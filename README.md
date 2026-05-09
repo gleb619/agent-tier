@@ -42,6 +42,7 @@ Options:
   --global-state          Single round-robin counter shared across all tiers
   --log-dir <path>        Log directory for detached mode (default: /tmp/at-logs)
   --json                  Read JSON from stdin (see JSON mode below)
+  -o, --orchestrate       Delegate to an orchestrator instead of a direct agent
 
 Commands:
   config sign             HMAC-sign ~/.at/config.json
@@ -100,6 +101,110 @@ Accepts a JSON object from stdin, compatible with the `coding-agent` protocol:
 
 All fields except `prompt` are optional.
 
+## Orchestrator mode
+
+Pass `-o` (`--orchestrate`) to delegate to a **multi-agent orchestrator** instead of a single coding agent. The
+orchestrator can coordinate sub-agents, plan multi-step work, and produce higher-quality results for complex tasks.
+
+```bash
+# Delegate a complex, multi-file task to an orchestrator
+at -o -t 1 -p "Implement OAuth2 with PKCE flow: plan the architecture, create routes, service, and tests"
+
+# Stream orchestrator output
+at -o -s -p "Audit all authentication middleware for security issues"
+```
+
+Orchestrators use a separate round-robin pool and state files (`/tmp/at-orch-<tier>-state.json`) so they don't
+interfere with direct agent scheduling.
+
+### Available orchestrators
+
+| Name   | Tier | Transport | Description                                      | Link                              |
+|--------|------|-----------|--------------------------------------------------|:----------------------------------|
+| `orch` | 1    | Generic   | Node.js orchestrator via `~/.at/orch/generic.js` | https://github.com/oxgeneral/ORCH |
+
+Orchestrators follow the same `AgentDef` interface as regular agents and are discovered from `~/.at/<name>/generic.js`
+(controlled by `AT_GENERIC_DIR`). Add custom orchestrators by dropping a `generic.js` directory under `~/.at/`.
+
+### Available agents
+
+`at` ships with **11 built-in agents** across 3 tiers, plus a generic plugin system for custom agents.
+
+#### Tier 1 — Architect / Review
+
+Agents optimized for complex multi-file refactors, architecture review, and hard problems.
+
+| Agent      | Binary (env override)                    | Command pattern                                       |
+|------------|------------------------------------------|-------------------------------------------------------|
+| `glm-code` | `GLM_CODE_BIN` → `~/.local/bin/glm-code` | `glm-code -p "prompt" --dangerously-skip-permissions` |
+| `codex`    | `CODEX_BIN` → `~/.nvm/.../bin/codex`     | `codex exec "prompt"`                                 |
+| `kimi`     | `KIMI_BIN` → `~/.nvm/.../bin/kimi`       | `kimi -y -p "prompt"`                                 |
+
+Round-robin order: glm-code → codex → kimi → glm-code → …
+
+#### Tier 2 — Dev / QA (default)
+
+Everyday feature work, bug fixes, tests, and refactors.
+
+| Agent      | Binary (env override)                      | Command pattern                                        |
+|------------|--------------------------------------------|--------------------------------------------------------|
+| `blackbox` | `BLACKBOX_BIN` → `~/.local/bin/blackbox`   | `blackbox -p "prompt" --yolo`                          |
+| `opencode` | `OPENCODE_BIN` → `~/.nvm/.../bin/opencode` | `opencode run --dangerously-skip-permissions "prompt"` |
+| `qwen`     | `QWEN_BIN` → `~/.nvm/.../bin/qwen`         | `qwen -y "prompt"`                                     |
+
+Round-robin order: blackbox → opencode → qwen → blackbox → …
+
+#### Tier 3 — Experimental / Boilerplate
+
+Scaffolding, simple scripts, and throwaway generation. Three of these agents use **Ollama** with local models.
+
+| Agent    | Type   | Binary (env override)                  | Command pattern                                                            |
+|----------|--------|----------------------------------------|----------------------------------------------------------------------------|
+| `kilo`   | Cloud  | `KILO_BIN` → `~/.nvm/.../bin/kilo`     | `kilo run --auto "prompt"`                                                 |
+| `gemini` | Cloud  | `GEMINI_BIN` → `~/.nvm/.../bin/gemini` | `echo "prompt" \| gemini --yolo --skip-trust`                              |
+| `goose`  | Ollama | `GOOSE_BIN` → `~/.local/bin/goose`     | `goose run --text "prompt" --model ... --provider ollama --no-session -q`  |
+| `aider`  | Ollama | `AIDER_BIN` → `~/.local/bin/aider`     | `aider --model ollama/... --message "prompt" --yes-always --no-git --exit` |
+| `pi`     | Ollama | `PI_BIN` → `~/.nvm/.../bin/pi`         | `pi -p --provider ollama --model ... "prompt" --no-session`                |
+
+Round-robin order: kilo → gemini → goose → aider → pi → kilo → …
+
+#### Ollama agents
+
+The three Ollama-based agents (`goose`, `aider`, `pi`) share common configuration:
+
+- **Host:** `OLLAMA_HOST` (default: `http://127.0.0.1:11434`)
+- **Model:** `OLLAMA_MODEL` (default: `minimax-m2.7:cloud`)
+- **Per-run model override:** set env var `OLLAMA_AGENT_MODEL` before calling `at`
+
+Note: `aider` additionally uses `OLLAMA_API_BASE` (default same as `OLLAMA_HOST`). `pi` requires an Ollama provider
+entry in `~/.pi/agent/models.json`.
+
+#### Prompt mode
+
+Most agents receive their prompt as a CLI argument (`promptMode: 'arg'`). One exception:
+
+- **`gemini`**: uses `promptMode: 'stdin'` — the prompt is piped to the agent's stdin rather than passed as an argument.
+  `at` handles this internally; no special flags needed.
+
+#### Generic agents (plugins)
+
+You can add custom agents without modifying the source code. Drop a directory under `~/.at/<agent-name>/generic.js`:
+
+```js
+// ~/.at/my-agent/generic.js
+module.exports = {
+  tier: 2,
+  bin: () => '/usr/local/bin/my-agent',
+  buildArgs: (prompt, model) => ['--task', prompt],
+  // optional:
+  buildEnv: (model) => ({ MY_MODEL: model ?? 'default' }),
+  promptMode: 'arg',  // or 'stdin'
+};
+```
+
+The directory name becomes the agent name. Override the scan directory with `AT_GENERIC_DIR`. Agents are validated at
+load time — `tier` must be 1/2/3, `bin` and `buildArgs` must be functions.
+
 ## Binary resolution
 
 Each agent binary is resolved in this order:
@@ -131,24 +236,6 @@ at config sign
 
 The HMAC secret defaults to `at-config-hmac-v1`; override with `AT_HMAC_SECRET`.
 
-## Generic agents (plugins)
-
-Drop a directory under `~/.at/<agent-name>/generic.js` to register a custom agent without modifying the source:
-
-```js
-// ~/.at/my-agent/generic.js
-module.exports = {
-  tier: 2,
-  bin: () => '/usr/local/bin/my-agent',
-  buildArgs: (prompt, model) => ['--task', prompt],
-  // optional:
-  buildEnv: (model) => ({ MY_MODEL: model ?? 'default' }),
-  promptMode: 'arg',  // or 'stdin'
-};
-```
-
-Override the scan directory with `AT_GENERIC_DIR`.
-
 ## Development
 
 ```bash
@@ -168,6 +255,7 @@ src/scheduler.ts         round-robin state: read/write /tmp/at-<tier>-state.json
 src/runner.ts            spawn agent process (stream or detached), retry on non-zero exit
 src/agents/registry.ts   AgentDef[] — name, tier, bin(), buildArgs(), buildEnv(), promptMode
 src/agents/generic-loader.ts  discover plugins from ~/.at/*/generic.js
+src/orchestrators/registry.ts OrchestratorDef[] — name, tier, bin(), buildArgs()
 src/config.ts            load ~/.at/config.json with HMAC verification
 ```
 

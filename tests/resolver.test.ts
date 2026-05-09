@@ -38,6 +38,7 @@ describe('resolveFromArgs', () => {
     expect(opts.globalState).toBe(false);
     expect(opts.retries).toBe(2);
     expect(opts.logDir).toBe('/tmp/at-logs');
+    expect(opts.orchestrate).toBe(false);
   });
 
   it('accepts tier as numeric string', () => {

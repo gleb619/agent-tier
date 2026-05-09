@@ -17,6 +17,7 @@ const baseOptions: RunOptions = {
   globalState: false,
   retries: 2,
   logDir: '/tmp/at-logs',
+  orchestrate: false,
 };
 
 const agents = [makeAgent('a'), makeAgent('b'), makeAgent('c')];

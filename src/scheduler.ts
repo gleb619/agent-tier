@@ -5,8 +5,8 @@ interface SchedulerState {
   index: number;
 }
 
-export function getStateFile(tier: number, globalState: boolean): string {
-  return globalState ? '/tmp/at-global-state.json' : `/tmp/at-${tier}-state.json`;
+export function getStateFile(tier: number, globalState: boolean, prefix = 'at'): string {
+  return globalState ? '/tmp/at-global-state.json' : `/tmp/${prefix}-${tier}-state.json`;
 }
 
 export function pickAgent(agents: AgentDef[], stateFile: string): AgentDef {

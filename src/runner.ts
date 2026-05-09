@@ -4,6 +4,7 @@ import path from 'path';
 import { AgentDef } from './agents/registry';
 import { RunOptions } from './resolver';
 import { pickAgent, getStateFile } from './scheduler';
+import { ORCHESTRATORS } from './orchestrators/registry';
 
 export type Spawner = (agent: AgentDef, options: RunOptions) => Promise<number>;
 
@@ -12,20 +13,22 @@ export async function run(
   agents: AgentDef[],
   spawner: Spawner = defaultSpawner,
 ): Promise<void> {
+  const candidatePool = options.orchestrate ? ORCHESTRATORS : agents;
+  const statePrefix = options.orchestrate ? 'at-orch' : 'at';
   let candidates: AgentDef[];
 
   if (options.agent !== 'auto') {
-    const named = agents.find((a) => a.name === options.agent);
+    const named = candidatePool.find((a) => a.name === options.agent);
     if (!named) throw new Error(`Unknown agent: ${options.agent}`);
     candidates = [named];
   } else {
-    candidates = agents.filter((a) => a.tier === options.tier);
+    candidates = candidatePool.filter((a) => a.tier === options.tier);
     if (candidates.length === 0) throw new Error(`No agents defined for tier ${options.tier}`);
   }
 
   const isNamed = options.agent !== 'auto';
   const maxAttempts = isNamed ? 1 : Math.min(options.retries + 1, candidates.length);
-  const stateFile = getStateFile(options.tier, options.globalState);
+  const stateFile = getStateFile(options.tier, options.globalState, statePrefix);
   let lastError: Error = new Error('All attempts failed');
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {

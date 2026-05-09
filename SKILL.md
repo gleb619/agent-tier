@@ -1,6 +1,7 @@
 # Skill: delegate work to `at`
 
-Use this skill when you want to hand off a coding task to another AI agent via the `at` CLI instead of implementing it yourself.
+Use this skill when you want to hand off a coding task to another AI agent via the `at` CLI instead of implementing it
+yourself.
 
 ---
 
@@ -15,16 +16,18 @@ Use this skill when you want to hand off a coding task to another AI agent via t
 
 ## Decision: which mode to use
 
-| Situation | Command form |
-|-----------|-------------|
-| Fire-and-forget background task | `at -p "..."` (default detached mode) |
-| Need to watch output right now | `at -s -p "..."` |
-| Specific agent required | `at -a <name> -p "..."` |
-| Architect-level task (design, review) | `at -t 1 -p "..."` |
-| Experimental / local model | `at -t 3 -p "..."` |
-| Integrating with a pipeline / scripting | `echo '<json>' \| at --json` |
+| Situation                               | Command form                          |
+|-----------------------------------------|---------------------------------------|
+| Fire-and-forget background task         | `at -p "..."` (default detached mode) |
+| Need to watch output right now          | `at -s -p "..."`                      |
+| Specific agent required                 | `at -a <name> -p "..."`               |
+| Architect-level task (design, review)   | `at -t 1 -p "..."`                    |
+| Experimental / local model              | `at -t 3 -p "..."`                    |
+| Integrating with a pipeline / scripting | `echo '<json>' \| at --json`          |
+| Multi-agent orchestration (complex)     | `at -o -t 1 -p "..."`                 |
 
-Default tier is **2** (dev/QA). Use tier 1 for anything that needs careful reasoning; tier 3 for boilerplate generation or offline models.
+Default tier is **2** (dev/QA). Use tier 1 for anything that needs careful reasoning; tier 3 for boilerplate generation
+or offline models.
 
 ---
 
@@ -32,7 +35,8 @@ Default tier is **2** (dev/QA). Use tier 1 for anything that needs careful reaso
 
 ### 1. Write a precise prompt
 
-A good `at` prompt is self-contained: another agent reading only that string must be able to complete the task without extra context.
+A good `at` prompt is self-contained: another agent reading only that string must be able to complete the task without
+extra context.
 
 ```
 Good:  "In src/auth/login.ts, add rate-limiting middleware that returns 429 after 5 failed attempts per IP within 60 s. Use the existing redis client at src/lib/redis.ts."
@@ -108,7 +112,8 @@ Fields: `prompt` (required), `agent`, `model`, `cwd`, `env` (all optional).
 
 ## Retry and failure handling
 
-`at` automatically retries on non-zero exit by picking the next agent in the same tier (up to `--retries`, default 2). You do not need to manually retry.
+`at` automatically retries on non-zero exit by picking the next agent in the same tier (up to `--retries`, default 2).
+You do not need to manually retry.
 
 If all agents in a tier fail, `at` exits non-zero and prints the last error. At that point either:
 - Rewrite the prompt to be clearer, or
@@ -118,7 +123,8 @@ If all agents in a tier fail, `at` exits non-zero and prints the last error. At 
 
 ## Custom / generic agents
 
-If your environment has agents not in the built-in registry, check `~/.at/` for plugin directories. Each plugin exposes a `generic.js` with `tier`, `bin`, and `buildArgs`. No code changes required — `at` discovers them automatically.
+If your environment has agents not in the built-in registry, check `~/.at/` for plugin directories. Each plugin exposes
+a `generic.js` with `tier`, `bin`, and `buildArgs`. No code changes required — `at` discovers them automatically.
 
 To add one:
 
@@ -138,14 +144,15 @@ EOF
 ## Quick reference
 
 ```bash
-at -p "<prompt>"                     # tier 2, detached, auto agent
-at -s -p "<prompt>"                  # stream to terminal
+at -p "<prompt>"                    # tier 2, detached, auto agent
+at -s -p "<prompt>"                 # stream to terminal
 at -t 1 -p "<prompt>"               # architect tier
 at -t 3 -p "<prompt>"               # experimental tier
 at -a <name> -p "<prompt>"          # named agent, no retry
 at -r 0 -p "<prompt>"               # no retry
 at --global-state -p "<prompt>"     # shared round-robin across tiers
 at --log-dir /var/log/at -p "..."   # custom log directory
-echo '<json>' | at --json            # JSON mode
-at config sign                       # sign ~/.at/config.json after editing
+at -o -t 1 -p "<prompt>"            # orchestrator mode (multi-agent)
+echo '<json>' | at --json           # JSON mode
+at config sign                      # sign ~/.at/config.json after editing
 ```

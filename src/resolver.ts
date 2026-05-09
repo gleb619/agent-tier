@@ -9,6 +9,7 @@ export interface RunOptions {
   globalState: boolean;
   retries: number;
   logDir: string;
+  orchestrate: boolean;
 }
 
 interface ArgvOptions {
@@ -22,6 +23,7 @@ interface ArgvOptions {
   globalState?: boolean;
   retries?: string | number;
   logDir?: string;
+  orchestrate?: boolean;
 }
 
 export interface ParsedJson {
@@ -50,6 +52,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     globalState: argv.globalState ?? false,
     retries: Number(argv.retries ?? 2),
     logDir: argv.logDir ?? '/tmp/at-logs',
+    orchestrate: argv.orchestrate ?? false,
   };
 }
 
