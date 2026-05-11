@@ -250,6 +250,7 @@ npx jest tests/runner.test.ts   # single file
 
 ```
 src/cli.ts               parse flags + stdin → resolveFromArgs/parseJsonInput → run()
+src/init.ts              wrapper script creation + ORCH project bootstrap (at init)
 src/resolver.ts          normalise raw argv/JSON into a typed RunOptions struct
 src/scheduler.ts         round-robin state: read/write /tmp/at-<tier>-state.json
 src/runner.ts            spawn agent process (stream or detached), retry on non-zero exit

@@ -1,11 +1,10 @@
-import { existsSync, writeFileSync, chmodSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { existsSync, writeFileSync, readFileSync, mkdirSync } from 'fs';
+import { dirname, basename, resolve } from 'path';
+import { execSync } from 'child_process';
+import { homedir } from 'os';
 import { AGENTS, AgentDef } from './agents/registry';
 
-// ── Template system ──
-// Each built-in agent that needs a wrapper script (not just an npm-installed
-// binary) has a template here. The target path is resolved from the agent's
-// bin() function at init time, so *_BIN env vars are honoured.
+// ── Template system (existing built-in wrapper scripts) ──
 
 export interface WrapperTemplate {
   agentName: string;
@@ -64,7 +63,7 @@ exec claude "$@"
   },
 };
 
-// ── Public API ──
+// ── Wrapper init (existing public API) ──
 
 export interface InitOptions {
   agent?: string;
@@ -81,10 +80,6 @@ export interface InitResult {
   reason?: string;
 }
 
-/**
- * Resolve which agent entries should be processed for init.
- * Returns the agent def + template pairs.
- */
 function resolveTargets(
   options: InitOptions,
 ): Array<{ agent: AgentDef; template: WrapperTemplate }> {
@@ -128,22 +123,15 @@ function resolveTargets(
   throw new Error('Specify an agent name, --all, or --list');
 }
 
-/** Return the list of agent names that have built-in wrapper templates. */
 export function getTemplateAgentNames(): string[] {
   return Object.keys(BUILTIN_TEMPLATES);
 }
 
-/** Get a template for a built-in agent, or undefined if none. */
 export function getTemplate(agentName: string): WrapperTemplate | undefined {
   return BUILTIN_TEMPLATES[agentName];
 }
 
-/**
- * Run the init command. Returns results for each target.
- * Writes wrapper scripts to disk unless dryRun is true.
- */
 export function runInit(options: InitOptions): InitResult[] {
-  // list mode: just report status, don't write
   if (options.list) {
     const targets = resolveTargets(options);
     return targets.map(({ agent, template }) => {
@@ -183,7 +171,6 @@ export function runInit(options: InitOptions): InitResult[] {
       continue;
     }
 
-    // Write the wrapper script
     mkdirSync(dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, template.content, { mode: 0o755 });
 
@@ -197,9 +184,6 @@ export function runInit(options: InitOptions): InitResult[] {
   return results;
 }
 
-/**
- * Format init results for CLI output.
- */
 export function formatInitResults(results: InitResult[]): string {
   return results
     .map((r) => {
@@ -211,6 +195,289 @@ export function formatInitResults(results: InitResult[]): string {
             : 'SKIP';
       const reason = r.reason ? ` (${r.reason})` : '';
       return `${prefix} ${r.agent} → ${r.targetPath}${reason}`;
+    })
+    .join('\n');
+}
+
+// ── ORCH Project Init ──
+
+/** Role configuration for an ORCH agent that delegates to `at`. */
+export interface OrchRole {
+  /** Display name shown in orch agent list */
+  name: string;
+  /** `at` tier: 1=architect, 2=dev, 3=experimental */
+  tier: 1 | 2 | 3;
+  /** Role description passed to `orch agent add --role` */
+  description: string;
+}
+
+const ORCH_ROLES: OrchRole[] = [
+  {
+    name: 'Arch',
+    tier: 1,
+    description:
+      'Architect — strategic design, task decomposition, system planning (at tier 1)',
+  },
+  {
+    name: 'Dev',
+    tier: 2,
+    description:
+      'Developer — feature implementation, bug fixes, code generation (at tier 2)',
+  },
+  {
+    name: 'QA',
+    tier: 2,
+    description:
+      'QA — testing, validation, linting, quality assurance (at tier 2)',
+  },
+  {
+    name: 'Reviewer',
+    tier: 1,
+    description:
+      'Reviewer — code review, security audit, best practices (at tier 1)',
+  },
+];
+
+export interface OrchInitOptions {
+  /** Project name (defaults to current directory name) */
+  name?: string;
+  /** Overwrite existing wrapper scripts and re-create agents */
+  force?: boolean;
+  /** Show what would be done without executing */
+  dryRun?: boolean;
+}
+
+export interface OrchInitResult {
+  step: string;
+  status: 'ok' | 'skipped' | 'error' | 'would_execute';
+  detail?: string;
+}
+
+// ── ORCH helpers ──
+
+function findOrchBin(): string {
+  const orchBin = process.env.ORCH_BIN;
+  if (orchBin && existsSync(orchBin)) return orchBin;
+
+  const nvmBin = `${homedir()}/.nvm/versions/node/v22.20.0/bin/orch`;
+  if (existsSync(nvmBin)) return nvmBin;
+
+  try {
+    const which = execSync('which orch', { encoding: 'utf8', stdio: 'pipe' }).trim();
+    if (which) return which;
+  } catch {
+    // not in PATH
+  }
+
+  return 'orch'; // fallback, let it fail naturally with a clear error
+}
+
+function orchExec(
+  args: string[],
+  cwd?: string,
+): { stdout: string; stderr: string; status: number } {
+  const bin = findOrchBin();
+  const cmd = [bin, ...args].map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(' ');
+  try {
+    const result = execSync(cmd, {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      cwd,
+      timeout: 30000,
+    });
+    return { stdout: result, stderr: '', status: 0 };
+  } catch (err: any) {
+    return {
+      stdout: err.stdout?.toString() ?? '',
+      stderr: err.stderr?.toString() ?? err.message,
+      status: err.status ?? 1,
+    };
+  }
+}
+
+/** Build the shell wrapper script content for a given ORCH role. */
+function wrapperScript(role: OrchRole): string {
+  return `#!/bin/bash
+# ORCH shell agent: ${role.name} — delegates to at (tier ${role.tier})
+# Generated by: at init
+set -e
+: "\${ORCHESTRY_TASK_PROMPT:?ORCHESTRY_TASK_PROMPT not set}"
+printf '%s' "$ORCHESTRY_TASK_PROMPT" | at -t ${role.tier}
+`;
+}
+
+function existingOrchAgentNames(): string[] {
+  const indexPath = '.orchestry/agents/_index.json';
+  if (!existsSync(indexPath)) return [];
+  try {
+    const index = JSON.parse(readFileSync(indexPath, 'utf8'));
+    return index.map((a: any) => a.name.toLowerCase());
+  } catch {
+    return [];
+  }
+}
+
+// ── ORCH init entry point ──
+
+/**
+ * Initialize an ORCH project in the current directory.
+ *
+ * Steps:
+ * 1. Locate the `orch` binary
+ * 2. Run `orch init --name <projectName>`
+ * 3. Write shell wrapper scripts into .orchestry/wrappers/
+ * 4. Create 4 agents (Arch, Dev, QA, Reviewer) via `orch agent add`
+ *
+ * Each wrapper script delegates to `at -t <tier> -s` using the
+ * ORCHESTRY_TASK_PROMPT env var set by ORCH's shell adapter.
+ */
+export function runOrchInit(options: OrchInitOptions = {}): OrchInitResult[] {
+  const results: OrchInitResult[] = [];
+  const projectName = options.name ?? basename(process.cwd());
+  const orchDir = '.orchestry';
+  const wrappersDir = `${orchDir}/wrappers`;
+
+  // ── Step 1: check orch binary ──
+  const orchBin = findOrchBin();
+  try {
+    execSync(`"${orchBin}" --version`, { encoding: 'utf8', stdio: 'pipe' });
+    results.push({ step: 'check orch', status: 'ok', detail: orchBin });
+  } catch {
+    results.push({
+      step: 'check orch',
+      status: 'error',
+      detail:
+        `orch not found at "${orchBin}". ` +
+        'Install with: npm i -g @oxgeneral/orch',
+    });
+    return results;
+  }
+
+  // ── Step 2: orch init ──
+  if (!existsSync(orchDir)) {
+    if (options.dryRun) {
+      results.push({
+        step: 'orch init',
+        status: 'would_execute',
+        detail: `orch init --name "${projectName}"`,
+      });
+    } else {
+      const r = orchExec(['init', '--name', projectName]);
+      if (r.status !== 0) {
+        results.push({
+          step: 'orch init',
+          status: 'error',
+          detail: r.stderr || r.stdout || 'unknown error',
+        });
+        return results;
+      }
+      results.push({
+        step: 'orch init',
+        status: 'ok',
+        detail: `.orchestry/ initialized for "${projectName}"`,
+      });
+    }
+  } else {
+    results.push({
+      step: 'orch init',
+      status: 'skipped',
+      detail: '.orchestry/ already exists',
+    });
+  }
+
+  // ── Step 3: create wrapper scripts ──
+  if (!options.dryRun && !existsSync(wrappersDir)) {
+    mkdirSync(wrappersDir, { recursive: true });
+  }
+
+  for (const role of ORCH_ROLES) {
+    const wrapperPath = `${wrappersDir}/orch-${role.name.toLowerCase()}.sh`;
+
+    if (existsSync(wrapperPath) && !options.force) {
+      results.push({
+        step: `wrapper: ${role.name}`,
+        status: 'skipped',
+        detail: `${wrapperPath} already exists (use --force to overwrite)`,
+      });
+      continue;
+    }
+
+    if (options.dryRun) {
+      results.push({
+        step: `wrapper: ${role.name}`,
+        status: 'would_execute',
+        detail: `would create ${wrapperPath}`,
+      });
+      continue;
+    }
+
+    writeFileSync(wrapperPath, wrapperScript(role), { mode: 0o755 });
+    results.push({
+      step: `wrapper: ${role.name}`,
+      status: 'ok',
+      detail: wrapperPath,
+    });
+  }
+
+  // ── Step 4: create ORCH agents ──
+  if (!options.dryRun && existsSync(orchDir)) {
+    const existing = existingOrchAgentNames();
+
+    for (const role of ORCH_ROLES) {
+      const nameLower = role.name.toLowerCase();
+      if (existing.includes(nameLower)) {
+        results.push({
+          step: `agent: ${role.name}`,
+          status: 'skipped',
+          detail: 'already registered in .orchestry/',
+        });
+        continue;
+      }
+
+      const wrapperPath = resolve(wrappersDir, `orch-${nameLower}.sh`);
+      const r = orchExec([
+        'agent', 'add', role.name,
+        '--adapter', 'shell',
+        '--role', role.description,
+        '--command', wrapperPath,
+        '--approval-policy', 'auto',
+        '--timeout', '600000',
+      ]);
+
+      if (r.status !== 0) {
+        results.push({
+          step: `agent: ${role.name}`,
+          status: 'error',
+          detail: r.stderr || r.stdout || 'orch agent add failed',
+        });
+      } else {
+        results.push({
+          step: `agent: ${role.name}`,
+          status: 'ok',
+          detail: `shell adapter → at tier ${role.tier} (${wrapperPath})`,
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+export function formatOrchInitResults(results: OrchInitResult[]): string {
+  if (results.length === 0) return 'Nothing to do.';
+
+  return results
+    .map((r) => {
+      const icon =
+        r.status === 'ok'
+          ? '✓'
+          : r.status === 'skipped'
+            ? '○'
+            : r.status === 'error'
+              ? '✗'
+              : '→';
+      const detail = r.detail ? ` — ${r.detail}` : '';
+      return `  ${icon} ${r.step}${detail}`;
     })
     .join('\n');
 }

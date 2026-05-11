@@ -6,7 +6,7 @@ import { loadGenericAgents } from './agents/generic-loader';
 import { resolveFromArgs, parseJsonInput } from './resolver';
 import { run } from './runner';
 import { loadConfig, applyTierOverrides, signConfig } from './config';
-import { runInit, formatInitResults } from './init';
+import { runInit, formatInitResults, runOrchInit, formatOrchInitResults } from './init';
 
 config();
 
@@ -79,7 +79,52 @@ program
       console.error(`[at] error: ${(err as Error).message}`);
       process.exit(1);
     }
-  });
+  })
+  .addHelpText(
+    'after',
+    `
+Examples:
+  # Fire-and-forget (detached, log in /tmp/at-logs/) — DEFAULT mode
+  at -p "add error handling to src/api.ts"
+
+  # Stream output to terminal — see progress in real time (most common)
+  at -s -p "refactor the auth module"
+
+  # Choose a tier: 1=architect (complex refactors), 2=dev (default), 3=experimental
+  at -s -t 1 -p "review auth middleware for security issues across src/auth/"
+
+  # Named agent — skip round-robin, no retry
+  at -s -a opencode -p "fix all lint errors in src/utils/"
+
+  # Auto-retry: up to 3 agents in same tier before giving up
+  at -s -r 3 -p "add input validation across all API endpoints"
+
+  # JSON mode — pass model, cwd, and env programmatically
+  echo '{"prompt":"add pagination","agent":"blackbox","cwd":"/home/me/proj"}' | at --json
+
+  # Orchestrator mode — spawn sub-agents for multi-file tasks
+  at -o -s -t 1 -p "implement OAuth2 PKCE: routes, service layer, and tests"
+
+  # Pipe prompt from stdin (no shell escaping needed)
+  echo "fix the login bug" | at -s
+
+  # Check logs after detached run
+  tail -f /tmp/at-logs/at-*.log
+
+  # Config: sign ~/.at/config.json after editing tier overrides
+  at config sign
+
+  # Init: bootstrap an ORCH project in the current directory (4 agents: arch/dev/qa/reviewer)
+  at init
+  at init --name "my-project"
+
+  # Init: preview what ORCH init would do
+  at init --dry-run
+
+  # Init: create built-in agent wrapper scripts (existing behavior)
+  at init --all
+  at init glm-code`,
+  );
 
 program
   .command('config <action>')
@@ -100,13 +145,53 @@ program
 
 program
   .command('init [agent]')
-  .description('Create wrapper scripts for agents that ship with at (e.g. glm-code)')
+  .description(
+    'Bootstrap an ORCH project with 4 tiered agents (default), or create wrapper scripts for built-in agents',
+  )
   .option('-a, --all', 'Initialize all built-in agent wrappers', false)
-  .option('-l, --list', 'List available agents and their status', false)
-  .option('-f, --force', 'Overwrite existing wrapper scripts', false)
+  .option('-l, --list', 'List available built-in agents and their status', false)
+  .option('-f, --force', 'Overwrite existing wrapper scripts / re-create ORCH agents', false)
   .option('-n, --dry-run', 'Show what would be created without writing', false)
+  .option('-o, --orch', 'Initialize an ORCH project with tiered at agents', false)
+  .option('--name <name>', 'Project name for ORCH init (default: current directory name)')
   .action((agent: string | undefined, opts: Record<string, unknown>) => {
     try {
+      const isWrapperMode = opts.all || opts.list || agent;
+      const isOrchMode = (opts.orch as boolean) || !isWrapperMode;
+
+      if (isOrchMode) {
+        // ── ORCH project init ──
+        const results = runOrchInit({
+          name: opts.name as string | undefined,
+          force: opts.force as boolean,
+          dryRun: opts.dryRun as boolean,
+        });
+
+        console.log('[at] init: ORCH project\n');
+        console.log(formatOrchInitResults(results));
+
+        const ok = results.filter((r) => r.status === 'ok').length;
+        const skipped = results.filter((r) => r.status === 'skipped').length;
+        const errors = results.filter((r) => r.status === 'error').length;
+        const wouldExec = results.filter((r) => r.status === 'would_execute').length;
+
+        const parts = [
+          ok > 0 ? `${ok} ok` : '',
+          skipped > 0 ? `${skipped} skipped` : '',
+          errors > 0 ? `${errors} errors` : '',
+          wouldExec > 0 ? `${wouldExec} would execute` : '',
+        ].filter(Boolean);
+
+        if (parts.length) {
+          const label = errors > 0 ? 'done with errors' : 'done';
+          console.log(`\n[at] ${label}: ${parts.join(', ')}`);
+        }
+
+        if (errors > 0) process.exit(1);
+        return;
+      }
+
+      // ── Built-in wrapper scripts ──
       const results = runInit({
         agent,
         all: opts.all as boolean,
