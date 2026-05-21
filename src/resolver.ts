@@ -10,6 +10,8 @@ export interface RunOptions {
   retries: number;
   logDir: string;
   orchestrate: boolean;
+  noChop: boolean;
+  timeout: number;
 }
 
 interface ArgvOptions {
@@ -24,6 +26,8 @@ interface ArgvOptions {
   retries?: string | number;
   logDir?: string;
   orchestrate?: boolean;
+  noChop?: boolean;
+  timeout?: string | number;
 }
 
 export interface ParsedJson {
@@ -50,9 +54,11 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     env: argv.env,
     stream: argv.stream ?? false,
     globalState: argv.globalState ?? false,
-    retries: Number(argv.retries ?? 2),
+    retries: Number(argv.retries ?? 0),
     logDir: argv.logDir ?? '/tmp/at-logs',
     orchestrate: argv.orchestrate ?? false,
+    noChop: argv.noChop ?? false,
+    timeout: Number(argv.timeout ?? 3600000),
   };
 }
 

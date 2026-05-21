@@ -1,6 +1,8 @@
-import { run, Spawner } from '../src/runner';
+import { run, Spawner, defaultSpawner } from '../src/runner';
 import { RunOptions } from '../src/resolver';
 import { AgentDef } from '../src/agents/registry';
+import { existsSync, readFileSync, readdirSync, unlinkSync, rmdirSync } from 'fs';
+import path from 'path';
 import * as scheduler from '../src/scheduler';
 
 jest.mock('../src/scheduler');
@@ -15,9 +17,11 @@ const baseOptions: RunOptions = {
   prompt: 'hello',
   stream: true,
   globalState: false,
-  retries: 2,
+  retries: 0,
   logDir: '/tmp/at-logs',
   orchestrate: false,
+  noChop: false,
+  timeout: 3600000,
 };
 
 const agents = [makeAgent('a'), makeAgent('b'), makeAgent('c')];
@@ -38,24 +42,22 @@ describe('run — auto mode', () => {
     expect(spawner).toHaveBeenCalledTimes(1);
   });
 
-  it('retries once on first failure', async () => {
-    const spawner: Spawner = jest.fn()
-      .mockResolvedValueOnce(1)
-      .mockResolvedValue(0);
-    await run(baseOptions, agents, spawner);
-    expect(spawner).toHaveBeenCalledTimes(2);
+  it('does not retry on first failure', async () => {
+    const spawner: Spawner = jest.fn().mockResolvedValue(1);
+    await expect(run(baseOptions, agents, spawner)).rejects.toThrow();
+    expect(spawner).toHaveBeenCalledTimes(1);
   });
 
-  it('retries up to retries+1 total attempts', async () => {
+  it('does not retry even when retries option is set', async () => {
     const spawner: Spawner = jest.fn().mockResolvedValue(1);
     await expect(run({ ...baseOptions, retries: 2 }, agents, spawner)).rejects.toThrow();
-    expect(spawner).toHaveBeenCalledTimes(3);
+    expect(spawner).toHaveBeenCalledTimes(1);
   });
 
-  it('caps total attempts at agents.length when retries exceeds pool', async () => {
+  it('does not retry even when retries exceed pool', async () => {
     const spawner: Spawner = jest.fn().mockResolvedValue(1);
     await expect(run({ ...baseOptions, retries: 10 }, agents, spawner)).rejects.toThrow();
-    expect(spawner).toHaveBeenCalledTimes(3);
+    expect(spawner).toHaveBeenCalledTimes(1);
   });
 
   it('throws after all agents fail', async () => {
@@ -91,9 +93,115 @@ describe('run — named agent mode', () => {
 });
 
 describe('run — detached mode', () => {
-  it('resolves immediately without waiting for child in detached mode', async () => {
+  it('uses the spawner in detached mode', async () => {
     const spawner: Spawner = jest.fn().mockResolvedValue(0);
     await run({ ...baseOptions, stream: false }, agents, spawner);
     expect(spawner).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('defaultSpawner', () => {
+  const tmpLogDir = '/tmp/at-test-logs-runner';
+
+  beforeEach(() => {
+    if (existsSync(tmpLogDir)) {
+      for (const f of readdirSync(tmpLogDir)) {
+        unlinkSync(path.join(tmpLogDir, f));
+      }
+      rmdirSync(tmpLogDir);
+    }
+  });
+
+  it('creates a non-empty log file in stream mode', async () => {
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/echo',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(0);
+    const files = readdirSync(tmpLogDir);
+    expect(files.length).toBe(1);
+    const logPath = path.join(tmpLogDir, files[0]);
+    const content = readFileSync(logPath, 'utf8');
+    expect(content.length).toBeGreaterThan(0);
+    expect(content).toContain('hello');
+  });
+
+  it('creates a non-empty log file in detached mode', async () => {
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/echo',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: false,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(0);
+    const files = readdirSync(tmpLogDir);
+    expect(files.length).toBe(1);
+    const logPath = path.join(tmpLogDir, files[0]);
+    const content = readFileSync(logPath, 'utf8');
+    expect(content.length).toBeGreaterThan(0);
+    expect(content).toContain('hello');
+  });
+
+  it('writes spawn error to log file in stream mode', async () => {
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/nonexistent-binary-12345',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+    };
+    await expect(defaultSpawner(agent, options)).rejects.toThrow('no PID assigned');
+    // createWriteStream opens the file asynchronously; give it a tick to land
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const files = readdirSync(tmpLogDir);
+    expect(files.length).toBe(1);
+    const logPath = path.join(tmpLogDir, files[0]);
+    const content = readFileSync(logPath, 'utf8');
+    expect(content.length).toBeGreaterThan(0);
+    expect(content).toContain('Failed to spawn');
+  });
+
+  it('writes spawn error to log file in detached mode', async () => {
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/nonexistent-binary-12345',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: false,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+    };
+    await expect(defaultSpawner(agent, options)).rejects.toThrow('no PID assigned');
+    const files = readdirSync(tmpLogDir);
+    expect(files.length).toBe(1);
+    const logPath = path.join(tmpLogDir, files[0]);
+    const content = readFileSync(logPath, 'utf8');
+    expect(content.length).toBeGreaterThan(0);
+    expect(content).toContain('Failed to spawn');
   });
 });

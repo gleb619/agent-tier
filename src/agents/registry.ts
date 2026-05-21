@@ -114,6 +114,14 @@ export const AGENTS: AgentDef[] = [
       prompt,
     ],
   },
+
+  // Mock: dry-run / test agent
+  {
+    name: 'mock',
+    tier: 2,
+    bin: () => process.env.MOCK_BIN ?? `${LOCAL_BIN}/mock-agent`,
+    buildArgs: (prompt) => [prompt],
+  },
 ];
 
 export function getAgentsByTier(tier: 1 | 2 | 3): AgentDef[] {

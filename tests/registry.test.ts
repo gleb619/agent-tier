@@ -1,16 +1,16 @@
 import { AGENTS, getAgentsByTier, getAgentByName } from '../src/agents/registry';
 
 describe('AgentRegistry', () => {
-  it('has 11 agents defined', () => {
-    expect(AGENTS).toHaveLength(11);
+  it('has 12 agents defined', () => {
+    expect(AGENTS).toHaveLength(12);
   });
 
   it('has 3 tier-1 agents', () => {
     expect(getAgentsByTier(1)).toHaveLength(3);
   });
 
-  it('has 3 tier-2 agents', () => {
-    expect(getAgentsByTier(2)).toHaveLength(3);
+  it('has 4 tier-2 agents', () => {
+    expect(getAgentsByTier(2)).toHaveLength(4);
   });
 
   it('has 5 tier-3 agents', () => {
@@ -23,6 +23,14 @@ describe('AgentRegistry', () => {
 
   it('returns undefined for unknown agent', () => {
     expect(getAgentByName('unknown')).toBeUndefined();
+  });
+
+  it('finds mock agent by name', () => {
+    expect(getAgentByName('mock')?.name).toBe('mock');
+  });
+
+  it('mock agent buildArgs includes prompt', () => {
+    expect(getAgentByName('mock')!.buildArgs('test prompt')).toContain('test prompt');
   });
 
   it('blackbox bin resolves to a string', () => {

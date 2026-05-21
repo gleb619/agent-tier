@@ -36,9 +36,11 @@ describe('resolveFromArgs', () => {
     expect(opts.tier).toBe(2);
     expect(opts.stream).toBe(false);
     expect(opts.globalState).toBe(false);
-    expect(opts.retries).toBe(2);
+    expect(opts.retries).toBe(0);
     expect(opts.logDir).toBe('/tmp/at-logs');
     expect(opts.orchestrate).toBe(false);
+    expect(opts.noChop).toBe(false);
+    expect(opts.timeout).toBe(3600000);
   });
 
   it('accepts tier as numeric string', () => {
@@ -55,5 +57,9 @@ describe('resolveFromArgs', () => {
 
   it('passes through agent name', () => {
     expect(resolveFromArgs({ prompt: 'hello', agent: 'glm-code' }).agent).toBe('glm-code');
+  });
+
+  it('accepts custom timeout', () => {
+    expect(resolveFromArgs({ prompt: 'hello', timeout: '5000' }).timeout).toBe(5000);
   });
 });

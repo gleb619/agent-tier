@@ -29,9 +29,11 @@ program
   .option('-t, --tier <number>', 'Tier: 1=architect, 2=dev (default), 3=experimental', '2')
   .option('-p, --prompt <text>', 'Prompt text')
   .option('-s, --stream', 'Stream agent output to terminal (default: detached with log file)', false)
-  .option('-r, --retries <number>', 'Max retry attempts with next agent in tier (default: 2)', '2')
+  .option('--no-chop', 'Disable chop output-log compression in stream mode (default: enabled when chop is available)')
+  .option('-r, --retries <number>', 'Max extra retry attempts with next agent in tier (default: 0). Total attempts = min(retries+1, agents-in-tier). Named agents never retry', '0')
   .option('--global-state', 'Single shared round-robin counter across all tiers', false)
   .option('--log-dir <path>', 'Log file directory for detached mode', '/tmp/at-logs')
+  .option('--timeout <ms>', 'Force-kill agent after N milliseconds (default: 3600000 = 1h)', '3600000')
   .option(
     '--json',
     'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{}}',
@@ -58,6 +60,8 @@ program
           retries: opts.retries,
           logDir: opts.logDir,
           orchestrate: opts.orchestrate as boolean,
+          noChop: !(opts.chop as boolean),
+          timeout: opts.timeout,
         });
       } else {
         const stdinData = process.stdin.isTTY ? '' : await readStdin();
@@ -71,20 +75,26 @@ program
           retries: opts.retries,
           logDir: opts.logDir,
           orchestrate: opts.orchestrate as boolean,
+          noChop: !(opts.chop as boolean),
+          timeout: opts.timeout,
         });
       }
 
-      await run(runOptions, effectiveAgents);
+      const exitCode = await run(runOptions, effectiveAgents);
+      if (exitCode !== 0) {
+        process.exit(exitCode);
+      }
     } catch (err) {
       console.error(`[at] error: ${(err as Error).message}`);
-      process.exit(1);
+      const code = (err as { code?: number }).code;
+      process.exit(code ?? 1);
     }
   })
   .addHelpText(
     'after',
     `
 Examples:
-  # Fire-and-forget (detached, log in /tmp/at-logs/) — DEFAULT mode
+  # Detached mode (logs in /tmp/at-logs/, blocks until agent exits) — DEFAULT
   at -p "add error handling to src/api.ts"
 
   # Stream output to terminal — see progress in real time (most common)
@@ -96,8 +106,8 @@ Examples:
   # Named agent — skip round-robin, no retry
   at -s -a opencode -p "fix all lint errors in src/utils/"
 
-  # Auto-retry: up to 3 agents in same tier before giving up
-  at -s -r 3 -p "add input validation across all API endpoints"
+  # Auto-retry with 2 extra attempts (3 total) before giving up
+  at -s -r 2 -p "add input validation across all API endpoints"
 
   # JSON mode — pass model, cwd, and env programmatically
   echo '{"prompt":"add pagination","agent":"blackbox","cwd":"/home/me/proj"}' | at --json

@@ -40,7 +40,7 @@ Options:
   -s, --stream            Stream output to terminal (default: detached + log file)
   -r, --retries <number>  Max retry attempts on non-zero exit (default: 2)
   --global-state          Single round-robin counter shared across all tiers
-  --log-dir <path>        Log directory for detached mode (default: /tmp/at-logs)
+  --log-dir <path>        Log directory for detached and stream mode (default: /tmp/at-logs)
   --json                  Read JSON from stdin (see JSON mode below)
   -o, --orchestrate       Delegate to an orchestrator instead of a direct agent
 
@@ -67,8 +67,8 @@ echo '{"agent":"opencode","prompt":"fix the login bug"}' | at --json
 
 | Mode               | Behavior                                                                                                   |
 |--------------------|------------------------------------------------------------------------------------------------------------|
-| Detached (default) | Agent spawns in the background; logs go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Returns immediately. |
-| Stream (`-s`)      | Agent's stdio is inherited by the terminal. Blocks until the agent exits.                                  |
+| Detached (default) | Agent spawns in the background; logs go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Blocks until the agent exits (supports timeout and retry). |
+| Stream (`-s`)      | Agent output is streamed to the terminal and simultaneously written to a log file. Blocks until the agent exits. |
 
 ## Tiers
 

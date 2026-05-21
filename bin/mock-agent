@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# mock-agent — dry-run / test agent for `at`
+# Prints the prompt and environment info, then exits successfully.
+
+set -e
+
+PROMPT="$1"
+
+if [ -z "$PROMPT" ]; then
+  echo "[mock] ERROR: no prompt provided" >&2
+  exit 1
+fi
+
+echo "[mock] received prompt: ${PROMPT}"
+echo "[mock] working directory: $(pwd)"
+echo "[mock] timestamp: $(date -Iseconds)"
+echo "[mock] done" >&2
+exit 0
