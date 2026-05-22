@@ -9,6 +9,8 @@ import { AgentDef } from './agents/registry';
 import { RunOptions } from './resolver';
 import { pickAgent, getStateFile } from './scheduler';
 import { ORCHESTRATORS } from './orchestrators/registry';
+import { filterHealthy, recordResult } from './health';
+import { addRun, updateRun } from './run-store';
 
 function chopAvailable(): boolean {
   try {
@@ -85,8 +87,15 @@ export async function run(
       if (!named) throw new Error(`Unknown agent: ${options.agent}`);
       candidates = [named];
     } else {
-      candidates = candidatePool.filter((a) => a.tier === options.tier);
-      if (candidates.length === 0) throw new Error(`No agents defined for tier ${options.tier}`);
+      const tierAgents = candidatePool.filter((a) => a.tier === options.tier);
+      if (tierAgents.length === 0) throw new Error(`No agents defined for tier ${options.tier}`);
+      const healthy = filterHealthy(tierAgents);
+      if (healthy.length === 0) {
+        console.warn(`[at] all tier-${options.tier} agents are disabled, using full pool`);
+        candidates = tierAgents;
+      } else {
+        candidates = healthy;
+      }
     }
 
     const isNamed = options.agent !== 'auto';
@@ -106,11 +115,13 @@ export async function run(
 
       try {
         const exitCode = await spawner(agent, options);
+        recordResult(agent.name, exitCode === 0);
         if (exitCode === 0) return 0;
         lastExitCode = exitCode;
         lastError = new AgentError(`${agent.name} exited with code ${exitCode}`, exitCode);
         console.error(`[at] ${agent.name} failed (exit ${exitCode})${hasMore ? ', retrying...' : ''}`);
       } catch (err) {
+        recordResult(agent.name, false);
         lastError = err as Error;
         console.error(`[at] ${agent.name} error: ${(err as Error).message}${hasMore ? ', retrying...' : ''}`);
       }
@@ -204,6 +215,18 @@ function spawnStream(
     }
 
     trackChild(child.pid, true);
+    addRun({
+      runId,
+      agent: agent.name,
+      tier: agent.tier,
+      pid: child.pid,
+      prompt: options.prompt.slice(0, 200),
+      logFile,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      exitCode: null,
+      status: 'running',
+    });
     console.log(`[at] started ${agent.name} (pid ${child.pid}, runId ${runId}) — logs: ${logFile}`);
 
     const timeoutMs = options.timeout;
@@ -230,12 +253,15 @@ function spawnStream(
     child.on('error', (err) => {
       cleanupStream();
       logStream.write(`[at] error: ${err.message}\n`);
+      updateRun(runId, { status: 'failed', finishedAt: new Date().toISOString(), exitCode: 1 });
       logStream.end(() => {
         reject(err);
       });
     });
     child.on('close', (code, signal) => {
       cleanupStream();
+      const finalStatus = code === 0 ? 'done' : 'failed';
+      updateRun(runId, { status: finalStatus, finishedAt: new Date().toISOString(), exitCode: code ?? 1 });
       logStream.end(() => {
         if (signal === 'SIGKILL') {
           reject(new Error(`process killed after ${timeoutMs}ms timeout`));
@@ -289,6 +315,18 @@ function spawnDetached(
     }
 
     trackChild(child.pid, true);
+    addRun({
+      runId,
+      agent: agent.name,
+      tier: agent.tier,
+      pid: child.pid,
+      prompt: options.prompt.slice(0, 200),
+      logFile,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      exitCode: null,
+      status: 'running',
+    });
 
     const timeoutMs = options.timeout;
     const timeout = setTimeout(() => {
@@ -310,6 +348,7 @@ function spawnDetached(
     child.on('error', (err) => {
       clearTimeout(timeout);
       untrackChild(child.pid!);
+      updateRun(runId, { status: 'failed', finishedAt: new Date().toISOString(), exitCode: 1 });
       try {
         appendFileSync(logFile, `[at] error: ${err.message}\n`);
       } catch {
@@ -320,6 +359,8 @@ function spawnDetached(
     child.on('close', (code, signal) => {
       clearTimeout(timeout);
       untrackChild(child.pid!);
+      const finalStatus = code === 0 ? 'done' : 'failed';
+      updateRun(runId, { status: finalStatus, finishedAt: new Date().toISOString(), exitCode: code ?? 1 });
       if (signal === 'SIGKILL') {
         reject(new Error(`${agent.name} killed after ${timeoutMs}ms timeout`));
       } else {

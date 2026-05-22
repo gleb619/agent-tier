@@ -4,8 +4,10 @@ import { AgentDef } from '../src/agents/registry';
 import { existsSync, readFileSync, readdirSync, unlinkSync, rmdirSync } from 'fs';
 import path from 'path';
 import * as scheduler from '../src/scheduler';
+import * as health from '../src/health';
 
 jest.mock('../src/scheduler');
+jest.mock('../src/health');
 
 function makeAgent(name: string): AgentDef {
   return { name, tier: 2, bin: () => '/usr/bin/true', buildArgs: (p) => [p] };
@@ -33,6 +35,8 @@ beforeEach(() => {
     return candidates[callCount++ % candidates.length];
   });
   (scheduler.getStateFile as jest.Mock).mockReturnValue('/tmp/at-test-state.json');
+  (health.filterHealthy as jest.Mock).mockImplementation((agents: AgentDef[]) => agents);
+  (health.recordResult as jest.Mock).mockImplementation(() => {});
 });
 
 describe('run — auto mode', () => {

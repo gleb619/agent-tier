@@ -7,6 +7,7 @@ import { resolveFromArgs, parseJsonInput } from './resolver';
 import { run } from './runner';
 import { loadConfig, applyTierOverrides, signConfig } from './config';
 import { runInit, formatInitResults, runOrchInit, formatOrchInitResults } from './init';
+import { runStatus } from './status';
 
 config();
 
@@ -224,6 +225,18 @@ program
       if (summary) {
         console.log(`\n[at] init: ${summary}`);
       }
+    } catch (err) {
+      console.error(`[at] error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('status')
+  .description('Show recent agent runs: running, stuck, done, failed')
+  .action(() => {
+    try {
+      runStatus();
     } catch (err) {
       console.error(`[at] error: ${(err as Error).message}`);
       process.exit(1);
