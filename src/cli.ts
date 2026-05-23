@@ -6,7 +6,7 @@ import { loadGenericAgents } from './agents/generic-loader';
 import { resolveFromArgs, parseJsonInput } from './resolver';
 import { run } from './runner';
 import { loadConfig, applyTierOverrides, signConfig } from './config';
-import { runInit, formatInitResults, runOrchInit, formatOrchInitResults } from './init';
+import { runInit, formatInitResults, runOrchInit, formatOrchInitResults, OrchInitResult } from './init/index';
 import { runStatus } from './status';
 
 config();
@@ -172,7 +172,7 @@ program
 
       if (isOrchMode) {
         // ── ORCH project init ──
-        const results = runOrchInit({
+        const results: OrchInitResult[] = runOrchInit({
           name: opts.name as string | undefined,
           force: opts.force as boolean,
           dryRun: opts.dryRun as boolean,

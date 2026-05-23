@@ -2,9 +2,6 @@ import { spawn, execSync } from 'child_process';
 import { mkdirSync, openSync, closeSync, createWriteStream, writeSync, appendFileSync } from 'fs';
 import path from 'path';
 
-function generateRunId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
 import { AgentDef } from './agents/registry';
 import { RunOptions } from './resolver';
 import { pickAgent, getStateFile } from './scheduler';
@@ -83,6 +80,7 @@ export async function run(
     let candidates: AgentDef[];
 
     if (options.agent !== 'auto') {
+      // Named agent: bypass health checks — user explicitly chose this agent
       const named = candidatePool.find((a) => a.name === options.agent);
       if (!named) throw new Error(`Unknown agent: ${options.agent}`);
       candidates = [named];
@@ -370,4 +368,43 @@ function spawnDetached(
 
     console.log(`[at] started ${agent.name} (pid ${child.pid}, runId ${runId}) — logs: ${logFile}`);
   });
+}
+
+const COLORS = [
+  'red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'black', 'white', 'gray',
+  'cyan', 'magenta', 'lime', 'teal', 'indigo', 'violet', 'gold', 'silver', 'bronze', 'crimson'
+];
+
+const ADJECTIVES = [
+  'cheerful', 'bright', 'dark', 'swift', 'calm', 'bold', 'quiet', 'loud', 'sharp', 'soft',
+  'wild', 'gentle', 'fierce', 'silent', 'rapid', 'slow', 'heavy', 'light', 'strong', 'weak'
+];
+
+const STELLAR_BODIES = [
+  'jupiter', 'mars', 'venus', 'saturn', 'mercury', 'neptune', 'uranus', 'earth', 'pluto', 'ceres',
+  'halley', 'encke', 'tempel', 'borrelly', 'wild', 'schwassmann', 'kopff', 'daniel', 'brorsen', 'finlay',
+  'cygnusx1', 'sagra', 'ton618', 'm87', 'andromeda', 'sombrero', 'whirlpool', 'pinwheel', 'cartwheel', 'sunflower',
+  'sirius', 'canopus', 'rigel', 'vega', 'arcturus', 'altair', 'aldebaran', 'antares', 'spica', 'pollux'
+];
+
+function getRandomElement<T>(array: T[]): T {
+  return array[Math.floor(Math.random() * array.length)];
+}
+
+function generateRandomString(length: number): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+function generateRunId(): string {
+  const color = getRandomElement(COLORS);
+  const adjective = getRandomElement(ADJECTIVES);
+  const stellarBody = getRandomElement(STELLAR_BODIES);
+  const randomSuffix = generateRandomString(5);
+
+  return `${color}-${adjective}-${stellarBody}-${randomSuffix}`;
 }

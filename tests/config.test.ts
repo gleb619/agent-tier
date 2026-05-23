@@ -1,23 +1,24 @@
 import { readFileSync } from 'fs';
 import { computeHmac, loadConfig, applyTierOverrides, AtConfig, CONFIG_FILE, HMAC_FILE } from '../src/config';
 import { AgentDef } from '../src/agents/registry';
+import { Mock } from 'vitest';
 
-jest.mock('fs');
+vi.mock('fs');
 
-const mockReadFileSync = readFileSync as jest.MockedFunction<typeof readFileSync>;
+const mockReadFileSync = readFileSync as Mock;
 
 function makeAgent(name: string, tier: 1 | 2 | 3 = 2): AgentDef {
   return { name, tier, bin: () => '/usr/bin/true', buildArgs: (p) => [p] };
 }
 
 beforeEach(() => {
-  jest.resetAllMocks();
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
-  jest.spyOn(console, 'error').mockImplementation(() => {});
+  vi.resetAllMocks();
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 afterEach(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe('loadConfig', () => {

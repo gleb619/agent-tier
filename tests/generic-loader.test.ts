@@ -17,28 +17,27 @@ describe('loadGenericAgents', () => {
 
   afterEach(() => {
     process.env.AT_GENERIC_DIR = originalEnv;
-    jest.resetModules();
   });
 
-  function load() {
-    // Re-require after env change so the module sees fresh env
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require('../src/agents/generic-loader').loadGenericAgents();
+  async function load() {
+    // Dynamic import to reload module with fresh env
+    const mod = await import('../src/agents/generic-loader');
+    return mod.loadGenericAgents();
   }
 
-  it('returns [] when base dir does not exist', () => {
+  it('returns [] when base dir does not exist', async () => {
     process.env.AT_GENERIC_DIR = '/tmp/at-generic-nonexistent-dir-xyz';
-    expect(load()).toEqual([]);
+    expect(await load()).toEqual([]);
   });
 
-  it('returns [] when base dir is empty', () => {
+  it('returns [] when base dir is empty', async () => {
     const dir = makeDir();
     process.env.AT_GENERIC_DIR = dir;
-    expect(load()).toEqual([]);
+    expect(await load()).toEqual([]);
     fs.rmSync(dir, { recursive: true });
   });
 
-  it('loads a valid generic.js and sets name from directory', () => {
+  it('loads a valid generic.js and sets name from directory', async () => {
     const dir = makeDir();
     writeGenericJs(dir, 'myagent', `
       module.exports = {
@@ -49,14 +48,14 @@ describe('loadGenericAgents', () => {
     `);
     process.env.AT_GENERIC_DIR = dir;
 
-    const agents = load();
+    const agents = await load();
     expect(agents).toHaveLength(1);
     expect(agents[0].name).toBe('myagent');
     expect(agents[0].tier).toBe(2);
     fs.rmSync(dir, { recursive: true });
   });
 
-  it('bin() returns the value from generic.js', () => {
+  it('bin() returns the value from generic.js', async () => {
     const dir = makeDir();
     writeGenericJs(dir, 'myagent', `
       module.exports = {
@@ -67,12 +66,12 @@ describe('loadGenericAgents', () => {
     `);
     process.env.AT_GENERIC_DIR = dir;
 
-    const agents = load();
+    const agents = await load();
     expect(agents[0].bin()).toBe('/custom/bin/myagent');
     fs.rmSync(dir, { recursive: true });
   });
 
-  it('buildArgs() works correctly', () => {
+  it('buildArgs() works correctly', async () => {
     const dir = makeDir();
     writeGenericJs(dir, 'myagent', `
       module.exports = {
@@ -83,24 +82,29 @@ describe('loadGenericAgents', () => {
     `);
     process.env.AT_GENERIC_DIR = dir;
 
-    const agents = load();
+    const agents = await load();
     expect(agents[0].buildArgs('hello world')).toEqual(['--prompt', 'hello world', '--flag']);
     fs.rmSync(dir, { recursive: true });
   });
 
-  it('skips a broken generic.js and warns', () => {
+  it('skips a broken generic.js and warns', async () => {
     const dir = makeDir();
     writeGenericJs(dir, 'broken', 'this is not valid javascript }{{{');
     process.env.AT_GENERIC_DIR = dir;
 
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(() => load()).not.toThrow();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('broken'));
-    warnSpy.mockRestore();
+    // Capture console.warn output
+    const warnCalls: string[] = [];
+    const originalWarn = console.warn;
+    console.warn = (msg: string) => warnCalls.push(msg);
+    
+    await load();
+    
+    console.warn = originalWarn;
+    expect(warnCalls.some(msg => msg.includes('broken'))).toBe(true);
     fs.rmSync(dir, { recursive: true });
   });
 
-  it('skips a generic.js missing tier and warns', () => {
+  it('skips a generic.js missing tier and warns', async () => {
     const dir = makeDir();
     writeGenericJs(dir, 'notier', `
       module.exports = {
@@ -110,15 +114,15 @@ describe('loadGenericAgents', () => {
     `);
     process.env.AT_GENERIC_DIR = dir;
 
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    const agents = load();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const agents = await load();
     expect(agents).toHaveLength(0);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('notier'));
     warnSpy.mockRestore();
     fs.rmSync(dir, { recursive: true });
   });
 
-  it('skips a generic.js missing buildArgs and warns', () => {
+  it('skips a generic.js missing buildArgs and warns', async () => {
     const dir = makeDir();
     writeGenericJs(dir, 'noargs', `
       module.exports = {
@@ -128,24 +132,24 @@ describe('loadGenericAgents', () => {
     `);
     process.env.AT_GENERIC_DIR = dir;
 
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    const agents = load();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const agents = await load();
     expect(agents).toHaveLength(0);
     warnSpy.mockRestore();
     fs.rmSync(dir, { recursive: true });
   });
 
-  it('skips plain files in the base dir (non-directories)', () => {
+  it('skips plain files in the base dir (non-directories)', async () => {
     const dir = makeDir();
     fs.writeFileSync(path.join(dir, 'somefile.json'), '{}');
     process.env.AT_GENERIC_DIR = dir;
 
-    const agents = load();
+    const agents = await load();
     expect(agents).toHaveLength(0);
     fs.rmSync(dir, { recursive: true });
   });
 
-  it('loads optional promptMode and buildEnv from generic.js', () => {
+  it('loads optional promptMode and buildEnv from generic.js', async () => {
     const dir = makeDir();
     writeGenericJs(dir, 'fancy', `
       module.exports = {
@@ -158,7 +162,7 @@ describe('loadGenericAgents', () => {
     `);
     process.env.AT_GENERIC_DIR = dir;
 
-    const agents = load();
+    const agents = await load();
     expect(agents[0].promptMode).toBe('stdin');
     expect(agents[0].buildEnv!('gpt-4')).toEqual({ MODEL: 'gpt-4' });
     fs.rmSync(dir, { recursive: true });

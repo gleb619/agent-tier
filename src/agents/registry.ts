@@ -1,4 +1,4 @@
-const NODE_BIN = process.env.NODE_BIN ?? `${process.env.HOME}/.nvm/versions/node/v22.20.0/bin`;
+const NODE_BIN = process.env.NODE_BIN ?? require('path').dirname(process.execPath);
 const LOCAL_BIN = process.env.LOCAL_BIN ?? `${process.env.HOME}/.local/bin`;
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'minimax-m2.7:cloud';
 
@@ -17,6 +17,12 @@ export const AGENTS: AgentDef[] = [
     name: 'glm-code',
     tier: 1,
     bin: () => process.env.GLM_CODE_BIN ?? `${LOCAL_BIN}/glm-code`,
+    buildArgs: (prompt) => ['-p', prompt, '--dangerously-skip-permissions'],
+  },
+  {
+    name: 'mm-code',
+    tier: 1,
+    bin: () => process.env.MM_CODE_BIN ?? `${LOCAL_BIN}/mm-code`,
     buildArgs: (prompt) => ['-p', prompt, '--dangerously-skip-permissions'],
   },
   {

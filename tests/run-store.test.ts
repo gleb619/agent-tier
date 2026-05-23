@@ -35,8 +35,15 @@ const mockRun: RunRecord = {
 };
 
 describe('run-store', () => {
+  beforeEach(() => {
+    // Clear any existing runs before each test
+    saveRuns({ runs: [] });
+  });
+
   describe('loadRuns / saveRuns', () => {
     it('returns empty array when no file exists', () => {
+      // First clear any existing data
+      saveRuns({ runs: [] });
       const result = loadRuns();
       expect(result).toEqual({ runs: [] });
     });

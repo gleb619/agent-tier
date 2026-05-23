@@ -6,3 +6,5 @@ dist/
 /docs/superpowers/*
 /.history/
 /.codegraph/
+.blackboxcli/
+env.local.sh

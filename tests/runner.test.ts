@@ -5,9 +5,10 @@ import { existsSync, readFileSync, readdirSync, unlinkSync, rmdirSync } from 'fs
 import path from 'path';
 import * as scheduler from '../src/scheduler';
 import * as health from '../src/health';
+import { Mock } from 'vitest';
 
-jest.mock('../src/scheduler');
-jest.mock('../src/health');
+vi.mock('../src/scheduler');
+vi.mock('../src/health');
 
 function makeAgent(name: string): AgentDef {
   return { name, tier: 2, bin: () => '/usr/bin/true', buildArgs: (p) => [p] };
@@ -29,68 +30,68 @@ const baseOptions: RunOptions = {
 const agents = [makeAgent('a'), makeAgent('b'), makeAgent('c')];
 
 beforeEach(() => {
-  jest.resetAllMocks();
+  vi.resetAllMocks();
   let callCount = 0;
-  (scheduler.pickAgent as jest.Mock).mockImplementation((candidates: AgentDef[]) => {
+  (scheduler.pickAgent as Mock).mockImplementation((candidates: AgentDef[]) => {
     return candidates[callCount++ % candidates.length];
   });
-  (scheduler.getStateFile as jest.Mock).mockReturnValue('/tmp/at-test-state.json');
-  (health.filterHealthy as jest.Mock).mockImplementation((agents: AgentDef[]) => agents);
-  (health.recordResult as jest.Mock).mockImplementation(() => {});
+  (scheduler.getStateFile as Mock).mockReturnValue('/tmp/at-test-state.json');
+  (health.filterHealthy as Mock).mockImplementation((agents: AgentDef[]) => agents);
+  (health.recordResult as Mock).mockImplementation(() => {});
 });
 
 describe('run — auto mode', () => {
   it('resolves on first success', async () => {
-    const spawner: Spawner = jest.fn().mockResolvedValue(0);
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
     await run(baseOptions, agents, spawner);
     expect(spawner).toHaveBeenCalledTimes(1);
   });
 
   it('does not retry on first failure', async () => {
-    const spawner: Spawner = jest.fn().mockResolvedValue(1);
+    const spawner: Spawner = vi.fn().mockResolvedValue(1);
     await expect(run(baseOptions, agents, spawner)).rejects.toThrow();
     expect(spawner).toHaveBeenCalledTimes(1);
   });
 
   it('does not retry even when retries option is set', async () => {
-    const spawner: Spawner = jest.fn().mockResolvedValue(1);
+    const spawner: Spawner = vi.fn().mockResolvedValue(1);
     await expect(run({ ...baseOptions, retries: 2 }, agents, spawner)).rejects.toThrow();
     expect(spawner).toHaveBeenCalledTimes(1);
   });
 
   it('does not retry even when retries exceed pool', async () => {
-    const spawner: Spawner = jest.fn().mockResolvedValue(1);
+    const spawner: Spawner = vi.fn().mockResolvedValue(1);
     await expect(run({ ...baseOptions, retries: 10 }, agents, spawner)).rejects.toThrow();
     expect(spawner).toHaveBeenCalledTimes(1);
   });
 
   it('throws after all agents fail', async () => {
-    const spawner: Spawner = jest.fn().mockResolvedValue(1);
+    const spawner: Spawner = vi.fn().mockResolvedValue(1);
     await expect(run(baseOptions, agents, spawner)).rejects.toThrow();
   });
 
   it('throws when tier has no agents', async () => {
-    const spawner: Spawner = jest.fn();
+    const spawner: Spawner = vi.fn();
     await expect(run({ ...baseOptions, tier: 1 }, [], spawner)).rejects.toThrow('No agents');
   });
 });
 
 describe('run — named agent mode', () => {
   it('uses the named agent without calling scheduler', async () => {
-    const spawner: Spawner = jest.fn().mockResolvedValue(0);
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
     await run({ ...baseOptions, agent: 'a' }, agents, spawner);
-    const calledAgent = (spawner as jest.Mock).mock.calls[0][0] as AgentDef;
+    const calledAgent = (spawner as Mock).mock.calls[0][0] as AgentDef;
     expect(calledAgent.name).toBe('a');
     expect(scheduler.pickAgent).not.toHaveBeenCalled();
   });
 
   it('throws for unknown named agent', async () => {
-    const spawner: Spawner = jest.fn();
+    const spawner: Spawner = vi.fn();
     await expect(run({ ...baseOptions, agent: 'unknown' }, agents, spawner)).rejects.toThrow('Unknown agent');
   });
 
   it('does not retry named agent on failure', async () => {
-    const spawner: Spawner = jest.fn().mockResolvedValue(1);
+    const spawner: Spawner = vi.fn().mockResolvedValue(1);
     await expect(run({ ...baseOptions, agent: 'a' }, agents, spawner)).rejects.toThrow();
     expect(spawner).toHaveBeenCalledTimes(1);
   });
@@ -98,7 +99,7 @@ describe('run — named agent mode', () => {
 
 describe('run — detached mode', () => {
   it('uses the spawner in detached mode', async () => {
-    const spawner: Spawner = jest.fn().mockResolvedValue(0);
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
     await run({ ...baseOptions, stream: false }, agents, spawner);
     expect(spawner).toHaveBeenCalledTimes(1);
   });

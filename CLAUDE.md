@@ -41,7 +41,7 @@ src/agents/registry.ts  AgentDef[] — name, tier, bin(), buildArgs(), buildEnv(
 
 ### Key design points
 
-- **Binary resolution:** Each `AgentDef.bin()` checks an env override (e.g. `OPENCODE_BIN`) then falls back to `$NODE_BIN/<name>` or `$LOCAL_BIN/<name>`. `NODE_BIN` defaults to `~/.nvm/versions/node/v22.20.0/bin`; `LOCAL_BIN` to `~/.local/bin`.
+- **Binary resolution:** Each `AgentDef.bin()` checks an env override (e.g. `OPENCODE_BIN`) then falls back to `$NODE_BIN/<name>` or `$LOCAL_BIN/<name>`. `NODE_BIN` defaults to the directory of the running `node` binary (`path.dirname(process.execPath)`); `LOCAL_BIN` to `~/.local/bin`. Override via `env.local.sh` (gitignored).
 - **promptMode:** Defaults to `'arg'` (prompt passed as a CLI arg). Set to `'stdin'` (e.g. `gemini`) to pipe the prompt to the child's stdin instead.
 - **Detached mode (default):** Child is spawned detached; stdout/stderr go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Caller gets `[at] started <agent> (pid N) — logs: <path>` and blocks until the child exits (enabling timeout, error detection, and retry).
 - **Stream mode (`-s`):** Child output is streamed to the terminal and simultaneously written to `/tmp/at-logs/at-<timestamp>-<agent>.log`.

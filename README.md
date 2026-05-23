@@ -210,7 +210,7 @@ load time — `tier` must be 1/2/3, `bin` and `buildArgs` must be functions.
 Each agent binary is resolved in this order:
 
 1. Environment variable override (e.g. `OPENCODE_BIN`, `GEMINI_BIN`)
-2. `$NODE_BIN/<name>` — defaults to `~/.nvm/versions/node/v22.20.0/bin`
+2. `$NODE_BIN/<name>` — defaults to the directory of the running `node` binary
 3. `$LOCAL_BIN/<name>` — defaults to `~/.local/bin`
 
 Override `NODE_BIN` or `LOCAL_BIN` to point at a different installation path.

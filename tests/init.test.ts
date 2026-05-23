@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { runInit, formatInitResults, getTemplateAgentNames, getTemplate, InitOptions } from '../src/init';
+import { runInit, formatInitResults, getTemplateAgentNames, getTemplate, InitOptions } from '../src/init/index';
 
 // We test with real filesystem for a realistic integration test,
 // but use temp directories to isolate.
@@ -31,7 +31,7 @@ function withEnv(overrides: Record<string, string>, fn: () => void): void {
     process.env[key] = overrides[key];
   }
   // Reset module cache so registry re-evaluates with new env
-  jest.resetModules();
+  vi.resetModules();
   try {
     fn();
   } finally {
@@ -42,7 +42,7 @@ function withEnv(overrides: Record<string, string>, fn: () => void): void {
         process.env[key] = saved[key];
       }
     }
-    jest.resetModules();
+    vi.resetModules();
   }
 }
 
@@ -228,7 +228,10 @@ describe('runInit - all mode', () => {
   });
 
   it('dry run does not write any files', () => {
-    withEnv({ GLM_CODE_BIN: binPath('glm-code') }, () => {
+    withEnv({
+      GLM_CODE_BIN: binPath('glm-code'),
+      MM_CODE_BIN: binPath('mm-code'),
+    }, () => {
       const results = runInit({ all: true, dryRun: true });
 
       for (const r of results) {
