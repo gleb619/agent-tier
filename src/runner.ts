@@ -1,5 +1,5 @@
 import { spawn, execSync } from 'child_process';
-import { mkdirSync, openSync, closeSync, writeSync, appendFileSync } from 'fs';
+import { mkdirSync, openSync, closeSync, writeSync, appendFileSync, existsSync } from 'fs';
 import path from 'path';
 
 import { AgentDef } from './agents/registry';
@@ -9,15 +9,6 @@ import { ORCHESTRATORS } from './orchestrators/registry';
 import { filterHealthy, recordResult, isDeactivated } from './health';
 import { addRun, updateRun } from './run-store';
 import { getStateFilePath } from './state-dir';
-
-function chopAvailable(): boolean {
-  try {
-    execSync('chop --version', { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 interface TrackedChild {
   pid: number;
@@ -144,9 +135,15 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
     timeoutHandle = setTimeout(() => resolve({ code: null, signal: 'SIGKILL' }), timeoutMs);
   });
 
-  const useChop = !options.noChop && chopAvailable();
-  const streamCmd = useChop ? 'chop' : 'tail';
-  const streamArgs = useChop ? [logFile] : ['-f', logFile];
+  // Use in-process log-streamer for real-time filtering.
+  // Falls back to plain tail -f if --no-chop or the built streamer is missing.
+  const logStreamerJs = path.join(__dirname, 'log-streamer.js');
+  const useStreamer = !options.noChop && existsSync(logStreamerJs);
+
+  const streamCmd = useStreamer ? 'node' : 'tail';
+  const streamArgs = useStreamer
+    ? [logStreamerJs, '--log', logFile, '--pid', String(child.pid!)]
+    : ['-f', logFile];
 
   const streamChild = spawn(streamCmd, streamArgs, {
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -283,6 +280,7 @@ export const defaultSpawner: Spawner = (agent, options) => {
   const { child, runId, logFile } = result;
 
   child.removeAllListeners('error');
+  printReport(result);
 
   if (options.stream) {
     return streamLogsAndWatch(result, options);
@@ -303,7 +301,6 @@ export const defaultSpawner: Spawner = (agent, options) => {
         exitCode,
       });
     });
-    printReport(result);
     return Promise.resolve(0);
   }
 };

@@ -7,11 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run build        # tsc → dist/
 npm run dev          # ts-node src/cli.ts (run without building)
-npm test             # jest (all tests in tests/)
-npm run test:watch   # jest --watch
+npm test             # vitest run (all tests in tests/)
+npm run test:watch   # vitest (watch mode)
+npm run test:agents  # vitest run tests_ai/
 
 # Run a single test file
-npx jest tests/resolver.test.ts
+npx vitest tests/resolver.test.ts
 
 # Run the built CLI
 node dist/cli.js -p "fix the bug"

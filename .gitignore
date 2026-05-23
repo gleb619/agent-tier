@@ -8,3 +8,4 @@ dist/
 /.codegraph/
 .blackboxcli/
 env.local.sh
+/build.gradle
