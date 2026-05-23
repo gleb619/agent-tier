@@ -13,5 +13,5 @@
     "types": ["vitest/globals", "node"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "tests_ai"]
+  "exclude": ["node_modules", "dist", "tests_ai", "src/tui"]
 }

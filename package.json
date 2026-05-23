@@ -13,8 +13,11 @@
     "test:agents": "[ -f env.local.sh ] && . ./env.local.sh; vitest run tests_ai/"
   },
   "dependencies": {
+    "@opentui/core": "^0.2.15",
+    "@opentui/solid": "^0.2.15",
     "commander": "^12.0.0",
-    "dotenv": "^16.0.0"
+    "dotenv": "^16.0.0",
+    "solid-js": "^1.9.12"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

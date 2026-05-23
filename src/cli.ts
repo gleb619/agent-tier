@@ -276,4 +276,26 @@ program
     }
   });
 
+// No-arg invocation → launch interactive TUI via Bun
+if (process.argv.length === 2) {
+  const { execFileSync } = require("child_process") as typeof import("child_process");
+  const path = require("path") as typeof import("path");
+  const tuiEntry = path.join(__dirname, "..", "src", "tui", "index.tsx");
+  try {
+    execFileSync(
+      "bun",
+      ["--preload", "@opentui/solid/preload", tuiEntry],
+      { stdio: "inherit" }
+    );
+    process.exit(0);
+  } catch (err: unknown) {
+    const exitErr = err as { status?: number; code?: string };
+    if (exitErr.code === "ENOENT") {
+      console.error("[at] TUI requires Bun (https://bun.sh). Install Bun or use flags to run without TUI.");
+      process.exit(1);
+    }
+    process.exit(exitErr.status ?? 1);
+  }
+}
+
 program.parse();
