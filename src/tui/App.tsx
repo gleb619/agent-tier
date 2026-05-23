@@ -6,9 +6,10 @@ import { spawn } from "child_process";
 import { Sidebar } from "./components/Sidebar";
 import { LogViewer } from "./components/LogViewer";
 import { PromptBar, type PromptSubmitOpts } from "./components/PromptBar";
-import { filteredSessions, selectedRunId, setSelectedRunId, refreshSessions, killSession, retrySession } from "./store/sessions";
+import { HotkeyBar } from "./components/HotkeyBar";
+import { filteredSessions, selectedRunId, setSelectedRunId, refreshSessions, killSession, retrySession, toggleDashboard } from "./store/sessions";
 import { scrollOffset, setScrollOffset, filteredLines, autoRefresh, refreshLog, goToHead, goToTail, setAutoRefresh } from "./store/log";
-import { cycleTier, cycleAgent, cycleMode, toggleOrchestrate, cycleRetries } from "./store/settings";
+import { cycleTier, cycleAgent, cycleMode, cycleRetries } from "./store/settings";
 
 export function App(): JSX.Element {
   const [focusZone, setFocusZone] = createSignal<0|1|2|3|4>(4);
@@ -34,9 +35,11 @@ export function App(): JSX.Element {
   useKeyHandler((key: string | { key: string }) => {
     const k = typeof key === "string" ? key : key.key ?? "";
 
-    if (k === "Tab") {
-      setFocusZone(z => ((z + 1) % FOCUS_COUNT) as any);
-    } else if (k === "Shift-Tab" || k === "S-Tab") {
+    if (k === "C-]" || k === "C-[") {
+      // Panel navigation: C-] = next, C-[ = previous
+      const dir = k === "C-]" ? 1 : -1;
+      setFocusZone(z => ((z + dir + FOCUS_COUNT) % FOCUS_COUNT) as any);
+    } else if (k === "S-Tab" || k === "S-]") {
       setFocusZone(z => ((z - 1 + FOCUS_COUNT) % FOCUS_COUNT) as any);
     } else if (k === "C-t") {
       cycleTier();
@@ -44,8 +47,6 @@ export function App(): JSX.Element {
       cycleAgent();
     } else if (k === "C-m") {
       cycleMode();
-    } else if (k === "C-o") {
-      toggleOrchestrate();
     } else if (k === "C-n") {
       cycleRetries();
     } else if (k === "C-k") {
@@ -61,9 +62,11 @@ export function App(): JSX.Element {
     } else if (k === "C-f") {
       refreshSessions();
       refreshLog();
+    } else if (k === "C-d") {
+      toggleDashboard();
     } else if (k === "C-l") {
       setAutoRefresh(!autoRefresh());
-    } else if ((k === "ArrowUp" || k === "up") && focusZone() === 1) {
+    } else if ((k === "ArrowUp" || k === "up") && (focusZone() === 0 || focusZone() === 1)) {
       const sessions = filteredSessions();
       const current = selectedRunId();
       const idx = sessions.findIndex(s => s.runId === current);
@@ -72,7 +75,7 @@ export function App(): JSX.Element {
       } else if (sessions.length > 0 && current === null) {
         setSelectedRunId(sessions[sessions.length - 1].runId);
       }
-    } else if ((k === "ArrowDown" || k === "down") && focusZone() === 1) {
+    } else if ((k === "ArrowDown" || k === "down") && (focusZone() === 0 || focusZone() === 1)) {
       const sessions = filteredSessions();
       const current = selectedRunId();
       const idx = sessions.findIndex(s => s.runId === current);
@@ -100,9 +103,6 @@ export function App(): JSX.Element {
     if (opts.mode === "stream") {
       args.push("-s");
     }
-    if (opts.orchestrate) {
-      args.push("-o");
-    }
     if (opts.retries > 0) {
       args.push("-r", String(opts.retries));
     }
@@ -126,16 +126,9 @@ export function App(): JSX.Element {
       </box>
 
       {/* prompt bar */}
-      <PromptBar focused={focusZone() === 4} onSubmit={handleSubmit} />
-
-      {/* footer */}
-      <box flexDirection="row" gap={2} padding={1} paddingY={0}>
-        <text content="Tab: next panel" fg="#555555" />
-        <text content="^K: kill" fg="#555555" />
-        <text content="^E: retry" fg="#555555" />
-        <text content="^F: refresh" fg="#555555" />
-        <text content="^L: toggle auto" fg="#555555" />
-        <text content="^C: exit" fg="#555555" />
+      <box flexDirection="column" flexGrow={0}>
+        <PromptBar focused={focusZone() === 4} onSubmit={handleSubmit} />
+        <HotkeyBar focusZone={focusZone() as 0|1|2|3|4} />
       </box>
     </box>
   );

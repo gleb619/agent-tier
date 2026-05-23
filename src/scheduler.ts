@@ -2,15 +2,20 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import path from 'path';
 import { AgentDef } from './agents/registry';
 
-interface SchedulerState {
+export interface SchedulerState {
   index: number;
 }
 
-interface StateFile {
-  scheduler?: Record<string, SchedulerState>;
+export interface RunsState {
+  maxEntries?: number;
 }
 
-function loadStateFile(stateFilePath: string): StateFile {
+export interface StateFile {
+  scheduler?: Record<string, SchedulerState>;
+  runs?: RunsState;
+}
+
+export function loadStateFile(stateFilePath: string): StateFile {
   try {
     return JSON.parse(readFileSync(stateFilePath, 'utf8'));
   } catch {
@@ -18,7 +23,7 @@ function loadStateFile(stateFilePath: string): StateFile {
   }
 }
 
-function saveStateFile(stateFilePath: string, state: StateFile): void {
+export function saveStateFile(stateFilePath: string, state: StateFile): void {
   mkdirSync(path.dirname(stateFilePath), { recursive: true });
   writeFileSync(stateFilePath, JSON.stringify(state, null, 2), 'utf8');
 }

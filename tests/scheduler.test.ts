@@ -16,7 +16,7 @@ describe('getStateFile', () => {
   });
 
   it('ignores tier and prefix', () => {
-    expect(getStateFile(1, '/tmp/test', 'at-orch')).toBe('/tmp/test/state.json');
+    expect(getStateFile(1, '/tmp/test', 'at-foo')).toBe('/tmp/test/state.json');
   });
 });
 

@@ -25,7 +25,6 @@ const baseOptions: RunOptions = {
   stateDir: defaultStateDir,
   retries: 0,
   logDir: '/tmp/at-logs',
-  orchestrate: false,
   noChop: false,
   timeout: 3600000,
 };

@@ -1,13 +1,14 @@
 /** @jsxImportSource @opentui/solid */
 import { For, Show, createMemo } from "solid-js";
-import { filteredLines, logFilter, setLogFilter, scrollOffset, autoRefresh, setAutoRefresh, currentLogFile, goToHead, goToTail } from "../store/log";
+import { filteredLines, logFilter, setLogFilter, scrollOffset, currentLogFile, goToHead, goToTail, VISIBLE_LINES, isLoading } from "../store/log";
 
 function lineColor(line: string): string {
-  if (/\[ERROR\]|\[FAIL\]/.test(line)) return "#ff4444";
-  if (/\[WARN\]/.test(line)) return "#ffaa00";
-  if (/\[INFO\]/.test(line)) return "#aaaaaa";
-  if (/\[DEBUG\]/.test(line)) return "#666666";
-  return "#cccccc";
+  if (/\[ERROR\]|\[FAIL\]|error|Error/.test(line)) return "#f85149";
+  if (/\[WARN\]|warn|Warning/.test(line)) return "#d29922";
+  if (/\[INFO\]|info/.test(line)) return "#8b949e";
+  if (/\[DEBUG\]|debug/.test(line)) return "#484f58";
+  if (/✓|success|done|complete/.test(line)) return "#3fb950";
+  return "#c9d1d9";
 }
 
 function logTitle(): string {
@@ -22,7 +23,7 @@ interface LogViewerProps {
 
 export function LogViewer(props: LogViewerProps): JSX.Element {
   const visibleLines = createMemo(() =>
-    filteredLines().slice(scrollOffset(), scrollOffset() + 40)
+    filteredLines().slice(scrollOffset(), scrollOffset() + VISIBLE_LINES)
   );
 
   return (
@@ -30,8 +31,8 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
       title={logTitle()}
       border
       borderStyle="single"
-      borderColor="#555555"
-      focusedBorderColor="#00aaff"
+      borderColor="#21262d"
+      focusedBorderColor="#1f6feb"
       focused={props.focused}
       flexDirection="column"
       flexGrow={3}
@@ -46,20 +47,18 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
           onInput={(v) => setLogFilter(v)}
           flexGrow={1}
         />
-        <text fg="#555555" content="[↑head]" onMouseDown={goToHead} />
-        <text fg="#555555" content="[↓tail]" onMouseDown={goToTail} />
-        <text
-          fg={autoRefresh() ? "#00ff88" : "#555555"}
-          content={autoRefresh() ? "[⟳ auto]" : "[⟳ off]"}
-          onMouseDown={() => setAutoRefresh(!autoRefresh())}
-        />
+        <Show when={isLoading()}>
+          <text content="loading..." fg="#d29922" />
+        </Show>
+        <text fg="#58a6ff" content="[g] head" onMouseDown={goToHead} />
+        <text fg="#58a6ff" content="[G] tail" onMouseDown={goToTail} />
       </box>
 
       {/* Row 2 — log lines */}
       <scrollbox flexGrow={1} focused={props.focusZone === 2}>
         <Show
           when={filteredLines().length > 0}
-          fallback={<text fg="#555555" content="(no log output)" />}
+          fallback={<text fg="#484f58" content="(no log output)" />}
         >
           <For each={visibleLines()}>
             {(line) => <text content={line} fg={lineColor(line)} />}

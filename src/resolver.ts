@@ -11,7 +11,6 @@ export interface RunOptions {
   stateDir: string;
   retries: number;
   logDir: string;
-  orchestrate: boolean;
   noChop: boolean;
   timeout: number;
 }
@@ -27,7 +26,6 @@ interface ArgvOptions {
   stateDir?: string;
   retries?: string | number;
   logDir?: string;
-  orchestrate?: boolean;
   noChop?: boolean;
   timeout?: string | number;
 }
@@ -58,7 +56,6 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     stateDir: resolveStateDir(argv.stateDir),
     retries: Number(argv.retries ?? 0),
     logDir: argv.logDir ?? '/tmp/at-logs',
-    orchestrate: argv.orchestrate ?? false,
     noChop: argv.noChop ?? false,
     timeout: Number(argv.timeout ?? 3600000),
   };

@@ -3,10 +3,9 @@ import { createSignal, Accessor } from 'solid-js';
 const [tier, setTier] = createSignal<1 | 2 | 3>(2);
 const [agent, setAgent] = createSignal<string>('auto');
 const [mode, setMode] = createSignal<'stream' | 'detached'>('stream');
-const [orchestrate, setOrchestrate] = createSignal<boolean>(false);
 const [retries, setRetries] = createSignal<number>(0);
 
-export { tier, agent, mode, orchestrate, retries };
+export { tier, agent, mode, retries };
 
 const TIERS: readonly [1, 2, 3] = [1, 2, 3];
 const AGENTS_BY_TIER: Record<1 | 2 | 3, string[]> = {
@@ -32,10 +31,6 @@ export function cycleAgent(): void {
 
 export function cycleMode(): void {
   setMode((m) => (m === 'stream' ? 'detached' : 'stream'));
-}
-
-export function toggleOrchestrate(): void {
-  setOrchestrate((o) => !o);
 }
 
 export function cycleRetries(): void {

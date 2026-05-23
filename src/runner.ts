@@ -5,7 +5,6 @@ import path from 'path';
 import { AgentDef } from './agents/registry';
 import { RunOptions } from './resolver';
 import { pickAgent, getStateFile } from './scheduler';
-import { ORCHESTRATORS } from './orchestrators/registry';
 import { filterHealthy, recordResult, isDeactivated } from './health';
 import { addRun, updateRun } from './run-store';
 import { getStateFilePath } from './state-dir';
@@ -219,7 +218,7 @@ export async function run(
   process.once('SIGINT', cleanup);
 
   try {
-    const candidatePool = options.orchestrate ? ORCHESTRATORS : agents;
+    const candidatePool = agents;
     const stateFilePath = getStateFilePath(options.stateDir);
     let candidates: AgentDef[];
 

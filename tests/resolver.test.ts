@@ -40,7 +40,6 @@ describe('resolveFromArgs', () => {
     expect(opts.stateDir).toBe(path.join(os.homedir(), '.at'));
     expect(opts.retries).toBe(0);
     expect(opts.logDir).toBe('/tmp/at-logs');
-    expect(opts.orchestrate).toBe(false);
     expect(opts.noChop).toBe(false);
     expect(opts.timeout).toBe(3600000);
   });

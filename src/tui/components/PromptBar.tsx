@@ -1,12 +1,11 @@
 /** @jsxImportSource @opentui/solid */
 import { createSignal, createMemo } from "solid-js";
-import { tier, agent, mode, orchestrate, retries } from "../store/settings";
+import { tier, agent, mode, retries } from "../store/settings";
 
 export interface PromptSubmitOpts {
   tier: 1 | 2 | 3;
   agent: string;
   mode: "stream" | "detached";
-  orchestrate: boolean;
   retries: number;
 }
 
@@ -23,7 +22,6 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
       tier: tier(),
       agent: agent(),
       mode: mode(),
-      orchestrate: orchestrate(),
       retries: retries(),
     })
   );
@@ -55,19 +53,7 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
         <text content={"Tier:[" + tier() + "]"} fg="#aaaaaa" />
         <text content={"Agent:[" + agent() + "]"} fg="#aaaaaa" />
         <text content={"Mode:[" + mode() + "]"} fg="#aaaaaa" />
-        <text
-          content={"Orch:[" + (orchestrate() ? "on" : "off") + "]"}
-          fg={orchestrate() ? "#00ff88" : "#aaaaaa"}
-        />
         <text content={"Retries:[" + retries() + "]"} fg="#aaaaaa" />
-      </box>
-
-      <box flexDirection="row" gap={2}>
-        <text content="^T tier" fg="#555555" />
-        <text content="^A agent" fg="#555555" />
-        <text content="^M mode" fg="#555555" />
-        <text content="^O orch" fg="#555555" />
-        <text content="^N retries" fg="#555555" />
       </box>
     </box>
   );

@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
+import { getStateFilePath } from './state-dir';
 
 export interface RunRecord {
   runId: string;
@@ -18,6 +19,7 @@ export interface RunsIndex {
   runs: RunRecord[];
 }
 
+const DEFAULT_MAX_RUNS = 10;
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const STUCK_SILENCE_MS = 30 * 60 * 1000; // 30 min of no log writes
 
@@ -25,45 +27,89 @@ export function getRunsFile(stateDir: string): string {
   return path.join(stateDir, 'runs.json');
 }
 
-export function loadRuns(stateDir: string): RunsIndex {
+function getMaxRuns(stateDir: string): number {
   try {
-    const data = readFileSync(getRunsFile(stateDir), 'utf8');
-    return JSON.parse(data) as RunsIndex;
+    const statePath = getStateFilePath(stateDir);
+    const data = JSON.parse(readFileSync(statePath, 'utf8')) as { runs?: { maxEntries?: number } };
+    if (data.runs?.maxEntries !== undefined && Number.isFinite(data.runs.maxEntries)) {
+      return Math.max(1, Math.floor(data.runs.maxEntries));
+    }
   } catch {
-    return { runs: [] };
+    // ignore missing or malformed state.json
+  }
+  return DEFAULT_MAX_RUNS;
+}
+
+function readJsonl(filePath: string): RunRecord[] {
+  try {
+    const raw = readFileSync(filePath, 'utf8');
+    const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+    // Attempt to migrate old plain-JSON format { runs: [...] }
+    if (lines.length === 1) {
+      try {
+        const parsed = JSON.parse(lines[0]) as RunsIndex;
+        if (Array.isArray(parsed.runs)) {
+          return parsed.runs;
+        }
+      } catch {
+        // not old format, fall through
+      }
+    }
+    return lines.map((l) => JSON.parse(l) as RunRecord);
+  } catch {
+    return [];
   }
 }
 
-export function saveRuns(stateDir: string, index: RunsIndex): void {
-  const runsFile = getRunsFile(stateDir);
-  mkdirSync(path.dirname(runsFile), { recursive: true });
-  writeFileSync(runsFile, JSON.stringify(index, null, 2), 'utf8');
+function writeJsonl(filePath: string, runs: RunRecord[]): void {
+  mkdirSync(path.dirname(filePath), { recursive: true });
+  const lines = runs.map((r) => JSON.stringify(r)).join('\n');
+  writeFileSync(filePath, lines ? lines + '\n' : '', 'utf8');
+}
+
+export function loadRuns(stateDir: string): RunRecord[] {
+  return readJsonl(getRunsFile(stateDir));
+}
+
+export function saveRuns(stateDir: string, runs: RunRecord[]): void {
+  writeJsonl(getRunsFile(stateDir), runs);
 }
 
 export function addRun(stateDir: string, record: RunRecord): void {
-  const index = loadRuns(stateDir);
-  index.runs.push(record);
-  saveRuns(stateDir, index);
+  const max = getMaxRuns(stateDir);
+  const runs = loadRuns(stateDir);
+  runs.push(record);
+  // Sort by startedAt descending (newest first)
+  runs.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  const pruned = runs.slice(0, max);
+  saveRuns(stateDir, pruned);
 }
 
 export function updateRun(stateDir: string, runId: string, updates: Partial<RunRecord>): void {
-  const index = loadRuns(stateDir);
-  const run = index.runs.find((r) => r.runId === runId);
+  const runs = loadRuns(stateDir);
+  const run = runs.find((r) => r.runId === runId);
   if (run) {
     Object.assign(run, updates);
-    saveRuns(stateDir, index);
+    saveRuns(stateDir, runs);
   }
 }
 
-export function pruneRuns(stateDir: string, ttlMs: number = getTtl()): void {
-  const index = loadRuns(stateDir);
+export function pruneRuns(
+  stateDir: string,
+  ttlMs: number = getTtl(),
+  maxRuns: number = getMaxRuns(stateDir),
+): void {
+  const runs = loadRuns(stateDir);
   const cutoff = Date.now() - ttlMs;
-  const pruned = index.runs.filter((r) => {
+  const filtered = runs.filter((r) => {
     const end = r.finishedAt ? new Date(r.finishedAt).getTime() : new Date(r.startedAt).getTime();
     return end >= cutoff;
   });
-  if (pruned.length !== index.runs.length) {
-    saveRuns(stateDir, { runs: pruned });
+  // Also enforce max entries cap (keep newest)
+  filtered.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  const pruned = filtered.slice(0, maxRuns);
+  if (pruned.length !== runs.length) {
+    saveRuns(stateDir, pruned);
   }
 }
 

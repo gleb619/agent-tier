@@ -24,7 +24,6 @@ yourself.
 | Architect-level task (design, review)   | `at -t 1 -p "..."`                    |
 | Experimental / local model              | `at -t 3 -p "..."`                    |
 | Integrating with a pipeline / scripting | `echo '<json>' \| at --json`          |
-| Multi-agent orchestration (complex)     | `at -o -t 1 -p "..."`                 |
 
 Default tier is **2** (dev/QA). Use tier 1 for anything that needs careful reasoning; tier 3 for boilerplate generation
 or offline models.
@@ -152,7 +151,6 @@ at -a <name> -p "<prompt>"          # named agent, no retry
 at -r 0 -p "<prompt>"               # no retry
 at --global-state -p "<prompt>"     # shared round-robin across tiers
 at --log-dir /var/log/at -p "..."   # custom log directory
-at -o -t 1 -p "<prompt>"            # orchestrator mode (multi-agent)
 echo '<json>' | at --json           # JSON mode
 at config sign                      # sign ~/.at/config.json after editing
 ```

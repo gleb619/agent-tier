@@ -42,7 +42,6 @@ Options:
   --global-state          Single round-robin counter shared across all tiers
   --log-dir <path>        Log directory for detached and stream mode (default: /tmp/at-logs)
   --json                  Read JSON from stdin (see JSON mode below)
-  -o, --orchestrate       Delegate to an orchestrator instead of a direct agent
 
 Commands:
   config sign             HMAC-sign ~/.at/config.json
@@ -100,31 +99,6 @@ Accepts a JSON object from stdin, compatible with the `coding-agent` protocol:
 ```
 
 All fields except `prompt` are optional.
-
-## Orchestrator mode
-
-Pass `-o` (`--orchestrate`) to delegate to a **multi-agent orchestrator** instead of a single coding agent. The
-orchestrator can coordinate sub-agents, plan multi-step work, and produce higher-quality results for complex tasks.
-
-```bash
-# Delegate a complex, multi-file task to an orchestrator
-at -o -t 1 -p "Implement OAuth2 with PKCE flow: plan the architecture, create routes, service, and tests"
-
-# Stream orchestrator output
-at -o -s -p "Audit all authentication middleware for security issues"
-```
-
-Orchestrators use a separate round-robin pool and state files (`/tmp/at-orch-<tier>-state.json`) so they don't
-interfere with direct agent scheduling.
-
-### Available orchestrators
-
-| Name   | Tier | Transport | Description                                      | Link                              |
-|--------|------|-----------|--------------------------------------------------|:----------------------------------|
-| `orch` | 1    | Generic   | Node.js orchestrator via `~/.at/orch/generic.js` | https://github.com/oxgeneral/ORCH |
-
-Orchestrators follow the same `AgentDef` interface as regular agents and are discovered from `~/.at/<name>/generic.js`
-(controlled by `AT_GENERIC_DIR`). Add custom orchestrators by dropping a `generic.js` directory under `~/.at/`.
 
 ### Available agents
 
@@ -241,22 +215,20 @@ The HMAC secret defaults to `at-config-hmac-v1`; override with `AT_HMAC_SECRET`.
 ```bash
 npm run dev          # run without building (ts-node)
 npm run build        # compile to dist/
-npm test             # jest
-npm run test:watch   # jest --watch
-npx jest tests/runner.test.ts   # single file
+npm test             # vitest
+npm run test:watch   # vitest --watch
+npx vitest tests/runner.test.ts   # single file
 ```
 
 ## Architecture
 
 ```
 src/cli.ts               parse flags + stdin → resolveFromArgs/parseJsonInput → run()
-src/init.ts              wrapper script creation + ORCH project bootstrap (at init)
 src/resolver.ts          normalise raw argv/JSON into a typed RunOptions struct
 src/scheduler.ts         round-robin state: read/write /tmp/at-<tier>-state.json
 src/runner.ts            spawn agent process (stream or detached), retry on non-zero exit
 src/agents/registry.ts   AgentDef[] — name, tier, bin(), buildArgs(), buildEnv(), promptMode
 src/agents/generic-loader.ts  discover plugins from ~/.at/*/generic.js
-src/orchestrators/registry.ts OrchestratorDef[] — name, tier, bin(), buildArgs()
 src/config.ts            load ~/.at/config.json with HMAC verification
 ```
 
