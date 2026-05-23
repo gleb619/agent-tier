@@ -1,12 +1,14 @@
+import { resolveStateDir } from './state-dir';
+
 export interface RunOptions {
   agent: string;
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4;
   prompt: string;
   model?: string;
   cwd?: string;
   env?: Record<string, string>;
   stream: boolean;
-  globalState: boolean;
+  stateDir: string;
   retries: number;
   logDir: string;
   orchestrate: boolean;
@@ -22,7 +24,7 @@ interface ArgvOptions {
   cwd?: string;
   env?: Record<string, string>;
   stream?: boolean;
-  globalState?: boolean;
+  stateDir?: string;
   retries?: string | number;
   logDir?: string;
   orchestrate?: boolean;
@@ -43,17 +45,17 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
   if (!prompt) throw new Error('prompt is required and cannot be empty');
 
   const tierNum = Number(argv.tier ?? 2);
-  if (![1, 2, 3].includes(tierNum)) throw new Error(`tier must be 1, 2, or 3 (got ${argv.tier})`);
+  if (![1, 2, 3, 4].includes(tierNum)) throw new Error(`tier must be 1, 2, 3, or 4 (got ${argv.tier})`);
 
   return {
     agent: argv.agent ?? 'auto',
-    tier: tierNum as 1 | 2 | 3,
+    tier: tierNum as 1 | 2 | 3 | 4,
     prompt,
     model: argv.model,
     cwd: argv.cwd,
     env: argv.env,
     stream: argv.stream ?? false,
-    globalState: argv.globalState ?? false,
+    stateDir: resolveStateDir(argv.stateDir),
     retries: Number(argv.retries ?? 0),
     logDir: argv.logDir ?? '/tmp/at-logs',
     orchestrate: argv.orchestrate ?? false,
@@ -78,6 +80,6 @@ export function parseJsonInput(raw: string): ParsedJson {
     prompt,
     model: parsed.model as string | undefined,
     cwd: parsed.cwd as string | undefined,
-    env: parsed.env as Record<string, string> | undefined,
+    env: parsed.env as Record<string, string | undefined> as Record<string, string> | undefined,
   };
 }

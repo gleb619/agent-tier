@@ -64,14 +64,14 @@ export function formatStatusTable(runs: RunRecord[]): string {
   return header + '\n' + lines.join('\n');
 }
 
-export function runStatus(): void {
-  pruneRuns();
+export function runStatus(stateDir: string): void {
+  pruneRuns(stateDir);
 
-  let index = loadRuns();
+  let index = loadRuns(stateDir);
   index.runs = detectStuck(index.runs);
 
   // Persist any stuck/failures detected
-  saveRuns(index);
+  saveRuns(stateDir, index);
 
   console.log(formatStatusTable(index.runs));
 }

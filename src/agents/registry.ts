@@ -4,7 +4,7 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'minimax-m2.7:cloud';
 
 export interface AgentDef {
   name: string;
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4;
   bin: () => string;
   buildArgs: (prompt: string, model?: string) => string[];
   buildEnv?: (model?: string) => Record<string, string>;
@@ -17,12 +17,6 @@ export const AGENTS: AgentDef[] = [
     name: 'glm-code',
     tier: 1,
     bin: () => process.env.GLM_CODE_BIN ?? `${LOCAL_BIN}/glm-code`,
-    buildArgs: (prompt) => ['-p', prompt, '--dangerously-skip-permissions'],
-  },
-  {
-    name: 'mm-code',
-    tier: 1,
-    bin: () => process.env.MM_CODE_BIN ?? `${LOCAL_BIN}/mm-code`,
     buildArgs: (prompt) => ['-p', prompt, '--dangerously-skip-permissions'],
   },
   {
@@ -46,6 +40,12 @@ export const AGENTS: AgentDef[] = [
     buildArgs: (prompt) => ['-p', prompt, '--yolo'],
   },
   {
+    name: 'mm-code',
+    tier: 2,
+    bin: () => process.env.MM_CODE_BIN ?? `${LOCAL_BIN}/mm-code`,
+    buildArgs: (prompt) => ['-p', prompt, '--dangerously-skip-permissions'],
+  },
+  {
     name: 'opencode',
     tier: 2,
     bin: () => process.env.OPENCODE_BIN ?? `${NODE_BIN}/opencode`,
@@ -60,6 +60,18 @@ export const AGENTS: AgentDef[] = [
     tier: 2,
     bin: () => process.env.QWEN_BIN ?? `${NODE_BIN}/qwen`,
     buildArgs: (prompt) => ['-y', prompt],
+  },
+  {
+    name: 'pi',
+    tier: 2,
+    bin: () => process.env.PI_BIN ?? `${NODE_BIN}/pi`,
+    buildArgs: (prompt, model) => [
+      '-p',
+      '--provider', 'ollama',
+      '--model', model ?? OLLAMA_MODEL,
+      '--no-session',
+      prompt,
+    ],
   },
 
   // Tier 3: boilerplate / gen
@@ -108,15 +120,15 @@ export const AGENTS: AgentDef[] = [
       OLLAMA_API_BASE: process.env.OLLAMA_API_BASE ?? 'http://127.0.0.1:11434',
     }),
   },
+
   {
-    name: 'pi',
+    name: 'cline',
     tier: 3,
-    bin: () => process.env.PI_BIN ?? `${NODE_BIN}/pi`,
-    buildArgs: (prompt, model) => [
-      '-p',
-      '--provider', 'ollama',
-      '--model', model ?? OLLAMA_MODEL,
-      '--no-session',
+    bin: () => process.env.CLINE_BIN ?? `${NODE_BIN}/cline`,
+    buildArgs: (prompt) => [
+      '--auto-approve', 'true',
+      '--json',
+      '--timeout', '600',
       prompt,
     ],
   },
@@ -124,13 +136,13 @@ export const AGENTS: AgentDef[] = [
   // Mock: dry-run / test agent
   {
     name: 'mock',
-    tier: 2,
+    tier: 4,
     bin: () => process.env.MOCK_BIN ?? `${LOCAL_BIN}/mock-agent`,
     buildArgs: (prompt) => [prompt],
   },
 ];
 
-export function getAgentsByTier(tier: 1 | 2 | 3): AgentDef[] {
+export function getAgentsByTier(tier: 1 | 2 | 3 | 4): AgentDef[] {
   return AGENTS.filter((a) => a.tier === tier);
 }
 

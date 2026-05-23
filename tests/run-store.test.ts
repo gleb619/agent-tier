@@ -13,14 +13,8 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-// Override RUNS_FILE for tests
-const TEST_RUNS_FILE = path.join(os.homedir(), '.at', 'runs.test.json');
+const TEST_STATE_DIR = path.join(os.tmpdir(), `at-test-runs-${Date.now()}`);
 
-// We need to mock the module-level RUNS_FILE — since it's a const,
-// we'll test via a temp file approach by writing/reading directly
-// and using the public API with a controlled environment.
-
-// For unit tests, we'll test the logic with controlled state
 const mockRun: RunRecord = {
   runId: 'abc123',
   agent: 'opencode',
@@ -36,48 +30,51 @@ const mockRun: RunRecord = {
 
 describe('run-store', () => {
   beforeEach(() => {
-    // Clear any existing runs before each test
-    saveRuns({ runs: [] });
+    fs.mkdirSync(TEST_STATE_DIR, { recursive: true });
+    saveRuns(TEST_STATE_DIR, { runs: [] });
+  });
+
+  afterAll(() => {
+    const runsFile = path.join(TEST_STATE_DIR, 'runs.json');
+    if (fs.existsSync(runsFile)) fs.unlinkSync(runsFile);
+    try { fs.rmdirSync(TEST_STATE_DIR); } catch { /* not empty */ }
   });
 
   describe('loadRuns / saveRuns', () => {
     it('returns empty array when no file exists', () => {
-      // First clear any existing data
-      saveRuns({ runs: [] });
-      const result = loadRuns();
+      saveRuns(TEST_STATE_DIR, { runs: [] });
+      const result = loadRuns(TEST_STATE_DIR);
       expect(result).toEqual({ runs: [] });
     });
   });
 
   describe('addRun / updateRun', () => {
     it('adds and updates a run record', () => {
-      // Create a fresh state
-      saveRuns({ runs: [] });
+      saveRuns(TEST_STATE_DIR, { runs: [] });
 
-      addRun(mockRun);
-      let loaded = loadRuns();
+      addRun(TEST_STATE_DIR, mockRun);
+      let loaded = loadRuns(TEST_STATE_DIR);
       expect(loaded.runs).toHaveLength(1);
       expect(loaded.runs[0].runId).toBe('abc123');
       expect(loaded.runs[0].status).toBe('running');
 
-      updateRun('abc123', { status: 'done', exitCode: 0, finishedAt: new Date().toISOString() });
-      loaded = loadRuns();
+      updateRun(TEST_STATE_DIR, 'abc123', { status: 'done', exitCode: 0, finishedAt: new Date().toISOString() });
+      loaded = loadRuns(TEST_STATE_DIR);
       expect(loaded.runs[0].status).toBe('done');
       expect(loaded.runs[0].exitCode).toBe(0);
 
-      // Cleanup
-      saveRuns({ runs: [] });
+      saveRuns(TEST_STATE_DIR, { runs: [] });
     });
 
     it('updateRun is a no-op for unknown runId', () => {
-      saveRuns({ runs: [] });
-      addRun(mockRun);
-      updateRun('nonexistent', { status: 'failed' });
-      const loaded = loadRuns();
+      saveRuns(TEST_STATE_DIR, { runs: [] });
+      addRun(TEST_STATE_DIR, mockRun);
+      updateRun(TEST_STATE_DIR, 'nonexistent', { status: 'failed' });
+      const loaded = loadRuns(TEST_STATE_DIR);
       expect(loaded.runs).toHaveLength(1);
       expect(loaded.runs[0].status).toBe('running');
 
-      saveRuns({ runs: [] });
+      saveRuns(TEST_STATE_DIR, { runs: [] });
     });
   });
 
@@ -86,19 +83,19 @@ describe('run-store', () => {
       const old = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
       const recent = new Date().toISOString();
 
-      saveRuns({
+      saveRuns(TEST_STATE_DIR, {
         runs: [
           { ...mockRun, runId: 'old1', startedAt: old, finishedAt: old, status: 'done', exitCode: 0 },
           { ...mockRun, runId: 'new1', startedAt: recent, status: 'running' },
         ],
       });
 
-      pruneRuns(24 * 60 * 60 * 1000);
-      const loaded = loadRuns();
+      pruneRuns(TEST_STATE_DIR, 24 * 60 * 60 * 1000);
+      const loaded = loadRuns(TEST_STATE_DIR);
       expect(loaded.runs).toHaveLength(1);
       expect(loaded.runs[0].runId).toBe('new1');
 
-      saveRuns({ runs: [] });
+      saveRuns(TEST_STATE_DIR, { runs: [] });
     });
   });
 

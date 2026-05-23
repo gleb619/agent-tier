@@ -45,6 +45,7 @@ export function agentBinExists(agent: string): boolean {
     case 'goose':     binPath = process.env.GOOSE_BIN ?? `${LOCAL_BIN}/goose`; break;
     case 'aider':     binPath = process.env.AIDER_BIN ?? `${LOCAL_BIN}/aider`; break;
     case 'pi':        binPath = process.env.PI_BIN ?? `${NODE_BIN}/pi`; break;
+    case 'cline':     binPath = process.env.CLINE_BIN ?? `${NODE_BIN}/cline`; break;
     case 'mock':      binPath = process.env.MOCK_BIN ?? `${LOCAL_BIN}/mock-agent`; break;
     default:          return false;
   }

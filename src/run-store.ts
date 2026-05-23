@@ -1,6 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
-import os from 'os';
 
 export interface RunRecord {
   runId: string;
@@ -19,49 +18,52 @@ export interface RunsIndex {
   runs: RunRecord[];
 }
 
-export const RUNS_FILE = path.join(os.homedir(), '.at', 'runs.json');
-
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const STUCK_SILENCE_MS = 30 * 60 * 1000; // 30 min of no log writes
 
-export function loadRuns(): RunsIndex {
+export function getRunsFile(stateDir: string): string {
+  return path.join(stateDir, 'runs.json');
+}
+
+export function loadRuns(stateDir: string): RunsIndex {
   try {
-    const data = readFileSync(RUNS_FILE, 'utf8');
+    const data = readFileSync(getRunsFile(stateDir), 'utf8');
     return JSON.parse(data) as RunsIndex;
   } catch {
     return { runs: [] };
   }
 }
 
-export function saveRuns(index: RunsIndex): void {
-  mkdirSync(path.dirname(RUNS_FILE), { recursive: true });
-  writeFileSync(RUNS_FILE, JSON.stringify(index, null, 2), 'utf8');
+export function saveRuns(stateDir: string, index: RunsIndex): void {
+  const runsFile = getRunsFile(stateDir);
+  mkdirSync(path.dirname(runsFile), { recursive: true });
+  writeFileSync(runsFile, JSON.stringify(index, null, 2), 'utf8');
 }
 
-export function addRun(record: RunRecord): void {
-  const index = loadRuns();
+export function addRun(stateDir: string, record: RunRecord): void {
+  const index = loadRuns(stateDir);
   index.runs.push(record);
-  saveRuns(index);
+  saveRuns(stateDir, index);
 }
 
-export function updateRun(runId: string, updates: Partial<RunRecord>): void {
-  const index = loadRuns();
+export function updateRun(stateDir: string, runId: string, updates: Partial<RunRecord>): void {
+  const index = loadRuns(stateDir);
   const run = index.runs.find((r) => r.runId === runId);
   if (run) {
     Object.assign(run, updates);
-    saveRuns(index);
+    saveRuns(stateDir, index);
   }
 }
 
-export function pruneRuns(ttlMs: number = getTtl()): void {
-  const index = loadRuns();
+export function pruneRuns(stateDir: string, ttlMs: number = getTtl()): void {
+  const index = loadRuns(stateDir);
   const cutoff = Date.now() - ttlMs;
   const pruned = index.runs.filter((r) => {
     const end = r.finishedAt ? new Date(r.finishedAt).getTime() : new Date(r.startedAt).getTime();
     return end >= cutoff;
   });
   if (pruned.length !== index.runs.length) {
-    saveRuns({ runs: pruned });
+    saveRuns(stateDir, { runs: pruned });
   }
 }
 
@@ -92,7 +94,6 @@ export function detectStuck(runs: RunRecord[]): RunRecord[] {
     const logSilence = logMtime ? now - logMtime : now - new Date(r.startedAt).getTime();
 
     if (!pidAlive) {
-      // Process died without reporting — mark failed
       return { ...r, status: 'failed' as const, finishedAt: new Date().toISOString(), exitCode: null };
     }
 

@@ -8,6 +8,9 @@ import { run } from './runner';
 import { loadConfig, applyTierOverrides, signConfig } from './config';
 import { runInit, formatInitResults, runOrchInit, formatOrchInitResults, OrchInitResult } from './init/index';
 import { runStatus } from './status';
+import { resolveStateDir } from './state-dir';
+import { setDeactivated, isDeactivated } from './health';
+import { getStateFilePath } from './state-dir';
 
 config();
 
@@ -29,10 +32,10 @@ program
   .option('-a, --agent <name>', 'Agent name or "auto"', 'auto')
   .option('-t, --tier <number>', 'Tier: 1=architect, 2=dev (default), 3=experimental', '2')
   .option('-p, --prompt <text>', 'Prompt text')
-  .option('-s, --stream', 'Stream agent output to terminal (default: detached with log file)', false)
+  .option('-s, --stream', 'Stream agent output to terminal via chop/tail (default: detached, fire-and-forget with report)', false)
   .option('--no-chop', 'Disable chop output-log compression in stream mode (default: enabled when chop is available)')
   .option('-r, --retries <number>', 'Max extra retry attempts with next agent in tier (default: 0). Total attempts = min(retries+1, agents-in-tier). Named agents never retry', '0')
-  .option('--global-state', 'Single shared round-robin counter across all tiers', false)
+  .option('--state-dir <path>', 'State directory (default: .at/ in CWD if exists, else ~/.at/)')
   .option('--log-dir <path>', 'Log file directory for detached mode', '/tmp/at-logs')
   .option('--timeout <ms>', 'Force-kill agent after N milliseconds (default: 3600000 = 1h)', '3600000')
   .option(
@@ -57,7 +60,7 @@ program
           cwd: parsed.cwd,
           env: parsed.env,
           stream: opts.stream as boolean,
-          globalState: opts.globalState as boolean,
+          stateDir: opts.stateDir as string | undefined,
           retries: opts.retries,
           logDir: opts.logDir,
           orchestrate: opts.orchestrate as boolean,
@@ -65,14 +68,14 @@ program
           timeout: opts.timeout,
         });
       } else {
-        const stdinData = process.stdin.isTTY ? '' : await readStdin();
+        const stdinData = !opts.prompt && !process.stdin.isTTY ? await readStdin() : '';
         const prompt = stdinData || (opts.prompt as string | undefined) || '';
         runOptions = resolveFromArgs({
           agent: opts.agent,
           tier: opts.tier,
           prompt,
           stream: opts.stream as boolean,
-          globalState: opts.globalState as boolean,
+          stateDir: opts.stateDir as string | undefined,
           retries: opts.retries,
           logDir: opts.logDir,
           orchestrate: opts.orchestrate as boolean,
@@ -236,7 +239,37 @@ program
   .description('Show recent agent runs: running, stuck, done, failed')
   .action(() => {
     try {
-      runStatus();
+      runStatus(resolveStateDir());
+    } catch (err) {
+      console.error(`[at] error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('enable <agent>')
+  .description('Re-enable a deactivated agent')
+  .action((agent: string) => {
+    try {
+      const stateDir = resolveStateDir();
+      const stateFilePath = getStateFilePath(stateDir);
+      setDeactivated(stateFilePath, agent, false);
+      console.log(`[at] agent "${agent}" enabled`);
+    } catch (err) {
+      console.error(`[at] error: ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('disable <agent>')
+  .description('Deactivate an agent (cannot be used even with -a)')
+  .action((agent: string) => {
+    try {
+      const stateDir = resolveStateDir();
+      const stateFilePath = getStateFilePath(stateDir);
+      setDeactivated(stateFilePath, agent, true);
+      console.log(`[at] agent "${agent}" deactivated`);
     } catch (err) {
       console.error(`[at] error: ${(err as Error).message}`);
       process.exit(1);

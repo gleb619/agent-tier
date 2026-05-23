@@ -1,18 +1,16 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import path from 'path';
-import os from 'os';
 import { AgentDef } from './agents/registry';
 
 export interface AgentHealth {
   failureTimes: string[];
   disabledTo: string | null;
+  deactivated?: boolean;
 }
 
 export interface HealthState {
   agents: Record<string, AgentHealth>;
 }
-
-export const STATE_FILE = path.join(os.homedir(), '.at', 'state.json');
 
 const DEFAULT_WINDOW_MS = 60 * 60 * 1000;       // 60 min
 const DEFAULT_THRESHOLD = 3;
@@ -51,7 +49,6 @@ function pruneOldFailures(times: string[]): string[] {
 
 function blockDurationFor(count: number): number {
   const durations = getBlockDurations();
-  // Pick the highest threshold that count meets
   let ms = durations[0]?.[1] ?? 30 * 60 * 1000;
   for (const [threshold, duration] of durations) {
     if (count >= threshold) ms = duration;
@@ -59,29 +56,58 @@ function blockDurationFor(count: number): number {
   return ms;
 }
 
-export function loadHealth(): HealthState {
+export function loadHealth(stateFilePath: string): HealthState {
   try {
-    const data = readFileSync(STATE_FILE, 'utf8');
-    return JSON.parse(data) as HealthState;
+    const data = readFileSync(stateFilePath, 'utf8');
+    const parsed = JSON.parse(data);
+    return { agents: {}, ...parsed };
   } catch {
     return { agents: {} };
   }
 }
 
-export function saveHealth(state: HealthState): void {
-  mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-  writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+export function saveHealth(stateFilePath: string, state: HealthState): void {
+  mkdirSync(path.dirname(stateFilePath), { recursive: true });
+  // Read existing full state file to preserve scheduler data
+  let full: Record<string, unknown> = {};
+  try {
+    full = JSON.parse(readFileSync(stateFilePath, 'utf8'));
+  } catch {
+    // no file yet
+  }
+  // Merge health fields into the existing state
+  full.agents = state.agents;
+  writeFileSync(stateFilePath, JSON.stringify(full, null, 2), 'utf8');
 }
 
-export function recordResult(name: string, success: boolean): void {
-  const state = loadHealth();
+export function isDeactivated(stateFilePath: string, name: string): boolean {
+  const state = loadHealth(stateFilePath);
+  return state.agents[name]?.deactivated === true;
+}
+
+export function setDeactivated(stateFilePath: string, name: string, deactivated: boolean): void {
+  const state = loadHealth(stateFilePath);
+  if (!state.agents[name]) {
+    state.agents[name] = { failureTimes: [], disabledTo: null };
+  }
+
+  if (deactivated) {
+    state.agents[name].deactivated = true;
+  } else {
+    delete state.agents[name].deactivated;
+  }
+  saveHealth(stateFilePath, state);
+}
+
+export function recordResult(stateFilePath: string, name: string, success: boolean): void {
+  const state = loadHealth(stateFilePath);
 
   if (success) {
     state.agents[name] = { failureTimes: [], disabledTo: null };
   } else {
     const current = state.agents[name] ?? { failureTimes: [], disabledTo: null };
     current.failureTimes = pruneOldFailures([...current.failureTimes, new Date().toISOString()]);
-    current.disabledTo = null; // will re-evaluate below
+    current.disabledTo = null;
 
     const count = current.failureTimes.length;
     if (count >= getThreshold()) {
@@ -91,16 +117,15 @@ export function recordResult(name: string, success: boolean): void {
     state.agents[name] = current;
   }
 
-  saveHealth(state);
+  saveHealth(stateFilePath, state);
 }
 
-export function isHealthy(name: string): boolean {
-  const state = loadHealth();
+export function isHealthy(stateFilePath: string, name: string): boolean {
+  const state = loadHealth(stateFilePath);
   const entry = state.agents[name];
 
   if (!entry) return true;
 
-  // Prune stale entries so the window stays accurate
   entry.failureTimes = pruneOldFailures(entry.failureTimes);
   if (entry.failureTimes.length === 0) {
     entry.disabledTo = null;
@@ -111,12 +136,12 @@ export function isHealthy(name: string): boolean {
   return Date.now() >= new Date(entry.disabledTo).getTime();
 }
 
-export function filterHealthy(agents: AgentDef[]): AgentDef[] {
-  return agents.filter((a) => isHealthy(a.name));
+export function filterHealthy(stateFilePath: string, agents: AgentDef[]): AgentDef[] {
+  return agents.filter((a) => isHealthy(stateFilePath, a.name));
 }
 
-export function resetAgent(name: string): void {
-  const state = loadHealth();
+export function resetAgent(stateFilePath: string, name: string): void {
+  const state = loadHealth(stateFilePath);
   state.agents[name] = { failureTimes: [], disabledTo: null };
-  saveHealth(state);
+  saveHealth(stateFilePath, state);
 }

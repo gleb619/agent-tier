@@ -1,5 +1,5 @@
 {
-  "name": "agent-tier",
+  "name": "@gleb619/agent-tier",
   "version": "0.1.0",
   "description": "Thin wrapper for routing coding tasks to tiered AI agents",
   "bin": {
@@ -21,5 +21,8 @@
     "ts-node": "^10.0.0",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   }
 }

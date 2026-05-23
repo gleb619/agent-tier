@@ -6,6 +6,7 @@ import path from 'path';
 import * as scheduler from '../src/scheduler';
 import * as health from '../src/health';
 import { Mock } from 'vitest';
+import os from 'os';
 
 vi.mock('../src/scheduler');
 vi.mock('../src/health');
@@ -14,12 +15,14 @@ function makeAgent(name: string): AgentDef {
   return { name, tier: 2, bin: () => '/usr/bin/true', buildArgs: (p) => [p] };
 }
 
+const defaultStateDir = path.join(os.homedir(), '.at');
+
 const baseOptions: RunOptions = {
   agent: 'auto',
   tier: 2,
   prompt: 'hello',
   stream: true,
-  globalState: false,
+  stateDir: defaultStateDir,
   retries: 0,
   logDir: '/tmp/at-logs',
   orchestrate: false,
@@ -35,9 +38,10 @@ beforeEach(() => {
   (scheduler.pickAgent as Mock).mockImplementation((candidates: AgentDef[]) => {
     return candidates[callCount++ % candidates.length];
   });
-  (scheduler.getStateFile as Mock).mockReturnValue('/tmp/at-test-state.json');
-  (health.filterHealthy as Mock).mockImplementation((agents: AgentDef[]) => agents);
+  (scheduler.getStateFile as Mock).mockReturnValue(path.join(defaultStateDir, 'state.json'));
+  (health.filterHealthy as Mock).mockImplementation((_stateFile: string, agents: AgentDef[]) => agents);
   (health.recordResult as Mock).mockImplementation(() => {});
+  (health.isDeactivated as Mock).mockReturnValue(false);
 });
 
 describe('run — auto mode', () => {
@@ -90,6 +94,12 @@ describe('run — named agent mode', () => {
     await expect(run({ ...baseOptions, agent: 'unknown' }, agents, spawner)).rejects.toThrow('Unknown agent');
   });
 
+  it('throws for deactivated agent', async () => {
+    (health.isDeactivated as Mock).mockReturnValue(true);
+    const spawner: Spawner = vi.fn();
+    await expect(run({ ...baseOptions, agent: 'a' }, agents, spawner)).rejects.toThrow('deactivated');
+  });
+
   it('does not retry named agent on failure', async () => {
     const spawner: Spawner = vi.fn().mockResolvedValue(1);
     await expect(run({ ...baseOptions, agent: 'a' }, agents, spawner)).rejects.toThrow();
@@ -140,7 +150,7 @@ describe('defaultSpawner', () => {
     expect(content).toContain('hello');
   });
 
-  it('creates a non-empty log file in detached mode', async () => {
+  it('creates a log file with runId header and agent output in detached mode', async () => {
     const agent: AgentDef = {
       name: 'test',
       tier: 2,
@@ -155,11 +165,13 @@ describe('defaultSpawner', () => {
     };
     const exitCode = await defaultSpawner(agent, options);
     expect(exitCode).toBe(0);
+    // Fire-and-forget: wait briefly for agent output to flush
+    await new Promise((resolve) => setTimeout(resolve, 200));
     const files = readdirSync(tmpLogDir);
     expect(files.length).toBe(1);
     const logPath = path.join(tmpLogDir, files[0]);
     const content = readFileSync(logPath, 'utf8');
-    expect(content.length).toBeGreaterThan(0);
+    expect(content).toContain('runId:');
     expect(content).toContain('hello');
   });
 
@@ -178,8 +190,6 @@ describe('defaultSpawner', () => {
       prompt: 'hello',
     };
     await expect(defaultSpawner(agent, options)).rejects.toThrow('no PID assigned');
-    // createWriteStream opens the file asynchronously; give it a tick to land
-    await new Promise((resolve) => setTimeout(resolve, 50));
     const files = readdirSync(tmpLogDir);
     expect(files.length).toBe(1);
     const logPath = path.join(tmpLogDir, files[0]);

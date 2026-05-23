@@ -1,13 +1,14 @@
 import { spawn, execSync } from 'child_process';
-import { mkdirSync, openSync, closeSync, createWriteStream, writeSync, appendFileSync } from 'fs';
+import { mkdirSync, openSync, closeSync, writeSync, appendFileSync } from 'fs';
 import path from 'path';
 
 import { AgentDef } from './agents/registry';
 import { RunOptions } from './resolver';
 import { pickAgent, getStateFile } from './scheduler';
 import { ORCHESTRATORS } from './orchestrators/registry';
-import { filterHealthy, recordResult } from './health';
+import { filterHealthy, recordResult, isDeactivated } from './health';
 import { addRun, updateRun } from './run-store';
+import { getStateFilePath } from './state-dir';
 
 function chopAvailable(): boolean {
   try {
@@ -59,12 +60,158 @@ export class AgentError extends Error {
 
 export type Spawner = (agent: AgentDef, options: RunOptions) => Promise<number>;
 
+interface LaunchResult {
+  child: ReturnType<typeof spawn>;
+  runId: string;
+  logFile: string;
+  agent: AgentDef;
+}
+
+function launchAgent(agent: AgentDef, options: RunOptions): LaunchResult {
+  const bin = agent.bin();
+  const args = agent.buildArgs(options.prompt, options.model);
+  const extraEnv = agent.buildEnv?.(options.model) ?? {};
+  const env = { ...process.env, ...extraEnv, ...(options.env ?? {}) } as Record<string, string>;
+
+  mkdirSync(options.logDir, { recursive: true });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const logFile = path.join(options.logDir, `at-${timestamp}-${agent.name}.log`);
+  const runId = generateRunId();
+  const stdinData = agent.promptMode === 'stdin' ? options.prompt : undefined;
+
+  const logFd = openSync(logFile, 'w');
+  writeSync(logFd, `[at] runId: ${runId}\n`);
+
+  const child = spawn(bin, args, {
+    env,
+    cwd: options.cwd,
+    detached: true,
+    stdio: stdinData ? ['pipe', logFd, logFd] : ['ignore', logFd, logFd],
+  });
+
+  if (child.pid === undefined) {
+    writeSync(logFd, `[at] error: Failed to spawn ${agent.name}: no PID assigned\n`);
+    closeSync(logFd);
+    throw new Error(`Failed to spawn ${agent.name}: no PID assigned`);
+  }
+
+  closeSync(logFd);
+  child.once('error', () => {});
+
+  if (stdinData && child.stdin) {
+    child.stdin.write(stdinData);
+    child.stdin.end();
+  }
+
+  trackChild(child.pid, true);
+  addRun(options.stateDir, {
+    runId,
+    agent: agent.name,
+    tier: agent.tier,
+    pid: child.pid,
+    prompt: options.prompt.slice(0, 200),
+    logFile,
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    exitCode: null,
+    status: 'running',
+  });
+
+  return { child, runId, logFile, agent };
+}
+
+function printReport(result: LaunchResult): void {
+  console.log(`[at] ┌──────────────────────────────────`);
+  console.log(`[at] │ Run ID:  ${result.runId}`);
+  console.log(`[at] │ Agent:   ${result.agent.name} (tier ${result.agent.tier})`);
+  console.log(`[at] │ PID:     ${result.child.pid}`);
+  console.log(`[at] │ Log:     ${result.logFile}`);
+  console.log(`[at] │ Status:  running`);
+  console.log(`[at] └──────────────────────────────────`);
+}
+
+async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Promise<number> {
+  const { child, runId, logFile, agent } = result;
+  const timeoutMs = options.timeout;
+
+  const agentExit = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
+    child.on('close', (code, signal) => resolve({ code, signal }));
+    child.on('error', () => resolve({ code: 1, signal: null }));
+  });
+
+  let timeoutHandle: ReturnType<typeof setTimeout>;
+  const timeoutP = new Promise<{ code: null; signal: 'SIGKILL' }>((resolve) => {
+    timeoutHandle = setTimeout(() => resolve({ code: null, signal: 'SIGKILL' }), timeoutMs);
+  });
+
+  const useChop = !options.noChop && chopAvailable();
+  const streamCmd = useChop ? 'chop' : 'tail';
+  const streamArgs = useChop ? [logFile] : ['-f', logFile];
+
+  const streamChild = spawn(streamCmd, streamArgs, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: false,
+  });
+
+  let streamPid: number | undefined;
+  if (streamChild.pid !== undefined) {
+    streamPid = streamChild.pid;
+    trackChild(streamPid, false);
+  }
+
+  const ignoreEpipe = (err: Error) => {
+    if ((err as NodeJS.ErrnoException).code !== 'EPIPE') {
+      console.error(`[at] stdout/stderr error: ${err.message}`);
+    }
+  };
+  process.stdout.on('error', ignoreEpipe);
+  process.stderr.on('error', ignoreEpipe);
+
+  streamChild.stdout?.pipe(process.stdout, { end: false });
+  streamChild.stderr?.pipe(process.stderr, { end: false });
+
+  streamChild.on('error', (err) => {
+    console.error(`[at] log stream error (logs at ${logFile}): ${err.message}`);
+  });
+
+  const { code, signal } = await Promise.race([agentExit, timeoutP]);
+  clearTimeout(timeoutHandle!);
+
+  if (streamPid !== undefined) {
+    try { streamChild.kill('SIGKILL'); } catch {}
+    untrackChild(streamPid);
+  }
+  untrackChild(child.pid!);
+
+  process.stdout.off('error', ignoreEpipe);
+  process.stderr.off('error', ignoreEpipe);
+
+  if (signal === 'SIGKILL') {
+    try { process.kill(-child.pid!, 'SIGKILL'); } catch {}
+    try { appendFileSync(logFile, `[at] timeout: killed after ${timeoutMs}ms\n`); } catch {}
+    updateRun(options.stateDir, runId, {
+      status: 'failed',
+      finishedAt: new Date().toISOString(),
+      exitCode: 1,
+    });
+    throw new Error(`${agent.name} killed after ${timeoutMs}ms timeout`);
+  }
+
+  const exitCode = code ?? 1;
+  updateRun(options.stateDir, runId, {
+    status: exitCode === 0 ? 'done' : 'failed',
+    finishedAt: new Date().toISOString(),
+    exitCode,
+  });
+
+  return exitCode;
+}
+
 export async function run(
   options: RunOptions,
   agents: AgentDef[],
   spawner: Spawner = defaultSpawner,
 ): Promise<number> {
-  // Clear any leaked state from previous calls
   activeChildren.length = 0;
 
   const cleanup = () => {
@@ -76,299 +223,90 @@ export async function run(
 
   try {
     const candidatePool = options.orchestrate ? ORCHESTRATORS : agents;
-    const statePrefix = options.orchestrate ? 'at-orch' : 'at';
+    const stateFilePath = getStateFilePath(options.stateDir);
     let candidates: AgentDef[];
 
     if (options.agent !== 'auto') {
-      // Named agent: bypass health checks — user explicitly chose this agent
+      if (isDeactivated(stateFilePath, options.agent)) {
+        throw new Error(
+          `Agent "${options.agent}" is deactivated. Enable it first with: at enable ${options.agent}`,
+        );
+      }
       const named = candidatePool.find((a) => a.name === options.agent);
       if (!named) throw new Error(`Unknown agent: ${options.agent}`);
       candidates = [named];
     } else {
       const tierAgents = candidatePool.filter((a) => a.tier === options.tier);
       if (tierAgents.length === 0) throw new Error(`No agents defined for tier ${options.tier}`);
-      const healthy = filterHealthy(tierAgents);
+      const enabled = tierAgents.filter((a) => !isDeactivated(stateFilePath, a.name));
+      if (enabled.length === 0) {
+        throw new Error(`All tier-${options.tier} agents are deactivated`);
+      }
+      const healthy = filterHealthy(stateFilePath, enabled);
       if (healthy.length === 0) {
-        console.warn(`[at] all tier-${options.tier} agents are disabled, using full pool`);
-        candidates = tierAgents;
+        console.warn(`[at] all tier-${options.tier} agents are temporarily disabled, using full enabled pool`);
+        candidates = enabled;
       } else {
         candidates = healthy;
       }
     }
 
     const isNamed = options.agent !== 'auto';
-    //const maxAttempts = isNamed ? 1 : Math.min(options.retries + 1, candidates.length);
-    const maxAttempts = 1; //It leads to bugs and agents children ghosts(staled processes)
-    const stateFile = getStateFile(options.tier, options.globalState, statePrefix);
-    let lastExitCode = 1;
-    let lastError: Error | null = null;
+    const stateFile = getStateFile(options.tier, options.stateDir);
+    const agent = isNamed ? candidates[0] : pickAgent(candidates, stateFile);
 
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      if (attempt > 0) {
-        killActiveChildren();
+    try {
+      const exitCode = await spawner(agent, options);
+      if (options.stream) {
+        recordResult(stateFilePath, agent.name, exitCode === 0);
+        if (exitCode !== 0) {
+          throw new AgentError(`${agent.name} exited with code ${exitCode}`, exitCode);
+        }
       }
-
-      const agent = isNamed ? candidates[0] : pickAgent(candidates, stateFile);
-      const hasMore = attempt < maxAttempts - 1;
-
-      try {
-        const exitCode = await spawner(agent, options);
-        recordResult(agent.name, exitCode === 0);
-        if (exitCode === 0) return 0;
-        lastExitCode = exitCode;
-        lastError = new AgentError(`${agent.name} exited with code ${exitCode}`, exitCode);
-        console.error(`[at] ${agent.name} failed (exit ${exitCode})${hasMore ? ', retrying...' : ''}`);
-      } catch (err) {
-        recordResult(agent.name, false);
-        lastError = err as Error;
-        console.error(`[at] ${agent.name} error: ${(err as Error).message}${hasMore ? ', retrying...' : ''}`);
-      }
+      return 0;
+    } catch (err) {
+      recordResult(stateFilePath, agent.name, false);
+      if (err instanceof AgentError) throw err;
+      throw err;
     }
-
-    if (lastError) throw lastError;
-    throw new AgentError('All attempts failed', lastExitCode);
   } finally {
     process.off('SIGTERM', cleanup);
     process.off('SIGINT', cleanup);
-    killActiveChildren();
+    if (options.stream) {
+      killActiveChildren();
+    }
   }
 }
 
 export const defaultSpawner: Spawner = (agent, options) => {
-  const bin = agent.bin();
-  const args = agent.buildArgs(options.prompt, options.model);
-  const extraEnv = agent.buildEnv?.(options.model) ?? {};
-  const env = { ...process.env, ...extraEnv, ...(options.env ?? {}) } as Record<string, string>;
+  const result = launchAgent(agent, options);
+  const { child, runId, logFile } = result;
 
-  return options.stream
-    ? spawnStream(bin, args, env, options, agent, options.noChop)
-    : spawnDetached(bin, args, env, options, agent);
+  child.removeAllListeners('error');
+
+  if (options.stream) {
+    return streamLogsAndWatch(result, options);
+  } else {
+    child.on('error', (err) => {
+      try { appendFileSync(logFile, `[at] error: ${err.message}\n`); } catch {}
+      updateRun(options.stateDir, runId, {
+        status: 'failed',
+        finishedAt: new Date().toISOString(),
+        exitCode: 1,
+      });
+    });
+    child.on('close', (code) => {
+      const exitCode = code ?? 1;
+      updateRun(options.stateDir, runId, {
+        status: exitCode === 0 ? 'done' : 'failed',
+        finishedAt: new Date().toISOString(),
+        exitCode,
+      });
+    });
+    printReport(result);
+    return Promise.resolve(0);
+  }
 };
-
-function spawnStream(
-  bin: string,
-  args: string[],
-  env: Record<string, string>,
-  options: RunOptions,
-  agent: AgentDef,
-  noChop?: boolean,
-): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const useChop = !noChop && chopAvailable();
-    const [cmd, cmdArgs] = useChop
-      ? ['chop', [bin, ...args]]
-      : [bin, args];
-
-    mkdirSync(options.logDir, { recursive: true });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const logFile = path.join(options.logDir, `at-${timestamp}-${agent.name}.log`);
-    const stdinData = agent.promptMode === 'stdin' ? options.prompt : undefined;
-    const logStream = createWriteStream(logFile);
-    const runId = generateRunId();
-    logStream.write(`[at] runId: ${runId}\n`);
-
-    const child = spawn(cmd, cmdArgs, {
-      env,
-      cwd: options.cwd,
-      detached: true,
-      stdio: stdinData ? ['pipe', 'pipe', 'pipe'] : ['ignore', 'pipe', 'pipe'],
-    });
-
-    // Prevent unhandled 'error' event if spawn fails before the real handler is attached
-    const swallowSpawnError = () => {};
-    child.once('error', swallowSpawnError);
-
-    const ignoreEpipe = (err: Error) => {
-      if ((err as NodeJS.ErrnoException).code === 'EPIPE') {
-        // Consumer closed the pipe (e.g., `| head`) — harmless
-      } else {
-        console.error(`[at] stdout/stderr error: ${err.message}`);
-      }
-    };
-    process.stdout.on('error', ignoreEpipe);
-    process.stderr.on('error', ignoreEpipe);
-
-    logStream.on('error', (err) => {
-      console.error(`[at] log stream error: ${err.message}`);
-    });
-
-    child.stdout!.pipe(process.stdout, { end: false });
-    child.stdout!.pipe(logStream, { end: false });
-    child.stderr!.pipe(process.stderr, { end: false });
-    child.stderr!.pipe(logStream, { end: false });
-
-    if (stdinData && child.stdin) {
-      child.stdin.write(stdinData);
-      child.stdin.end();
-    }
-
-    if (child.pid === undefined) {
-      logStream.write('[at] error: Failed to spawn process: no PID assigned\n');
-      process.stdout.off('error', ignoreEpipe);
-      process.stderr.off('error', ignoreEpipe);
-      logStream.end(() => {
-        reject(new Error('Failed to spawn process: no PID assigned'));
-      });
-      return;
-    }
-
-    trackChild(child.pid, true);
-    addRun({
-      runId,
-      agent: agent.name,
-      tier: agent.tier,
-      pid: child.pid,
-      prompt: options.prompt.slice(0, 200),
-      logFile,
-      startedAt: new Date().toISOString(),
-      finishedAt: null,
-      exitCode: null,
-      status: 'running',
-    });
-    console.log(`[at] started ${agent.name} (pid ${child.pid}, runId ${runId}) — logs: ${logFile}`);
-
-    const timeoutMs = options.timeout;
-    const timeout = setTimeout(() => {
-      const msg = `[at] timeout: killing process after ${timeoutMs}ms\n`;
-      console.error(msg.trim());
-      logStream.write(msg);
-      try {
-        process.kill(-child.pid!, 'SIGKILL');
-      } catch {
-        // ignore
-      }
-    }, timeoutMs);
-
-    const cleanupStream = () => {
-      clearTimeout(timeout);
-      untrackChild(child.pid!);
-      process.stdout.off('error', ignoreEpipe);
-      process.stderr.off('error', ignoreEpipe);
-      child.removeAllListeners('error');
-    };
-
-    child.off('error', swallowSpawnError);
-    child.on('error', (err) => {
-      cleanupStream();
-      logStream.write(`[at] error: ${err.message}\n`);
-      updateRun(runId, { status: 'failed', finishedAt: new Date().toISOString(), exitCode: 1 });
-      logStream.end(() => {
-        reject(err);
-      });
-    });
-    child.on('close', (code, signal) => {
-      cleanupStream();
-      const finalStatus = code === 0 ? 'done' : 'failed';
-      updateRun(runId, { status: finalStatus, finishedAt: new Date().toISOString(), exitCode: code ?? 1 });
-      logStream.end(() => {
-        if (signal === 'SIGKILL') {
-          reject(new Error(`process killed after ${timeoutMs}ms timeout`));
-        } else {
-          resolve(code ?? 1);
-        }
-      });
-    });
-  });
-}
-
-function spawnDetached(
-  bin: string,
-  args: string[],
-  env: Record<string, string>,
-  options: RunOptions,
-  agent: AgentDef,
-): Promise<number> {
-  return new Promise((resolve, reject) => {
-    mkdirSync(options.logDir, { recursive: true });
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const logFile = path.join(options.logDir, `at-${timestamp}-${agent.name}.log`);
-    const stdinData = agent.promptMode === 'stdin' ? options.prompt : undefined;
-    const runId = generateRunId();
-
-    const logFd = openSync(logFile, 'w');
-    writeSync(logFd, `[at] runId: ${runId}\n`);
-    const child = spawn(bin, args, {
-      env,
-      cwd: options.cwd,
-      detached: true,
-      stdio: stdinData ? ['pipe', logFd, logFd] : ['ignore', logFd, logFd],
-    });
-
-    // Prevent unhandled 'error' event if spawn fails before the real handler is attached
-    const swallowSpawnError = () => {};
-    child.once('error', swallowSpawnError);
-
-    if (child.pid === undefined) {
-      writeSync(logFd, `[at] error: Failed to spawn ${agent.name}: no PID assigned\n`);
-      closeSync(logFd);
-      reject(new Error(`Failed to spawn ${agent.name}: no PID assigned`));
-      return;
-    }
-
-    closeSync(logFd);
-
-    if (stdinData && child.stdin) {
-      child.stdin.write(stdinData);
-      child.stdin.end();
-    }
-
-    trackChild(child.pid, true);
-    addRun({
-      runId,
-      agent: agent.name,
-      tier: agent.tier,
-      pid: child.pid,
-      prompt: options.prompt.slice(0, 200),
-      logFile,
-      startedAt: new Date().toISOString(),
-      finishedAt: null,
-      exitCode: null,
-      status: 'running',
-    });
-
-    const timeoutMs = options.timeout;
-    const timeout = setTimeout(() => {
-      const msg = `[at] timeout: killing ${agent.name} (pid ${child.pid}) after ${timeoutMs}ms\n`;
-      console.error(msg.trim());
-      try {
-        appendFileSync(logFile, msg);
-      } catch {
-        // ignore
-      }
-      try {
-        process.kill(-child.pid!, 'SIGKILL');
-      } catch {
-        // ignore
-      }
-    }, timeoutMs);
-
-    child.off('error', swallowSpawnError);
-    child.on('error', (err) => {
-      clearTimeout(timeout);
-      untrackChild(child.pid!);
-      updateRun(runId, { status: 'failed', finishedAt: new Date().toISOString(), exitCode: 1 });
-      try {
-        appendFileSync(logFile, `[at] error: ${err.message}\n`);
-      } catch {
-        // ignore
-      }
-      reject(err);
-    });
-    child.on('close', (code, signal) => {
-      clearTimeout(timeout);
-      untrackChild(child.pid!);
-      const finalStatus = code === 0 ? 'done' : 'failed';
-      updateRun(runId, { status: finalStatus, finishedAt: new Date().toISOString(), exitCode: code ?? 1 });
-      if (signal === 'SIGKILL') {
-        reject(new Error(`${agent.name} killed after ${timeoutMs}ms timeout`));
-      } else {
-        resolve(code ?? 1);
-      }
-    });
-
-    console.log(`[at] started ${agent.name} (pid ${child.pid}, runId ${runId}) — logs: ${logFile}`);
-  });
-}
 
 const COLORS = [
   'red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'black', 'white', 'gray',

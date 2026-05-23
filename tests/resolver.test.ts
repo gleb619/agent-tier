@@ -1,4 +1,6 @@
 import { parseJsonInput, resolveFromArgs } from '../src/resolver';
+import path from 'path';
+import os from 'os';
 
 describe('parseJsonInput', () => {
   it('parses full JSON payload', () => {
@@ -35,7 +37,7 @@ describe('resolveFromArgs', () => {
     expect(opts.agent).toBe('auto');
     expect(opts.tier).toBe(2);
     expect(opts.stream).toBe(false);
-    expect(opts.globalState).toBe(false);
+    expect(opts.stateDir).toBe(path.join(os.homedir(), '.at'));
     expect(opts.retries).toBe(0);
     expect(opts.logDir).toBe('/tmp/at-logs');
     expect(opts.orchestrate).toBe(false);
@@ -48,7 +50,7 @@ describe('resolveFromArgs', () => {
   });
 
   it('throws for invalid tier', () => {
-    expect(() => resolveFromArgs({ prompt: 'hello', tier: '4' })).toThrow('tier');
+    expect(() => resolveFromArgs({ prompt: 'hello', tier: '5' })).toThrow('tier');
   });
 
   it('throws when prompt is empty', () => {
@@ -61,5 +63,9 @@ describe('resolveFromArgs', () => {
 
   it('accepts custom timeout', () => {
     expect(resolveFromArgs({ prompt: 'hello', timeout: '5000' }).timeout).toBe(5000);
+  });
+
+  it('uses explicit stateDir when provided', () => {
+    expect(resolveFromArgs({ prompt: 'hello', stateDir: '/custom/.at' }).stateDir).toBe('/custom/.at');
   });
 });

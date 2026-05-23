@@ -65,10 +65,10 @@ echo '{"agent":"opencode","prompt":"fix the login bug"}' | at --json
 
 ### Output modes
 
-| Mode               | Behavior                                                                                                   |
-|--------------------|------------------------------------------------------------------------------------------------------------|
+| Mode               | Behavior                                                                                                                                         |
+|--------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
 | Detached (default) | Agent spawns in the background; logs go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Blocks until the agent exits (supports timeout and retry). |
-| Stream (`-s`)      | Agent output is streamed to the terminal and simultaneously written to a log file. Blocks until the agent exits. |
+| Stream (`-s`)      | Agent output is streamed to the terminal and simultaneously written to a log file. Blocks until the agent exits.                                 |
 
 ## Tiers
 
