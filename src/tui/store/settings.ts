@@ -12,6 +12,7 @@ const AGENTS_BY_TIER: Record<1 | 2 | 3, string[]> = {
   1: ['auto', 'glm-code', 'codex', 'kimi'],
   2: ['auto', 'blackbox', 'mm-code', 'opencode', 'qwen', 'pi'],
   3: ['auto', 'kilo', 'gemini', 'goose', 'aider', 'cline'],
+  4: ['auto', 'mock', 'mock-long'],
 };
 const RETRIES_CYCLE: readonly [0, 1, 2, 3] = [0, 1, 2, 3];
 

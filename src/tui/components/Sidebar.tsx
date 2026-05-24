@@ -1,5 +1,4 @@
-import { For, Show, createMemo } from 'solid-js';
-import { execSync } from 'child_process';
+import { For, createMemo } from 'solid-js';
 import {
   filteredSessions,
   selectedRunId,
@@ -8,7 +7,6 @@ import {
   setSidebarFilter,
   showDashboard,
   setShowDashboard,
-  toggleDashboard,
 } from '../store/sessions';
 import { setCurrentLogFile, loadLogFile } from '../store/log';
 import type { RunRecord } from '../../run-store';
@@ -129,29 +127,6 @@ function groupSessionsByDate(sessions: RunRecord[]): SessionGroup[] {
   return groups;
 }
 
-function StatusDashboard(): JSX.Element {
-  try {
-    const output = execSync('at status', { encoding: 'utf8', timeout: 5000 });
-    const lines = output.split('\n').filter((l) => l.trim());
-    return (
-      <box flexDirection="column" flexGrow={1} padding={1}>
-        <text content="── Dashboard ──" fg="#58a6ff" marginY={0} />
-        <scrollbox flexGrow={1}>
-          <For each={lines}>
-            {(line) => <text content={line} fg="#c9d1d9" />}
-          </For>
-        </scrollbox>
-      </box>
-    );
-  } catch {
-    return (
-      <box flexDirection="column" flexGrow={1} padding={1}>
-        <text content="Dashboard unavailable" fg="#f85149" />
-      </box>
-    );
-  }
-}
-
 export function Sidebar(props: SidebarProps): JSX.Element {
   const groups = createMemo(() => groupSessionsByDate(filteredSessions()));
 
@@ -160,14 +135,13 @@ export function Sidebar(props: SidebarProps): JSX.Element {
       title="Sessions"
       border
       borderStyle="single"
-      borderColor={props.focused ? "#00aaff" : "#555555"}
+      borderColor={props.focused ? (props.focusZone === 1 ? "#00ddff" : "#00aaff") : "#555555"}
       focused={props.focused}
       flexDirection="column"
       flexGrow={1}
-      width="25%"
-      maxWidth="30%"
       padding={1}
     >
+      {/* TODO: add here support of arrows navigation for list(e.g. if input active, we still need to navigate in list) */}
       <input
         value={sidebarFilter()}
         placeholder="filter..."
@@ -176,50 +150,54 @@ export function Sidebar(props: SidebarProps): JSX.Element {
         width="100%"
       />
 
-      <text content="───────────────────────────" fg="#30363d" />
+      <text content="───────────────────────────" fg={props.focusZone === 0 ? "#00aaff" : "#555555"} />
 
-      <Show when={showDashboard()}>
-        <StatusDashboard />
-      </Show>
+      <scrollbox flexGrow={1}>
+        <box
+          flexDirection="column"
+          paddingY={0}
+          paddingX={1}
+          backgroundColor={showDashboard() && '#1c2128'}
+          onMouseDown={() => { setShowDashboard(true); setSelectedRunId(null); }}
+        >
+          <text fg="#58a6ff">
+            {showDashboard() ? '▶ ' : '  '}📊 Dashboard
+          </text>
+        </box>
 
-      <Show when={!showDashboard()}>
-        <scrollbox flexGrow={1}>
-          <text
-            content={showDashboard() ? '◀ Back to sessions' : '📊 Dashboard (status)'}
-            fg="#58a6ff"
-            onMouseDown={toggleDashboard}
-            marginY={1}
-          />
-          <For each={groups()}>
-            {(group) => (
-              <>
-                <text content={'── ' + group.label + ' ──'} fg="#484f58" marginY={0} />
-                <For each={group.sessions}>
-                  {(s) => {
-                    const isSelected = selectedRunId() === s.runId;
-                    return (
-                      <box
-                        flexDirection="column"
-                        paddingY={0}
-                        paddingX={1}
-                        backgroundColor={isSelected ? '#1c2128' : '#0d1117'}
-                        onMouseDown={() => selectSession(s)}
-                      >
-                        <text>
-                          {isSelected ? '▶ ' : '  '}{statusIcon(s.status)} {truncate(s.runId, 20)}
-                        </text>
-                        <text fg="#8b949e" marginBottom={1}>
-                          {isSelected ? '   ' : '    '}{s.agent} t{s.tier} · {formatDuration(s)}
-                        </text>
-                      </box>
-                    );
-                  }}
-                </For>
-              </>
-            )}
-          </For>
-        </scrollbox>
-      </Show>
+        <text content="───────────────────────────" fg="#484f58" />
+
+        <For each={groups()}>
+          {(group) => (
+            <>
+              <text content={'── ' + group.label + ' ──'} fg="#484f58" marginY={0} />
+              <For each={group.sessions}>
+                {(s) => {
+                  //TODO: move selection to a special store, for fast/reactive changes, since now we need to wait
+                  // some time for rerender
+                  const isSelected = selectedRunId() === s.runId;
+                  return (
+                    <box
+                      flexDirection="column"
+                      paddingY={0}
+                      paddingX={1}
+                      backgroundColor={isSelected && '#1c2128'}
+                      onMouseDown={() => selectSession(s)}
+                    >
+                      <text>
+                        {isSelected ? '▶ ' : '  '}{statusIcon(s.status)} {truncate(s.runId, 20)}
+                      </text>
+                      <text fg="#8b949e" marginBottom={1}>
+                        {isSelected ? '   ' : '    '}{s.agent} t{s.tier} · {formatDuration(s)}
+                      </text>
+                    </box>
+                  );
+                }}
+              </For>
+            </>
+          )}
+        </For>
+      </scrollbox>
     </box>
   );
 }

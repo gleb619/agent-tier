@@ -140,6 +140,15 @@ export const AGENTS: AgentDef[] = [
     bin: () => process.env.MOCK_BIN ?? `${LOCAL_BIN}/mock-agent`,
     buildArgs: (prompt) => [prompt],
   },
+
+  // MockLong: simulates long-running agent with streaming output, controlled by --duration flag
+  {
+    name: 'mock-long',
+    tier: 4,
+    bin: () => process.env.MOCK_LONG_BIN ?? `${LOCAL_BIN}/mock-long-agent`,
+    buildArgs: (prompt, _model?: string) => [prompt],
+    buildEnv: () => ({ MOCK_LONG_DURATION: process.env.MOCK_LONG_DURATION ?? '30000' }),
+  },
 ];
 
 export function getAgentsByTier(tier: 1 | 2 | 3 | 4): AgentDef[] {

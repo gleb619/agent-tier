@@ -13,42 +13,26 @@ interface HotkeyItem {
 function getHotkeysForZone(zone: number): HotkeyItem[] {
   switch (zone) {
     case 0: // sidebar filter
+    case 1: // sidebar list
       return [
         { key: "↑↓", desc: "select" },
-        { key: "^D", desc: "dashboard" },
+        { key: "Tab", desc: "input/list" },
         { key: "^K", desc: "kill" },
         { key: "^E", desc: "retry" },
-        { key: "^F", desc: "refresh" },
-        { key: "^]^[", desc: "panels" },
+        { key: "^R", desc: "refresh" },
+        { key: "^]", desc: "panels" },
         { key: "^C", desc: "exit" },
       ];
-    case 1: // sidebar list / dashboard
-      return [
-        { key: "↑↓", desc: "select" },
-        { key: "^D", desc: "dashboard" },
-        { key: "^K", desc: "kill" },
-        { key: "^E", desc: "retry" },
-        { key: "^F", desc: "refresh" },
-        { key: "^]^[", desc: "panels" },
-        { key: "^C", desc: "exit" },
-      ];
-    case 2: // log scroll
+    case 2: // log filter
+    case 3: // log scroll
       return [
         { key: "↑↓", desc: "scroll" },
-        { key: "g", desc: "head" },
-        { key: "G", desc: "tail" },
-        { key: "^F", desc: "refresh" },
+        { key: "Tab", desc: "scroll/filter" },
+        { key: "^H", desc: "head" },
+        { key: "^T", desc: "tail" },
+        { key: "^R", desc: "refresh" },
         { key: "^L", desc: "auto" },
-        { key: "^]^[", desc: "panels" },
-        { key: "^C", desc: "exit" },
-      ];
-    case 3: // log filter
-      return [
-        { key: "↑↓", desc: "scroll" },
-        { key: "g", desc: "head" },
-        { key: "G", desc: "tail" },
-        { key: "^F", desc: "refresh" },
-        { key: "^]^[", desc: "panels" },
+        { key: "^]", desc: "panels" },
         { key: "^C", desc: "exit" },
       ];
     case 4: // prompt bar
@@ -56,8 +40,9 @@ function getHotkeysForZone(zone: number): HotkeyItem[] {
         { key: "Enter", desc: "submit" },
         { key: "^T", desc: "tier" },
         { key: "^A", desc: "agent" },
-        { key: "^M", desc: "mode" },
+        { key: "^O", desc: "mode" },
         { key: "^N", desc: "retries" },
+        { key: "^]", desc: "panels" },
         { key: "^C", desc: "exit" },
       ];
     default:

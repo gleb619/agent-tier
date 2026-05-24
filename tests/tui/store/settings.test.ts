@@ -13,19 +13,14 @@ import {
 // Solid.js createSignal creates module-level singletons. Each test must reset
 // to a known state: tier=2, agent='auto', mode='stream', retries=0
 function resetToKnown() {
-  // Reset tier: cycle until tier=2
-  // This also resets agent to 'auto' (called on every cycleTier even when tier wraps)
-  while (tier() !== 2) {
-    cycleTier();
-  }
-  // Reset mode: cycle until mode='stream'
-  while (mode() !== 'stream') {
-    cycleMode();
-  }
-  // Reset retries: cycle until retries=0
-  while (retries() !== 0) {
-    cycleRetries();
-  }
+  // First get to tier 2
+  while (tier() !== 2) cycleTier();
+  // Force a full round-trip to reset agent to 'auto' (each cycleTier resets agent)
+  cycleTier(); // 2→3
+  cycleTier(); // 3→1
+  cycleTier(); // 1→2, agent='auto'
+  if (mode() !== 'stream') cycleMode();
+  while (retries() !== 0) cycleRetries();
 }
 
 describe('settings store', () => {

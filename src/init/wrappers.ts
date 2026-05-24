@@ -112,6 +112,81 @@ mkdir -p "$CLAUDE_CONFIG_DIR"
 exec claude "$@"
 `,
   },
+
+  'mock': {
+    agentName: 'mock',
+    description: 'Dry-run / test agent — prints prompt and exits successfully',
+    content: `#!/bin/bash
+# mock — dry-run / test agent for \`at\`
+# Prints the prompt and environment info, then exits successfully.
+
+set -e
+
+PROMPT="$1"
+
+if [ -z "$PROMPT" ]; then
+    echo "[mock] ERROR: no prompt provided" >&2
+    exit 1
+fi
+
+echo "[mock] received prompt: \${PROMPT}"
+echo "[mock] working directory: \$(pwd)"
+echo "[mock] timestamp: \$(date -Iseconds)"
+echo "[mock] done" >&2
+exit 0
+`,
+  },
+
+  'mock-long': {
+    agentName: 'mock-long',
+    description: 'Simulates long-running agent with streaming output — controlled by MOCK_LONG_DURATION env var (default 30000ms)',
+    content: `#!/bin/bash
+# mock-long — simulates long-running agent with streaming output
+# Controlled by MOCK_LONG_DURATION env var (default: 30000ms = 30 seconds)
+# Useful for testing log streaming behavior.
+
+set -e
+
+PROMPT="$1"
+DURATION="\${MOCK_LONG_DURATION:-30000}"
+ITERATION_MS=2000
+
+if [ -z "$PROMPT" ]; then
+    echo "[mock-long] ERROR: no prompt provided" >&2
+    exit 1
+fi
+
+echo "[mock-long] started — duration: \${DURATION}ms"
+echo "[mock-long] received prompt: \${PROMPT}"
+echo "[mock-long] working directory: $(pwd)"
+
+START_TIME=$(date +%s%3N)
+ITER=0
+
+while true; do
+    CURRENT_TIME=$(date +%s%3N)
+    ELAPSED=$((CURRENT_TIME - START_TIME))
+
+    if [ $ELAPSED -ge $DURATION ]; then
+        echo "[mock-long] iteration $ITER: done (elapsed: \${ELAPSED}ms)"
+        echo "[mock-long] completed successfully after \${ELAPSED}ms" >&2
+        exit 0
+    fi
+
+    echo "[mock-long] iteration $ITER: working... (elapsed: \${ELAPSED}ms/\${DURATION}ms)"
+    sleep 0.1
+    echo "[mock-long] iteration $ITER: wrote file step-$(printf '%03d' $ITER).txt with content"
+    echo "content for step $ITER" > "step-$(printf '%03d' $ITER).txt"
+    sleep 0.1
+    echo "[mock-long] iteration $ITER: analyzing structure"
+    sleep 0.1
+    echo "[mock-long] iteration $ITER: thinking..."
+
+    ITER=$((ITER + 1))
+    sleep $((ITERATION_MS / 1000))
+done
+`,
+  },
 };
 
 // ── Public API ──

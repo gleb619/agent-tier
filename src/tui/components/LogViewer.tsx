@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createEffect } from "solid-js";
 import { filteredLines, logFilter, setLogFilter, scrollOffset, currentLogFile, goToHead, goToTail, VISIBLE_LINES, isLoading } from "../store/log";
-import { selectedSession } from "../store/sessions";
+import { selectedSession, showDashboard, sessions } from "../store/sessions";
+import { formatStatusTable } from "../../status";
 
 function lineColor(line: string): string {
   if (/\[ERROR\]|\[FAIL\]|error|Error/.test(line)) return "#f85149";
@@ -35,7 +36,7 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
 
   return (
     <box
-      title={logTitle()}
+      title={showDashboard() ? "Dashboard — Status" : logTitle()}
       border
       borderStyle="single"
       borderColor={props.focused ? "#00aaff" : "#555555"}
@@ -44,38 +45,49 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
       flexGrow={3}
       padding={1}
     >
-      {/* Row 1 — toolbar */}
-      <box flexDirection="row" gap={2}>
-        <input
-          value={logFilter()}
-          placeholder={props.focusZone === 3 ? "🔍 filter logs..." : "filter logs..."}
-          focused={props.focusZone === 3}
-          borderStyle="single"
-          borderColor={props.focusZone === 3 ? "#58a6ff" : "#30363d"}
-          onInput={(v) => setLogFilter(v)}
-          flexGrow={1}
-        />
+      <Show
+        when={!showDashboard()}
+        fallback={
+          <scrollbox flexGrow={1} focused={props.focusZone === 2}>
+            <text content={formatStatusTable(sessions())} fg="#c9d1d9" />
+          </scrollbox>
+        }
+      >
+        {/* Row 1 — toolbar */}
+        <box flexDirection="row" gap={2} height={3}>
+          {/* TODO: add here support of arrows navigation for list(e.g. if input active, we still need to navigate in log list) */}
+          <input
+            value={logFilter()}
+            placeholder={props.focusZone === 3 ? "🔍 filter logs..." : "filter logs..."}
+            focused={props.focusZone === 3}
+            borderStyle="single"
+            borderColor={props.focusZone === 3 ? "#58a6ff" : "#30363d"}
+            onInput={(v) => setLogFilter(v)}
+            flexGrow={1}
+            width="100%"
+          />
 
-        <Show when={isLoading()}>
-          <text content="loading..." fg="#d29922" />
-        </Show>
-        <text fg="#58a6ff" content="[g] head" onMouseDown={goToHead} />
-        <text fg="#58a6ff" content="[G] tail" onMouseDown={goToTail} />
-      </box>
+          <Show when={isLoading()}>
+            <text content="loading..." fg="#d29922" />
+          </Show>
+          <text fg="#58a6ff" content="[g] head" onMouseDown={goToHead} />
+          <text fg="#58a6ff" content="[G] tail" onMouseDown={goToTail} />
+        </box>
 
-      <text content="────────────────────────────────────────" fg="#30363d" />
+        <text content="────────────────────────────────────────" fg="#30363d" />
 
-      {/* Row 2 — log lines */}
-      <scrollbox flexGrow={1} focused={props.focusZone === 2}>
-        <Show
-          when={filteredLines().length > 0}
-          fallback={<text fg="#484f58" content="(no log output)" />}
-        >
-          <For each={visibleLines()}>
-            {(line) => <text content={line} fg={lineColor(line)} />}
-          </For>
-        </Show>
-      </scrollbox>
+        {/* Row 2 — log lines */}
+        <scrollbox flexGrow={1} focused={props.focusZone === 2}>
+          <Show
+            when={filteredLines().length > 0}
+            fallback={<text fg="#484f58" content="(no log output)" />}
+          >
+            <For each={visibleLines()}>
+              {(line) => <text content={line} fg={lineColor(line)} />}
+            </For>
+          </Show>
+        </scrollbox>
+      </Show>
     </box>
   );
 }

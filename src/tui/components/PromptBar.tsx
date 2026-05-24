@@ -52,7 +52,7 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
       ) : (
         <input
           value={prompt()}
-          placeholder="Enter prompt and press Enter to launch agent..."
+          placeholder={props.focused ? "⚡︎ Enter prompt..." : "Enter prompt and press Enter to launch agent..."}
           focused={props.focused}
           onInput={(v) => setPrompt(v)}
           onSubmit={(v) => {

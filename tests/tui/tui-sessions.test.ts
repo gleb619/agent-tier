@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { filteredSessions, sidebarFilter, setSidebarFilter, showDashboard, toggleDashboard } from '../../src/tui/store/sessions';
+import { filteredSessions, sidebarFilter, setSidebarFilter } from '../../src/tui/store/sessions';
 import type { RunRecord } from '../../src/run-store';
 
 const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord => ({
@@ -83,20 +83,6 @@ describe('sessions store — pure functions', () => {
         s.status.toLowerCase().includes('')
       );
       expect(filtered).toHaveLength(3);
-    });
-  });
-
-  describe('showDashboard / toggleDashboard', () => {
-    it('showDashboard starts false', () => {
-      expect(showDashboard()).toBe(false);
-    });
-
-    it('toggleDashboard flips the state', () => {
-      expect(showDashboard()).toBe(false);
-      toggleDashboard();
-      expect(showDashboard()).toBe(true);
-      toggleDashboard();
-      expect(showDashboard()).toBe(false);
     });
   });
 });
