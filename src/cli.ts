@@ -26,6 +26,7 @@ async function readStdin(): Promise<string> {
 }
 
 import { readFileSync } from 'fs';
+import { spawn } from 'child_process';
 import path from 'path';
 const pkg = JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')) as { version: string };
 const CLI_VERSION = pkg.version;
@@ -183,11 +184,15 @@ program
 program
   .command('status [runId]')
   .description('Show recent agent runs: running, stuck, done, failed. With runId, show logs for that run')
-  .action((runId: string | undefined) => {
+  .option('-n, --lines <number>', 'Number of log lines to show (default: all)', value => parseInt(value, 10))
+  .option('--head', 'Show lines from the beginning of the log')
+  .option('--tail', 'Show lines from the end of the log (default when -n is used)')
+  .option('-f, --follow', 'Stream new log lines as they arrive (requires runId)')
+  .action((runId: string | undefined, opts: Record<string, unknown>) => {
     try {
       const stateDir = resolveStateDir();
       if (runId) {
-        showRunLogs(stateDir, runId);
+        showRunLogs(stateDir, runId, { lines: opts.lines as number | undefined, head: opts.head as boolean, tail: opts.tail as boolean, follow: opts.follow as boolean });
       } else {
         runStatus(stateDir);
       }
@@ -197,18 +202,33 @@ program
     }
   });
 
-function showRunLogs(stateDir: string, runId: string): void {
-  const { readFileSync: readFile } = require('fs') as typeof import('fs');
+function showRunLogs(stateDir: string, runId: string, opts: { lines?: number; head?: boolean; tail?: boolean; follow?: boolean } = {}): void {
   const runs = loadRuns(stateDir);
   const run = runs.find((r) => r.runId === runId || r.runId.startsWith(runId));
   if (!run) {
     console.error(`[at] run not found: ${runId}`);
     process.exit(1);
   }
+  console.log(`=== Logs for ${run.runId} (${run.agent}) ===\n`);
+
+  if (opts.follow) {
+    try {
+      spawn('tail', ['-f', run.logFile], { stdio: 'inherit' });
+      return;
+    } catch (err) {
+      // fall through to reading + watching
+    }
+  }
+
   try {
-    const logs = readFile(run.logFile, 'utf8');
-    console.log(`=== Logs for ${run.runId} (${run.agent}) ===\n`);
-    process.stdout.write(logs);
+    const logs = readFileSync(run.logFile, 'utf8');
+    if (opts.lines !== undefined) {
+      const lines = logs.split('\n');
+      const slice = opts.head ? lines.slice(0, opts.lines) : lines.slice(-opts.lines);
+      process.stdout.write(slice.join('\n') + '\n');
+    } else {
+      process.stdout.write(logs);
+    }
   } catch (err) {
     console.error(`[at] cannot read log: ${run.logFile}`);
     process.exit(1);

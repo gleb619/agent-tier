@@ -1,7 +1,6 @@
-/** @jsxImportSource @opentui/solid */
-
 import { createSignal, createEffect, onMount, onCleanup } from "solid-js";
 import { useKeyHandler } from "@opentui/solid";
+import { KeyEvent } from "@opentui/core";
 import { spawn } from "child_process";
 import { Sidebar } from "./components/Sidebar";
 import { LogViewer } from "./components/LogViewer";
@@ -32,41 +31,43 @@ export function App(): JSX.Element {
   });
 
   // Keyboard handler
-  useKeyHandler((key: string | { key: string }) => {
-    const k = typeof key === "string" ? key : key.key ?? "";
+  useKeyHandler((key: KeyEvent) => {
+    if (key.eventType !== "press") return;
 
-    if (k === "C-]" || k === "C-[") {
+    const { name, ctrl, shift } = key;
+
+    if (ctrl && (name === "]" || name === "[")) {
       // Panel navigation: C-] = next, C-[ = previous
-      const dir = k === "C-]" ? 1 : -1;
+      const dir = name === "]" ? 1 : -1;
       setFocusZone(z => ((z + dir + FOCUS_COUNT) % FOCUS_COUNT) as any);
-    } else if (k === "S-Tab" || k === "S-]") {
+    } else if ((shift && name === "tab") || (shift && name === "]")) {
       setFocusZone(z => ((z - 1 + FOCUS_COUNT) % FOCUS_COUNT) as any);
-    } else if (k === "C-t") {
+    } else if (ctrl && name === "t") {
       cycleTier();
-    } else if (k === "C-a") {
+    } else if (ctrl && name === "a") {
       cycleAgent();
-    } else if (k === "C-m") {
+    } else if (ctrl && name === "m") {
       cycleMode();
-    } else if (k === "C-n") {
+    } else if (ctrl && name === "n") {
       cycleRetries();
-    } else if (k === "C-k") {
+    } else if (ctrl && name === "k") {
       const runId = selectedRunId();
       if (runId !== null) {
         killSession(runId);
       }
-    } else if (k === "C-e") {
+    } else if (ctrl && name === "e") {
       const runId = selectedRunId();
       if (runId !== null) {
         retrySession(runId);
       }
-    } else if (k === "C-f") {
+    } else if (ctrl && name === "f") {
       refreshSessions();
       refreshLog();
-    } else if (k === "C-d") {
+    } else if (ctrl && name === "d") {
       toggleDashboard();
-    } else if (k === "C-l") {
+    } else if (ctrl && name === "l") {
       setAutoRefresh(!autoRefresh());
-    } else if ((k === "ArrowUp" || k === "up") && (focusZone() === 0 || focusZone() === 1)) {
+    } else if (name === "up" && (focusZone() === 0 || focusZone() === 1)) {
       const sessions = filteredSessions();
       const current = selectedRunId();
       const idx = sessions.findIndex(s => s.runId === current);
@@ -75,7 +76,7 @@ export function App(): JSX.Element {
       } else if (sessions.length > 0 && current === null) {
         setSelectedRunId(sessions[sessions.length - 1].runId);
       }
-    } else if ((k === "ArrowDown" || k === "down") && (focusZone() === 0 || focusZone() === 1)) {
+    } else if (name === "down" && (focusZone() === 0 || focusZone() === 1)) {
       const sessions = filteredSessions();
       const current = selectedRunId();
       const idx = sessions.findIndex(s => s.runId === current);
@@ -84,13 +85,13 @@ export function App(): JSX.Element {
       } else if (sessions.length > 0 && current === null) {
         setSelectedRunId(sessions[0].runId);
       }
-    } else if ((k === "ArrowUp" || k === "up") && focusZone() === 2) {
+    } else if (name === "up" && focusZone() === 2) {
       setScrollOffset(Math.max(0, scrollOffset() - 1));
-    } else if ((k === "ArrowDown" || k === "down") && focusZone() === 2) {
+    } else if (name === "down" && focusZone() === 2) {
       setScrollOffset(Math.min(filteredLines().length - 1, scrollOffset() + 1));
-    } else if (k === "g" && focusZone() === 2) {
+    } else if (name === "g" && !ctrl && !shift && focusZone() === 2) {
       goToHead();
-    } else if (k === "G" && focusZone() === 2) {
+    } else if (name === "g" && shift && focusZone() === 2) {
       goToTail();
     }
   }, {});
@@ -121,12 +122,12 @@ export function App(): JSX.Element {
 
       {/* main area: sidebar + log viewer side by side */}
       <box flexDirection="row" flexGrow={1}>
-        <Sidebar focused={focusZone() <= 1} focusZone={Math.min(focusZone(), 1) as 0|1} />
-        <LogViewer focused={focusZone() >= 2 && focusZone() <= 3} focusZone={focusZone() >= 2 && focusZone() <= 3 ? (focusZone() as 2|3) : 2} />
+        <box onMouseDown={() => setFocusZone(0)}><Sidebar focused={focusZone() <= 1} focusZone={Math.min(focusZone(), 1) as 0|1} /></box>
+        <box onMouseDown={() => setFocusZone(2)}><LogViewer focused={focusZone() >= 2 && focusZone() <= 3} focusZone={focusZone() >= 2 && focusZone() <= 3 ? (focusZone() as 2|3) : 2} /></box>
       </box>
 
       {/* prompt bar */}
-      <box flexDirection="column" flexGrow={0}>
+      <box flexDirection="column" flexGrow={0} onMouseDown={() => setFocusZone(4)}>
         <PromptBar focused={focusZone() === 4} onSubmit={handleSubmit} />
         <HotkeyBar focusZone={focusZone() as 0|1|2|3|4} />
       </box>

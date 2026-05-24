@@ -32,8 +32,10 @@ export function formatStatusTable(runs: RunRecord[]): string {
   const rows = runs.map((r) => {
     const endTime = r.finishedAt ? new Date(r.finishedAt).getTime() : now;
     const duration = formatDuration(endTime - new Date(r.startedAt).getTime());
+    const truncate = (str: string): string => str.length > 20 ? str.slice(0, 17) + '...' : str;
+
     return {
-      runId: r.runId.slice(0, 6),
+      runId: truncate(r.runId),
       agent: r.agent,
       status: statusIcon(r.status),
       duration,
@@ -41,7 +43,7 @@ export function formatStatusTable(runs: RunRecord[]): string {
     };
   });
 
-  const colRun = Math.max(6, ...rows.map((r) => r.runId.length));
+  const colRun = Math.max(20, ...rows.map((r) => r.runId.length));
   const colAgent = Math.max(10, ...rows.map((r) => r.agent.length));
   const colStatus = 7;
   const colDur = Math.max(8, ...rows.map((r) => r.duration.length));

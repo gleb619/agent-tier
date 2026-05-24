@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tier, agent, mode, retries } from '../src/tui/store/settings';
+import { tier, agent, mode, retries } from '../../src/tui/store/settings';
 
 describe('settings store', () => {
   // Settings store uses module-level signals that persist across tests.

@@ -1,6 +1,6 @@
-/** @jsxImportSource @opentui/solid */
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createMemo, createEffect } from "solid-js";
 import { filteredLines, logFilter, setLogFilter, scrollOffset, currentLogFile, goToHead, goToTail, VISIBLE_LINES, isLoading } from "../store/log";
+import { selectedSession } from "../store/sessions";
 
 function lineColor(line: string): string {
   if (/\[ERROR\]|\[FAIL\]|error|Error/.test(line)) return "#f85149";
@@ -26,13 +26,19 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
     filteredLines().slice(scrollOffset(), scrollOffset() + VISIBLE_LINES)
   );
 
+  createEffect(() => {
+    const session = selectedSession();
+    if (session?.status === 'running' && filteredLines().length > 0) {
+      goToTail();
+    }
+  });
+
   return (
     <box
       title={logTitle()}
       border
       borderStyle="single"
-      borderColor="#21262d"
-      focusedBorderColor="#1f6feb"
+      borderColor={props.focused ? "#00aaff" : "#555555"}
       focused={props.focused}
       flexDirection="column"
       flexGrow={3}
@@ -42,17 +48,22 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
       <box flexDirection="row" gap={2}>
         <input
           value={logFilter()}
-          placeholder="filter logs..."
+          placeholder={props.focusZone === 3 ? "🔍 filter logs..." : "filter logs..."}
           focused={props.focusZone === 3}
+          borderStyle="single"
+          borderColor={props.focusZone === 3 ? "#58a6ff" : "#30363d"}
           onInput={(v) => setLogFilter(v)}
           flexGrow={1}
         />
+
         <Show when={isLoading()}>
           <text content="loading..." fg="#d29922" />
         </Show>
         <text fg="#58a6ff" content="[g] head" onMouseDown={goToHead} />
         <text fg="#58a6ff" content="[G] tail" onMouseDown={goToTail} />
       </box>
+
+      <text content="────────────────────────────────────────" fg="#30363d" />
 
       {/* Row 2 — log lines */}
       <scrollbox flexGrow={1} focused={props.focusZone === 2}>

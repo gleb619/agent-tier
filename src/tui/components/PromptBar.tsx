@@ -1,5 +1,4 @@
-/** @jsxImportSource @opentui/solid */
-import { createSignal, createMemo } from "solid-js";
+import { createSignal, createMemo, createEffect, onCleanup } from "solid-js";
 import { tier, agent, mode, retries } from "../store/settings";
 
 export interface PromptSubmitOpts {
@@ -14,8 +13,12 @@ export interface PromptBarProps {
   onSubmit: (prompt: string, opts: PromptSubmitOpts) => void;
 }
 
+const SPINNER_FRAMES = ["|", "/", "-", "\\"];
+
 export function PromptBar(props: PromptBarProps): JSX.Element {
   const [prompt, setPrompt] = createSignal("");
+  const [submitting, setSubmitting] = createSignal(false);
+  const [spinnerFrame, setSpinnerFrame] = createSignal(0);
 
   const currentOpts = createMemo(
     (): PromptSubmitOpts => ({
@@ -26,6 +29,15 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
     })
   );
 
+  createEffect(() => {
+    if (submitting()) {
+      const interval = setInterval(() => {
+        setSpinnerFrame((f) => (f + 1) % SPINNER_FRAMES.length);
+      }, 200);
+      onCleanup(() => clearInterval(interval));
+    }
+  });
+
   return (
     <box
       border
@@ -35,19 +47,29 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
       padding={1}
       gap={1}
     >
-      <input
-        value={prompt()}
-        placeholder="Enter prompt and press Enter to launch agent..."
-        focused={props.focused}
-        onInput={(v) => setPrompt(v)}
-        onSubmit={(v) => {
-          if (v.trim()) {
-            props.onSubmit(v.trim(), currentOpts());
+      {submitting() ? (
+        <text content={SPINNER_FRAMES[spinnerFrame()] + " launching agent..."} fg="#00aaff" />
+      ) : (
+        <input
+          value={prompt()}
+          placeholder="Enter prompt and press Enter to launch agent..."
+          focused={props.focused}
+          onInput={(v) => setPrompt(v)}
+          onSubmit={(v) => {
+            if (submitting()) return;
+            const trimmed = v.trim();
+            if (trimmed.length < 3) return;
+            props.onSubmit(trimmed, currentOpts());
             setPrompt("");
-          }
-        }}
-        width="100%"
-      />
+            setSubmitting(true);
+            setTimeout(() => setSubmitting(false), 3000);
+          }}
+          width="100%"
+        />
+      )}
+      {prompt().trim().length > 0 && prompt().trim().length < 3 && !submitting() && (
+        <text content="min 3 characters" fg="#ffaa00" />
+      )}
 
       <box flexDirection="row" gap={2}>
         <text content={"Tier:[" + tier() + "]"} fg="#aaaaaa" />

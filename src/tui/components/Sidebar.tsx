@@ -1,4 +1,3 @@
-/** @jsxImportSource @opentui/solid */
 import { For, Show, createMemo } from 'solid-js';
 import { execSync } from 'child_process';
 import {
@@ -8,6 +7,7 @@ import {
   sidebarFilter,
   setSidebarFilter,
   showDashboard,
+  setShowDashboard,
   toggleDashboard,
 } from '../store/sessions';
 import { setCurrentLogFile, loadLogFile } from '../store/log';
@@ -160,8 +160,7 @@ export function Sidebar(props: SidebarProps): JSX.Element {
       title="Sessions"
       border
       borderStyle="single"
-      borderColor="#21262d"
-      focusedBorderColor="#1f6feb"
+      borderColor={props.focused ? "#00aaff" : "#555555"}
       focused={props.focused}
       flexDirection="column"
       flexGrow={1}
@@ -177,6 +176,8 @@ export function Sidebar(props: SidebarProps): JSX.Element {
         width="100%"
       />
 
+      <text content="───────────────────────────" fg="#30363d" />
+
       <Show when={showDashboard()}>
         <StatusDashboard />
       </Show>
@@ -187,7 +188,7 @@ export function Sidebar(props: SidebarProps): JSX.Element {
             content={showDashboard() ? '◀ Back to sessions' : '📊 Dashboard (status)'}
             fg="#58a6ff"
             onMouseDown={toggleDashboard}
-            marginY={0}
+            marginY={1}
           />
           <For each={groups()}>
             {(group) => (
@@ -207,8 +208,8 @@ export function Sidebar(props: SidebarProps): JSX.Element {
                         <text>
                           {isSelected ? '▶ ' : '  '}{statusIcon(s.status)} {truncate(s.runId, 20)}
                         </text>
-                        <text fg="#8b949e">
-                          {s.agent} t{s.tier} · {formatDuration(s)}
+                        <text fg="#8b949e" marginBottom={1}>
+                          {isSelected ? '   ' : '    '}{s.agent} t{s.tier} · {formatDuration(s)}
                         </text>
                       </box>
                     );

@@ -1,5 +1,3 @@
-/** @jsxImportSource @opentui/solid */
-
 import { For, Switch, Match } from "solid-js";
 import type { JSX } from "solid-js";
 

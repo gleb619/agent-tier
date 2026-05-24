@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { logLines, setLogLines, logFilter, setLogFilter, scrollOffset, setScrollOffset, VISIBLE_LINES, goToHead, goToTail } from '../src/tui/store/log';
+import { logLines, setLogLines, logFilter, setLogFilter, scrollOffset, setScrollOffset, VISIBLE_LINES, goToHead, goToTail } from '../../src/tui/store/log';
 
 describe('log store', () => {
   beforeEach(() => {

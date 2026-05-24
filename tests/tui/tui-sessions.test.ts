@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { filteredSessions, sidebarFilter, setSidebarFilter, showDashboard, toggleDashboard } from '../src/tui/store/sessions';
-import type { RunRecord } from '../src/run-store';
+import { filteredSessions, sidebarFilter, setSidebarFilter, showDashboard, toggleDashboard } from '../../src/tui/store/sessions';
+import type { RunRecord } from '../../src/run-store';
 
 const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord => ({
   runId,
