@@ -1,4 +1,5 @@
 import { For, createMemo } from 'solid-js';
+import type { JSX } from 'solid-js';
 import {
   filteredSessions,
   selectedRunId,
@@ -8,7 +9,7 @@ import {
   showDashboard,
   setShowDashboard,
 } from '../store/sessions';
-import { setCurrentLogFile, loadLogFile } from '../store/log';
+
 import type { RunRecord } from '../../run-store';
 
 interface SidebarProps {
@@ -16,7 +17,7 @@ interface SidebarProps {
   focusZone: 0 | 1;
 }
 
-function statusIcon(status: RunRecord['status']): string {
+export function statusIcon(status: RunRecord['status']): string {
   switch (status) {
     case 'running':
       return '●';
@@ -29,7 +30,7 @@ function statusIcon(status: RunRecord['status']): string {
   }
 }
 
-function statusColor(status: RunRecord['status']): string {
+export function statusColor(status: RunRecord['status']): string {
   switch (status) {
     case 'running':
       return '#3fb950';
@@ -42,7 +43,7 @@ function statusColor(status: RunRecord['status']): string {
   }
 }
 
-function formatDuration(r: RunRecord): string {
+export function formatDuration(r: RunRecord): string {
   const start = new Date(r.startedAt).getTime();
   const end = r.finishedAt ? new Date(r.finishedAt).getTime() : Date.now();
   const diff = Math.floor((end - start) / 1000);
@@ -54,9 +55,9 @@ function formatDuration(r: RunRecord): string {
   return `${secs}s`;
 }
 
-function truncate(text: string, maxLen: number): string {
+export function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen - 1) + "…";
+  return text.slice(0, maxLen - 1) + '…';
 }
 
 function selectSession(s: RunRecord): void {
@@ -64,13 +65,15 @@ function selectSession(s: RunRecord): void {
     setShowDashboard(false);
   }
   setSelectedRunId(s.runId);
-  setCurrentLogFile(s.logFile);
-  loadLogFile(s.logFile);
 }
 
-interface SessionGroup {
+export type SidebarItem =
+  | { type: 'session'; data: RunRecord; isSelected: boolean }
+  | { type: 'action'; label: string; icon: string; active: boolean; onSelect: () => void };
+
+export interface SidebarGroup {
   label: string;
-  sessions: RunRecord[];
+  items: SidebarItem[];
 }
 
 function getDateBucket(dateStr: string): string {
@@ -101,22 +104,27 @@ function getDateBucket(dateStr: string): string {
   return `${day} ${months[month]}`;
 }
 
-function groupSessionsByDate(sessions: RunRecord[]): SessionGroup[] {
-  const groups: SessionGroup[] = [];
+export function groupSessionsByDate(sessions: RunRecord[], selectedId: string | null): SidebarGroup[] {
+  const groups: SidebarGroup[] = [];
   let currentLabel: string | null = null;
-  let currentGroup: SessionGroup | null = null;
+  let currentGroup: SidebarGroup | null = null;
 
   for (let i = 0; i < sessions.length; i++) {
     const session = sessions[i];
     const label = getDateBucket(session.startedAt);
+    const item: SidebarItem = {
+      type: 'session',
+      data: session,
+      isSelected: session.runId === selectedId,
+    };
     if (label !== currentLabel) {
       if (currentGroup) {
         groups.push(currentGroup);
       }
       currentLabel = label;
-      currentGroup = { label, sessions: [session] };
+      currentGroup = { label, items: [item] };
     } else if (currentGroup) {
-      currentGroup.sessions.push(session);
+      currentGroup.items.push(item);
     }
   }
 
@@ -127,68 +135,103 @@ function groupSessionsByDate(sessions: RunRecord[]): SessionGroup[] {
   return groups;
 }
 
+export function buildSidebarGroups(
+  sessions: RunRecord[],
+  selectedId: string | null,
+  dashboardActive: boolean,
+  onSelectDashboard: () => void
+): SidebarGroup[] {
+  const sessionGroups = groupSessionsByDate(sessions, selectedId);
+  const actionGroup: SidebarGroup = {
+    label: 'Actions',
+    items: [
+      {
+        type: 'action',
+        label: 'Dashboard',
+        icon: '📊',
+        active: dashboardActive,
+        onSelect: onSelectDashboard,
+      },
+    ],
+  };
+  return [actionGroup, ...sessionGroups];
+}
+
 export function Sidebar(props: SidebarProps): JSX.Element {
-  const groups = createMemo(() => groupSessionsByDate(filteredSessions()));
+  const groups = createMemo(() =>
+    buildSidebarGroups(
+      filteredSessions(),
+      selectedRunId(),
+      showDashboard(),
+      () => {
+        setShowDashboard(true);
+        setSelectedRunId(null);
+      }
+    )
+  );
 
   return (
     <box
       title="Sessions"
       border
       borderStyle="single"
-      borderColor={props.focused ? (props.focusZone === 1 ? "#00ddff" : "#00aaff") : "#555555"}
+      borderColor={props.focused ? (props.focusZone === 1 ? '#00ddff' : '#00aaff') : '#555555'}
       focused={props.focused}
       flexDirection="column"
       flexGrow={1}
       padding={1}
     >
-      {/* TODO: add here support of arrows navigation for list(e.g. if input active, we still need to navigate in list) */}
       <input
         value={sidebarFilter()}
-        placeholder="filter..."
+        placeholder={props.focusZone === 0 ? '🔍 Filter runs...' : 'Filter runs...'}
         focused={props.focusZone === 0}
         onInput={(v: string) => setSidebarFilter(v)}
         width="100%"
       />
 
-      <text content="───────────────────────────" fg={props.focusZone === 0 ? "#00aaff" : "#555555"} />
+      <text content="───────────────────────────" fg={props.focusZone === 0 ? '#00aaff' : '#555555'} />
 
       <scrollbox flexGrow={1}>
-        <box
-          flexDirection="column"
-          paddingY={0}
-          paddingX={1}
-          backgroundColor={showDashboard() && '#1c2128'}
-          onMouseDown={() => { setShowDashboard(true); setSelectedRunId(null); }}
-        >
-          <text fg="#58a6ff">
-            {showDashboard() ? '▶ ' : '  '}📊 Dashboard
-          </text>
-        </box>
-
-        <text content="───────────────────────────" fg="#484f58" />
-
         <For each={groups()}>
           {(group) => (
             <>
-              <text content={'── ' + group.label + ' ──'} fg="#484f58" marginY={0} />
-              <For each={group.sessions}>
-                {(s) => {
-                  //TODO: move selection to a special store, for fast/reactive changes, since now we need to wait
-                  // some time for rerender
-                  const isSelected = selectedRunId() === s.runId;
+              <box
+                width="100%"
+                justifyContent="center"
+                alignItems="center"
+                paddingBottom={1}>
+                <text content={'── ' + group.label + ' ──'} fg="#484f58" marginY={0} />
+              </box>
+              <For each={group.items}>
+                {(item) => {
+                  if (item.type === 'action') {
+                    return (
+                      <box
+                        flexDirection="column"
+                        paddingY={0}
+                        paddingX={1}
+                        backgroundColor={item.active ? '#1c2128' : undefined}
+                        onMouseDown={() => item.onSelect()}
+                      >
+                        <text fg="#58a6ff" paddingY={1}>
+                          {item.active ? '▶ ' : '  '}{item.icon} {item.label}
+                        </text>
+                      </box>
+                    );
+                  }
                   return (
                     <box
                       flexDirection="column"
                       paddingY={0}
                       paddingX={1}
-                      backgroundColor={isSelected && '#1c2128'}
-                      onMouseDown={() => selectSession(s)}
+                      backgroundColor={item.isSelected ? '#1c2128' : undefined}
+                      onMouseDown={() => selectSession(item.data)}
                     >
                       <text>
-                        {isSelected ? '▶ ' : '  '}{statusIcon(s.status)} {truncate(s.runId, 20)}
+                        {item.isSelected ? '▶ ' : '  '}{statusIcon(item.data.status)} {truncate(item.data.runId, 20)}
                       </text>
                       <text fg="#8b949e" marginBottom={1}>
-                        {isSelected ? '   ' : '    '}{s.agent} t{s.tier} · {formatDuration(s)}
+                        {item.isSelected ? '   ' : '    '}{item.data.agent} t{item.data.tier} · {formatDuration(item.data)}
                       </text>
                     </box>
                   );

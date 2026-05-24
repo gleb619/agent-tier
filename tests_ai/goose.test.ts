@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn } from 'child_process';
-import { createSandbox, cleanupSandbox, agentBinExists, getCliPath, DEFAULT_TIMEOUT, Sandbox } from './setup';
+import { createSandbox, cleanupSandbox, agentBinExists, isAgentEnabled, getCliPath, DEFAULT_TIMEOUT, Sandbox } from './setup';
 
 describe('goose agent', () => {
   let sandbox: Sandbox;
@@ -11,6 +11,10 @@ describe('goose agent', () => {
   it('should create test_result.txt with hello world', async () => {
     if (!agentBinExists('goose')) {
       console.log('SKIP: goose binary not found');
+      return;
+    }
+    if (!isAgentEnabled('goose')) {
+      console.log('SKIP: goose is deactivated or temporarily disabled');
       return;
     }
 

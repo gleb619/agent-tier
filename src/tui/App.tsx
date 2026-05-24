@@ -1,18 +1,18 @@
 import { createSignal, createEffect, onMount, onCleanup } from "solid-js";
+import type { JSX } from "solid-js";
 import { useKeyHandler } from "@opentui/solid";
 import { KeyEvent } from "@opentui/core";
-import { spawn } from "child_process";
 import { Sidebar } from "./components/Sidebar";
 import { LogViewer } from "./components/LogViewer";
 import { PromptBar, type PromptSubmitOpts } from "./components/PromptBar";
 import { HotkeyBar } from "./components/HotkeyBar";
-import { filteredSessions, selectedRunId, setSelectedRunId, refreshSessions, killSession, retrySession, showDashboard, setShowDashboard } from "./store/sessions";
-import { scrollOffset, setScrollOffset, filteredLines, autoRefresh, refreshLog, goToHead, goToTail, setAutoRefresh } from "./store/log";
-import { cycleTier, cycleAgent, cycleMode, cycleRetries } from "./store/settings";
+import { filteredSessions, selectedSession, selectedRunId, setSelectedRunId, refreshSessions, killSession, retrySession, showDashboard, setShowDashboard, loadSessionState, saveSessionState } from "./store/sessions";
+import { scrollOffset, setScrollOffset, filteredLines, autoRefresh, refreshLog, goToHead, goToTail, setAutoRefresh, setCurrentLogFile, loadLogFile, setLogLines, VISIBLE_LINES, showPrompt, setShowPrompt } from "./store/log";
+import { cycleTier, cycleAgent, cycleMode, cycleRetries, loadSettings } from "./store/settings";
+import { focusZone, setFocusZone, loadUIState, saveUIState } from "./store/ui";
+import { submitPrompt } from "./launch";
 
 export function App(): JSX.Element {
-  const [focusZone, setFocusZone] = createSignal<0|1|2|3|4>(4);
-
   // Auto-refresh timer
   createEffect(() => {
     if (autoRefresh()) {
@@ -24,8 +24,33 @@ export function App(): JSX.Element {
     }
   });
 
+  // Load log file when selected session changes
+  createEffect(() => {
+    const session = selectedSession();
+    if (session) {
+      setCurrentLogFile(session.logFile);
+      loadLogFile(session.logFile);
+    } else {
+      setCurrentLogFile(null);
+      setLogLines([]);
+    }
+  });
+
+  // Save selected session id when it changes
+  createEffect(() => {
+    saveSessionState(selectedRunId());
+  });
+
+  // Save focused zone when it changes
+  createEffect(() => {
+    saveUIState(focusZone());
+  });
+
   // Initial load
   onMount(() => {
+    loadSessionState();
+    loadUIState();
+    loadSettings();
     refreshSessions();
   });
 
@@ -55,10 +80,12 @@ export function App(): JSX.Element {
       if (z === 0 || z === 1) setFocusZone(4);
       else if (z === 2 || z === 3) setFocusZone(1);
       else if (z === 4) setFocusZone(2);
-    } else if (ctrl && name === "h" && (focusZone() === 2 || focusZone() === 3)) {
-      goToHead();
-    } else if (ctrl && name === "t" && (focusZone() === 2 || focusZone() === 3)) {
-      goToTail();
+    } else if (ctrl && name === "d" && (focusZone() === 2 || focusZone() === 3)) {
+      if (scrollOffset() === 0) {
+        goToTail();
+      } else {
+        goToHead();
+      }
     } else if (ctrl && name === "t") {
       cycleTier();
     } else if (ctrl && name === "a") {
@@ -77,12 +104,13 @@ export function App(): JSX.Element {
       if (runId !== null) {
         retrySession(runId);
       }
+    } else if (ctrl && name === "p" && (focusZone() === 2 || focusZone() === 3)) {
+      setShowPrompt((v) => !v);
     } else if (ctrl && name === "r") {
       refreshSessions();
       refreshLog();
     } else if (ctrl && name === "l") {
       setAutoRefresh(!autoRefresh());
-    //TODO: for sidebar, changing of selection, doesnt update log view
     } else if (name === "up" && (focusZone() === 0 || focusZone() === 1)) {
       const sessions = filteredSessions();
       const current = selectedRunId();
@@ -97,7 +125,6 @@ export function App(): JSX.Element {
       } else if (idx > 0) {
         setSelectedRunId(sessions[idx - 1].runId);
       }
-    //TODO: for sidebar, changing of selection, doesnt update log view
     } else if (name === "down" && (focusZone() === 0 || focusZone() === 1)) {
       const sessions = filteredSessions();
       const current = selectedRunId();
@@ -122,19 +149,7 @@ export function App(): JSX.Element {
   }, {});
 
   const handleSubmit = (prompt: string, opts: PromptSubmitOpts): void => {
-    const args: string[] = ["-p", prompt, "-t", String(opts.tier)];
-    if (opts.agent !== "auto") {
-      args.push("-a", opts.agent);
-    }
-    if (opts.mode === "stream") {
-      args.push("-s");
-    }
-    if (opts.retries > 0) {
-      args.push("-r", String(opts.retries));
-    }
-
-    spawn("at", args, { detached: false, stdio: "inherit" });
-    setTimeout(() => refreshSessions(), 1000);
+    submitPrompt(prompt, opts);
   };
 
   return (
@@ -143,6 +158,15 @@ export function App(): JSX.Element {
       <box flexDirection="row" gap={2} padding={1} paddingY={0}>
         <text content="at — agent tier" fg="#aaaaaa" />
         <text content={autoRefresh() ? "⟳ auto-refresh ON" : "⟳ auto-refresh OFF"} fg={autoRefresh() ? "#00ff88" : "#555555"} />
+        <text content={'\u00A0' + `dir: ${scrollOffset() === 0 ? "head" : scrollOffset() >= filteredLines().length - VISIBLE_LINES ? "tail" : "scroll"}`} fg="#aaaaaa" />
+        <text content={'\u00A0' + `lines: ${Math.min(VISIBLE_LINES, Math.max(0, filteredLines().length - scrollOffset()))}/${filteredLines().length}`} fg="#aaaaaa" />
+        <text content={selectedSession() ? '\u00A0' + `status: ${selectedSession()!.status}` : ""} fg="#aaaaaa" />
+        <text content={selectedSession() ? '\u00A0' + `code: ${selectedSession()!.exitCode ?? "-"}` : ""} fg="#aaaaaa" />
+        <text content={selectedSession() ? '\u00A0' + `started: ${new Date(selectedSession()!.startedAt).toLocaleTimeString()}` : ""} fg="#aaaaaa" />
+        <text content={selectedSession() ? '\u00A0' + `finished: ${(() => { const f = selectedSession()!.finishedAt; return f ? new Date(f).toLocaleTimeString() : "-"; })()}` : ""} fg="#aaaaaa" />
+        <text content={selectedSession() ? '\u00A0' + `pid: ${selectedSession()!.pid}` : ""} fg="#aaaaaa" />
+        <text content={selectedSession() ? '\u00A0' + `agent: ${selectedSession()!.agent}` : ""} fg="#aaaaaa" />
+        <text content={selectedSession() ? '\u00A0' + `tier: ${selectedSession()!.tier}` : ""} fg="#aaaaaa" />
       </box>
 
       {/* main area: sidebar + log viewer side by side */}

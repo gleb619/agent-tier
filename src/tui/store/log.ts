@@ -7,6 +7,7 @@ const [logFilter, setLogFilter] = createSignal<string>('');
 const [scrollOffset, setScrollOffset] = createSignal<number>(0);
 const [autoRefresh, setAutoRefresh] = createSignal<boolean>(true);
 const [isLoading, setIsLoading] = createSignal(false);
+const [showPrompt, setShowPrompt] = createSignal(false);
 
 export {
   currentLogFile,
@@ -20,6 +21,8 @@ export {
   autoRefresh,
   setAutoRefresh,
   isLoading,
+  showPrompt,
+  setShowPrompt,
 };
 
 export const filteredLines: Accessor<string[]> = createMemo(() => {

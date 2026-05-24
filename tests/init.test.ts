@@ -231,6 +231,8 @@ describe('runInit - all mode', () => {
     withEnv({
       GLM_CODE_BIN: binPath('glm-code'),
       MM_CODE_BIN: binPath('mm-code'),
+      MOCK_BIN: binPath('mock-agent'),
+      MOCK_LONG_BIN: binPath('mock-long-agent'),
     }, () => {
       const results = runInit({ all: true, dryRun: true });
 

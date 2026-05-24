@@ -59,6 +59,20 @@ export function agentBinExists(agent: string): boolean {
   }
 }
 
+export function isAgentEnabled(agent: string): boolean {
+  try {
+    const statePath = path.join(os.homedir(), '.at', 'state.json');
+    if (!fs.existsSync(statePath)) return true;
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const agentState = state.agents?.[agent];
+    if (agentState?.deactivated) return false;
+    if (agentState?.disabledTo && new Date(agentState.disabledTo) > new Date()) return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 export function getCliPath(): string {
   return path.resolve(__dirname, '../dist/cli.js');
 }

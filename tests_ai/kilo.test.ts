@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn } from 'child_process';
-import { createSandbox, cleanupSandbox, agentBinExists, getCliPath, DEFAULT_TIMEOUT, Sandbox } from './setup';
+import { createSandbox, cleanupSandbox, agentBinExists, isAgentEnabled, getCliPath, DEFAULT_TIMEOUT, Sandbox } from './setup';
 
 describe('kilo agent', () => {
   let sandbox: Sandbox;
@@ -11,6 +11,10 @@ describe('kilo agent', () => {
   it('should create test_result.txt with hello world', async () => {
     if (!agentBinExists('kilo')) {
       console.log('SKIP: kilo binary not found');
+      return;
+    }
+    if (!isAgentEnabled('kilo')) {
+      console.log('SKIP: kilo is deactivated or temporarily disabled');
       return;
     }
 

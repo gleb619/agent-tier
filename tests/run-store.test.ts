@@ -37,7 +37,7 @@ describe('run-store', () => {
   });
 
   afterAll(() => {
-    const runsFile = path.join(TEST_STATE_DIR, 'runs.json');
+    const runsFile = path.join(TEST_STATE_DIR, 'runs.jsonl');
     if (fs.existsSync(runsFile)) fs.unlinkSync(runsFile);
     const stateFile = path.join(TEST_STATE_DIR, 'state.json');
     if (fs.existsSync(stateFile)) fs.unlinkSync(stateFile);
@@ -46,7 +46,7 @@ describe('run-store', () => {
 
   describe('loadRuns / saveRuns', () => {
     it('returns empty array when no file exists', () => {
-      const runsFile = path.join(TEST_STATE_DIR, 'runs.json');
+      const runsFile = path.join(TEST_STATE_DIR, 'runs.jsonl');
       if (fs.existsSync(runsFile)) fs.unlinkSync(runsFile);
       const result = loadRuns(TEST_STATE_DIR);
       expect(result).toEqual([]);
@@ -61,14 +61,14 @@ describe('run-store', () => {
       expect(loaded[1].runId).toBe('r2');
 
       // Verify on-disk format is JSONL
-      const raw = fs.readFileSync(path.join(TEST_STATE_DIR, 'runs.json'), 'utf8');
+      const raw = fs.readFileSync(path.join(TEST_STATE_DIR, 'runs.jsonl'), 'utf8');
       const lines = raw.trim().split('\n');
       expect(lines.length).toBe(2);
       expect(JSON.parse(lines[0]).runId).toBe('r1');
     });
 
     it('migrates old plain-JSON format on first read', () => {
-      const runsFile = path.join(TEST_STATE_DIR, 'runs.json');
+      const runsFile = path.join(TEST_STATE_DIR, 'runs.jsonl');
       fs.writeFileSync(runsFile, JSON.stringify({ runs: [{ ...mockRun, runId: 'old1' }] }), 'utf8');
       const loaded = loadRuns(TEST_STATE_DIR);
       expect(loaded).toHaveLength(1);

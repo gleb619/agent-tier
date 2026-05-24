@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   tier,
   agent,
@@ -10,20 +10,30 @@ import {
   cycleRetries,
 } from '../../../src/tui/store/settings';
 
+vi.mock('fs', () => ({
+  readFileSync: vi.fn(() => {
+    throw new Error('ENOENT');
+  }),
+  writeFileSync: vi.fn(),
+  mkdirSync: vi.fn(),
+}));
+
 // Solid.js createSignal creates module-level singletons. Each test must reset
 // to a known state: tier=2, agent='auto', mode='stream', retries=0
 function resetToKnown() {
-  // First get to tier 2
-  while (tier() !== 2) cycleTier();
-  // Force a full round-trip to reset agent to 'auto' (each cycleTier resets agent)
-  cycleTier(); // 2→3
-  cycleTier(); // 3→1
-  cycleTier(); // 1→2, agent='auto'
+  // cycleTier resets agent to 'auto'. Keep cycling until we land on tier 2.
+  do {
+    cycleTier();
+  } while (tier() !== 2);
   if (mode() !== 'stream') cycleMode();
   while (retries() !== 0) cycleRetries();
 }
 
 describe('settings store', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe('cycleTier', () => {
     it('cycles tier 2 → 3 and resets agent to auto', () => {
       resetToKnown();
@@ -32,8 +42,17 @@ describe('settings store', () => {
       expect(agent()).toBe('auto');
     });
 
-    it('cycles tier 3 → 1 and resets agent to auto', () => {
+    it('cycles tier 3 → 4 and resets agent to auto', () => {
       resetToKnown();
+      cycleTier();
+      cycleTier();
+      expect(tier()).toBe(4);
+      expect(agent()).toBe('auto');
+    });
+
+    it('cycles tier 4 → 1 and resets agent to auto', () => {
+      resetToKnown();
+      cycleTier();
       cycleTier();
       cycleTier();
       expect(tier()).toBe(1);
@@ -42,6 +61,7 @@ describe('settings store', () => {
 
     it('cycles tier 1 → 2 and resets agent to auto', () => {
       resetToKnown();
+      cycleTier();
       cycleTier();
       cycleTier();
       cycleTier();
@@ -140,8 +160,18 @@ describe('settings store', () => {
       expect(retries()).toBe(3);
     });
 
-    it('cycles 3 → 0 (wraps around)', () => {
+    it('cycles 3 → 4', () => {
       resetToKnown();
+      cycleRetries();
+      cycleRetries();
+      cycleRetries();
+      cycleRetries();
+      expect(retries()).toBe(4);
+    });
+
+    it('cycles 4 → 0 (wraps around)', () => {
+      resetToKnown();
+      cycleRetries();
       cycleRetries();
       cycleRetries();
       cycleRetries();

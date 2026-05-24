@@ -1,5 +1,6 @@
 import { For, Switch, Match } from "solid-js";
 import type { JSX } from "solid-js";
+import { selectedSession } from "../store/sessions";
 
 interface HotkeyBarProps {
   focusZone: 0 | 1 | 2 | 3 | 4;
@@ -11,14 +12,15 @@ interface HotkeyItem {
 }
 
 function getHotkeysForZone(zone: number): HotkeyItem[] {
+  const status = selectedSession()?.status;
   switch (zone) {
     case 0: // sidebar filter
     case 1: // sidebar list
       return [
         { key: "↑↓", desc: "select" },
         { key: "Tab", desc: "input/list" },
-        { key: "^K", desc: "kill" },
-        { key: "^E", desc: "retry" },
+        ...(status === 'running' ? [{ key: "^K", desc: "kill" }] : []),
+        ...(status !== 'done' ? [{ key: "^E", desc: "retry" }] : []),
         { key: "^R", desc: "refresh" },
         { key: "^]", desc: "panels" },
         { key: "^C", desc: "exit" },
@@ -28,8 +30,8 @@ function getHotkeysForZone(zone: number): HotkeyItem[] {
       return [
         { key: "↑↓", desc: "scroll" },
         { key: "Tab", desc: "scroll/filter" },
-        { key: "^H", desc: "head" },
-        { key: "^T", desc: "tail" },
+        { key: "^D", desc: "direction" },
+        { key: "^P", desc: "prompt" },
         { key: "^R", desc: "refresh" },
         { key: "^L", desc: "auto" },
         { key: "^]", desc: "panels" },
@@ -67,7 +69,7 @@ export function HotkeyBar(props: HotkeyBarProps): JSX.Element {
         {(item) => (
           <box flexDirection="row" gap={0}>
             <text content={"[" + item.key + "]"} fg="#58a6ff" />
-            <text content={item.desc} fg="#8b949e" />
+            <text content={'\u00A0' + item.desc} fg="#8b949e" />
           </box>
         )}
       </For>

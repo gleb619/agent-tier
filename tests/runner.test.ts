@@ -10,6 +10,25 @@ import os from 'os';
 
 vi.mock('../src/scheduler');
 vi.mock('../src/health');
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>();
+  const { EventEmitter } = await import('events');
+  return {
+    ...actual,
+    spawn: vi.fn((...args: any[]) => {
+      const cmd = args[0];
+      if (cmd === '/nonexistent-binary-12345') {
+        const child = new EventEmitter() as any;
+        child.pid = undefined;
+        child.stdin = null;
+        child.stdout = null;
+        child.stderr = null;
+        return child;
+      }
+      return (actual.spawn as any)(...args);
+    }),
+  };
+});
 
 function makeAgent(name: string): AgentDef {
   return { name, tier: 2, bin: () => '/usr/bin/true', buildArgs: (p) => [p] };
@@ -188,7 +207,7 @@ describe('defaultSpawner', () => {
       logDir: tmpLogDir,
       prompt: 'hello',
     };
-    await expect(defaultSpawner(agent, options)).rejects.toThrow('no PID assigned');
+    expect(() => defaultSpawner(agent, options)).toThrow('no PID assigned');
     const files = readdirSync(tmpLogDir);
     expect(files.length).toBe(1);
     const logPath = path.join(tmpLogDir, files[0]);
@@ -210,7 +229,7 @@ describe('defaultSpawner', () => {
       logDir: tmpLogDir,
       prompt: 'hello',
     };
-    await expect(defaultSpawner(agent, options)).rejects.toThrow('no PID assigned');
+    expect(() => defaultSpawner(agent, options)).toThrow('no PID assigned');
     const files = readdirSync(tmpLogDir);
     expect(files.length).toBe(1);
     const logPath = path.join(tmpLogDir, files[0]);

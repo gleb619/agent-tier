@@ -1,8 +1,9 @@
 import { createSignal, createMemo, Accessor } from 'solid-js';
 import { spawn } from 'child_process';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { RunRecord } from '../../run-store';
 import { loadRuns, pruneRuns, detectStuck } from '../../run-store';
-import { resolveStateDir } from '../../state-dir';
+import { resolveStateDir, getStateFilePath } from '../../state-dir';
 
 const stateDir = resolveStateDir();
 
@@ -71,4 +72,35 @@ export function retrySession(runId: string): void {
     stdio: 'inherit',
   });
   refreshSessions();
+}
+
+export function loadSessionState(): void {
+  try {
+    const path = getStateFilePath(stateDir);
+    const data = JSON.parse(readFileSync(path, 'utf8')) as { tui?: { selectedRunId?: string | null } };
+    if (data.tui && 'selectedRunId' in data.tui) {
+      setSelectedRunId(data.tui.selectedRunId ?? null);
+    }
+  } catch {
+    // ignore missing or malformed state.json
+  }
+}
+
+export function saveSessionState(runId: string | null): void {
+  try {
+    const path = getStateFilePath(stateDir);
+    let data: Record<string, unknown> = {};
+    try {
+      data = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    } catch {
+      // ignore missing or malformed state.json
+    }
+    const tui = (data.tui as Record<string, unknown> | undefined) ?? {};
+    tui.selectedRunId = runId;
+    data.tui = tui;
+    mkdirSync(stateDir, { recursive: true });
+    writeFileSync(path, JSON.stringify(data, null, 2), 'utf8');
+  } catch {
+    // ignore write errors
+  }
 }

@@ -1,8 +1,9 @@
 import { createSignal, createMemo, createEffect, onCleanup } from "solid-js";
-import { tier, agent, mode, retries } from "../store/settings";
+import type { JSX } from "solid-js";
+import { tier, agent, mode, retries, cycleTier, cycleAgent, cycleMode, cycleRetries } from "../store/settings";
 
 export interface PromptSubmitOpts {
-  tier: 1 | 2 | 3;
+  tier: 1 | 2 | 3 | 4;
   agent: string;
   mode: "stream" | "detached";
   retries: number;
@@ -57,6 +58,7 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
           onInput={(v) => setPrompt(v)}
           onSubmit={(v) => {
             if (submitting()) return;
+            if (typeof v !== 'string') return;
             const trimmed = v.trim();
             if (trimmed.length < 3) return;
             props.onSubmit(trimmed, currentOpts());
@@ -67,15 +69,15 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
           width="100%"
         />
       )}
-      {prompt().trim().length > 0 && prompt().trim().length < 3 && !submitting() && (
-        <text content="min 3 characters" fg="#ffaa00" />
-      )}
 
       <box flexDirection="row" gap={2}>
-        <text content={"Tier:[" + tier() + "]"} fg="#aaaaaa" />
-        <text content={"Agent:[" + agent() + "]"} fg="#aaaaaa" />
-        <text content={"Mode:[" + mode() + "]"} fg="#aaaaaa" />
-        <text content={"Retries:[" + retries() + "]"} fg="#aaaaaa" />
+        <text content={"Tier:[" + tier() + "]"} fg="#aaaaaa" onMouseDown={cycleTier} />
+        <text content={"Agent:[" + agent() + "]"} fg="#aaaaaa" onMouseDown={cycleAgent} />
+        <text content={"Mode:[" + mode() + "]"} fg="#aaaaaa" onMouseDown={cycleMode} />
+        <text content={"Retries:[" + retries() + "]"} fg="#aaaaaa" onMouseDown={cycleRetries} />
+        {prompt().trim().length > 0 && prompt().trim().length < 3 && !submitting() && (
+          <text content="min 3 characters" fg="#ffaa00" />
+        )}
       </box>
     </box>
   );

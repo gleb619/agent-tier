@@ -24,7 +24,7 @@ const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const STUCK_SILENCE_MS = 30 * 60 * 1000; // 30 min of no log writes
 
 export function getRunsFile(stateDir: string): string {
-  return path.join(stateDir, 'runs.json');
+  return path.join(stateDir, 'runs.jsonl');
 }
 
 function getMaxRuns(stateDir: string): number {

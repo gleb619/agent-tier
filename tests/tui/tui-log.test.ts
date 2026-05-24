@@ -1,17 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { logLines, setLogLines, logFilter, setLogFilter, scrollOffset, setScrollOffset, VISIBLE_LINES, goToHead, goToTail } from '../../src/tui/store/log';
+import { logLines, setLogLines, logFilter, setLogFilter, scrollOffset, setScrollOffset, VISIBLE_LINES, goToHead, goToTail, showPrompt, setShowPrompt } from '../../src/tui/store/log';
+import { lineColor } from '../../src/tui/components/LogViewer';
 
 describe('log store', () => {
   beforeEach(() => {
     setLogLines([]);
     setLogFilter('');
     setScrollOffset(0);
+    setShowPrompt(false);
   });
 
   afterEach(() => {
     setLogLines([]);
     setLogFilter('');
     setScrollOffset(0);
+    setShowPrompt(false);
   });
 
   describe('goToHead', () => {
@@ -82,6 +85,62 @@ describe('log store', () => {
       const lines = ['[INFO] started', '[DEBUG] running', '[ERROR] failed'];
       setLogLines(lines);
       expect(logLines()).toEqual(lines);
+    });
+  });
+
+  describe('showPrompt signal', () => {
+    it('starts false', () => {
+      expect(showPrompt()).toBe(false);
+    });
+
+    it('can be set to true', () => {
+      setShowPrompt(true);
+      expect(showPrompt()).toBe(true);
+    });
+
+    it('can be toggled', () => {
+      setShowPrompt((v) => !v);
+      expect(showPrompt()).toBe(true);
+      setShowPrompt((v) => !v);
+      expect(showPrompt()).toBe(false);
+    });
+  });
+});
+
+describe('LogViewer pure functions', () => {
+  describe('lineColor', () => {
+    it('returns red for error lines', () => {
+      expect(lineColor('[ERROR] something failed')).toBe('#f85149');
+      expect(lineColor('error: oops')).toBe('#f85149');
+      expect(lineColor('Error occurred')).toBe('#f85149');
+      expect(lineColor('[FAIL] test')).toBe('#f85149');
+    });
+
+    it('returns yellow for warn lines', () => {
+      expect(lineColor('[WARN] caution')).toBe('#d29922');
+      expect(lineColor('warn: be careful')).toBe('#d29922');
+      expect(lineColor('Warning!')).toBe('#d29922');
+    });
+
+    it('returns grey for info lines', () => {
+      expect(lineColor('[INFO] hello')).toBe('#8b949e');
+      expect(lineColor('info: something')).toBe('#8b949e');
+    });
+
+    it('returns dark grey for debug lines', () => {
+      expect(lineColor('[DEBUG] trace')).toBe('#484f58');
+      expect(lineColor('debug: details')).toBe('#484f58');
+    });
+
+    it('returns green for success lines', () => {
+      expect(lineColor('✓ passed')).toBe('#3fb950');
+      expect(lineColor('success!')).toBe('#3fb950');
+      expect(lineColor('done')).toBe('#3fb950');
+      expect(lineColor('complete')).toBe('#3fb950');
+    });
+
+    it('returns default for plain lines', () => {
+      expect(lineColor('hello world')).toBe('#c9d1d9');
     });
   });
 });

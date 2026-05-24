@@ -1,9 +1,10 @@
 import { For, Show, createMemo, createEffect } from "solid-js";
-import { filteredLines, logFilter, setLogFilter, scrollOffset, currentLogFile, goToHead, goToTail, VISIBLE_LINES, isLoading } from "../store/log";
+import type { JSX } from "solid-js";
+import { filteredLines, logFilter, setLogFilter, scrollOffset, currentLogFile, goToHead, goToTail, VISIBLE_LINES, isLoading, logLines, showPrompt, setShowPrompt } from "../store/log";
 import { selectedSession, showDashboard, sessions } from "../store/sessions";
 import { formatStatusTable } from "../../status";
 
-function lineColor(line: string): string {
+export function lineColor(line: string): string {
   if (/\[ERROR\]|\[FAIL\]|error|Error/.test(line)) return "#f85149";
   if (/\[WARN\]|warn|Warning/.test(line)) return "#d29922";
   if (/\[INFO\]|info/.test(line)) return "#8b949e";
@@ -13,8 +14,19 @@ function lineColor(line: string): string {
 }
 
 function logTitle(): string {
+  const session = selectedSession();
   const file = currentLogFile();
-  return file ? "Log — " + file.split("/").pop()!.slice(0, 30) : "Log";
+  const filePart = file ? file.split("/").pop()!.slice(0, 30) : "";
+  if (session?.runId && filePart) {
+    return "Log — " + session.runId + " — " + filePart;
+  }
+  if (session?.runId) {
+    return "Log — " + session.runId;
+  }
+  if (filePart) {
+    return "Log — " + filePart;
+  }
+  return "Log";
 }
 
 interface LogViewerProps {
@@ -23,9 +35,21 @@ interface LogViewerProps {
 }
 
 export function LogViewer(props: LogViewerProps): JSX.Element {
-  const visibleLines = createMemo(() =>
-    filteredLines().slice(scrollOffset(), scrollOffset() + VISIBLE_LINES)
-  );
+  const visibleLinesWithIndex = createMemo(() => {
+    const all = logLines();
+    const filtered = filteredLines();
+    const slice = filtered.slice(scrollOffset(), scrollOffset() + VISIBLE_LINES);
+    const result: [number, string][] = [];
+    let allIdx = 0;
+    for (const line of slice) {
+      while (allIdx < all.length && all[allIdx] !== line) {
+        allIdx++;
+      }
+      result.push([allIdx + 1, line]);
+      allIdx++;
+    }
+    return result;
+  });
 
   createEffect(() => {
     const session = selectedSession();
@@ -39,7 +63,7 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
       title={showDashboard() ? "Dashboard — Status" : logTitle()}
       border
       borderStyle="single"
-      borderColor={props.focused ? "#00aaff" : "#555555"}
+      borderColor={props.focused ? (props.focusZone === 3 ? "#00ddff" : "#00aaff") : "#555555"}
       focused={props.focused}
       flexDirection="column"
       flexGrow={3}
@@ -53,40 +77,57 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
           </scrollbox>
         }
       >
-        {/* Row 1 — toolbar */}
         <box flexDirection="row" gap={2} height={3}>
-          {/* TODO: add here support of arrows navigation for list(e.g. if input active, we still need to navigate in log list) */}
-          <input
-            value={logFilter()}
-            placeholder={props.focusZone === 3 ? "🔍 filter logs..." : "filter logs..."}
-            focused={props.focusZone === 3}
-            borderStyle="single"
-            borderColor={props.focusZone === 3 ? "#58a6ff" : "#30363d"}
-            onInput={(v) => setLogFilter(v)}
+          <box
+            flexDirection="column"
             flexGrow={1}
-            width="100%"
-          />
+            marginBottom={1}>
 
-          <Show when={isLoading()}>
-            <text content="loading..." fg="#d29922" />
-          </Show>
-          <text fg="#58a6ff" content="[g] head" onMouseDown={goToHead} />
-          <text fg="#58a6ff" content="[G] tail" onMouseDown={goToTail} />
+            <input
+              value={logFilter()}
+              placeholder={props.focusZone === 3 ? "🔍 Filter logs..." : "Filter logs..."}
+              focused={props.focusZone === 3}
+              onInput={(v) => setLogFilter(v)}
+              flexGrow={1}
+              width="100%"
+              {...{ borderStyle: "single", borderColor: props.focusZone === 3 ? "#58a6ff" : "#30363d" } as any}
+            />
+
+            <text content="────────────────────────────────────────" fg="#30363d" />
+          </box>
         </box>
 
-        <text content="────────────────────────────────────────" fg="#30363d" />
+        <Show
+          when={!showPrompt()}
+          fallback={
+            <scrollbox flexGrow={1} focused={props.focusZone === 2}>
+              <text content={selectedSession()?.prompt ?? "(no prompt)"} fg="#c9d1d9" />
+            </scrollbox>
+          }
+        >
+          <scrollbox flexGrow={1} focused={props.focusZone === 2}>
+            <Show
+              when={filteredLines().length > 0}
+              fallback={<text fg="#484f58" content="(no log output)" />}
+            >
+              <For each={visibleLinesWithIndex()}>
+                {([idx, line]) => (
+                  <text content={String(idx).padStart(4, " ") + " | " + line} fg={lineColor(line)} />
+                )}
+              </For>
+            </Show>
+          </scrollbox>
+        </Show>
 
-        {/* Row 2 — log lines */}
-        <scrollbox flexGrow={1} focused={props.focusZone === 2}>
-          <Show
-            when={filteredLines().length > 0}
-            fallback={<text fg="#484f58" content="(no log output)" />}
-          >
-            <For each={visibleLines()}>
-              {(line) => <text content={line} fg={lineColor(line)} />}
-            </For>
-          </Show>
-        </scrollbox>
+        <box flexDirection="row" gap={2} marginTop={1}>
+          <text content={selectedSession()?.logFile ?? ""} fg="#484f58" />
+          <text
+            content={showPrompt() ? "[Show Logs]" : "[Show Prompt]"}
+            fg="#58a6ff"
+            onMouseDown={() => setShowPrompt((p) => !p)}
+          />
+          <text content={isLoading() ? "\u{26AA}" : "\u{26AB}"} />
+        </box>
       </Show>
     </box>
   );
