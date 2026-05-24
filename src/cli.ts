@@ -188,13 +188,14 @@ program
   .option('--head', 'Show lines from the beginning of the log')
   .option('--tail', 'Show lines from the end of the log (default when -n is used)')
   .option('-f, --follow', 'Stream new log lines as they arrive (requires runId)')
+  .option('--json', 'Output as JSON without text trimming', false)
   .action((runId: string | undefined, opts: Record<string, unknown>) => {
     try {
       const stateDir = resolveStateDir();
       if (runId) {
         showRunLogs(stateDir, runId, { lines: opts.lines as number | undefined, head: opts.head as boolean, tail: opts.tail as boolean, follow: opts.follow as boolean });
       } else {
-        runStatus(stateDir);
+        runStatus(stateDir, { json: opts.json as boolean });
       }
     } catch (err) {
       console.error(`[at] error: ${(err as Error).message}`);

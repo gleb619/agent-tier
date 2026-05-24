@@ -1,4 +1,4 @@
-import { formatStatusTable } from '../src/status';
+import { formatStatusTable, formatStatusJson } from '../src/status';
 import { RunRecord } from '../src/run-store';
 
 const baseRun: RunRecord = {
@@ -48,5 +48,35 @@ describe('formatStatusTable', () => {
     expect(lines).toHaveLength(3);
     expect(lines[1]).toContain('running');
     expect(lines[2]).toContain('done');
+  });
+});
+
+describe('formatStatusJson', () => {
+  it('returns valid JSON', () => {
+    const result = formatStatusJson([baseRun]);
+    expect(() => JSON.parse(result)).not.toThrow();
+  });
+
+  it('total matches runs.length', () => {
+    const result = JSON.parse(formatStatusJson([baseRun, { ...baseRun, runId: 'x', status: 'done' }]));
+    expect(result.total).toBe(2);
+    expect(result.runs).toHaveLength(2);
+  });
+
+  it('runId not truncated', () => {
+    const longRunId = 'r3k2a1b9-static-long-id-for-test';
+    const run = { ...baseRun, runId: longRunId };
+    const result = JSON.parse(formatStatusJson([run]));
+    expect(result.runs[0].runId).toBe(longRunId);
+  });
+
+  it('agent not truncated', () => {
+    const result = JSON.parse(formatStatusJson([baseRun]));
+    expect(result.runs[0].agent).toBe('opencode');
+  });
+
+  it('logFile not truncated', () => {
+    const result = JSON.parse(formatStatusJson([baseRun]));
+    expect(result.runs[0].logFile).toBe('/tmp/at-logs/at-test-opencode.log');
   });
 });

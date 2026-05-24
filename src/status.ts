@@ -66,14 +66,26 @@ export function formatStatusTable(runs: RunRecord[]): string {
   return header + '\n' + lines.join('\n');
 }
 
-export function runStatus(stateDir: string): void {
+export function formatStatusJson(runs: RunRecord[]): string {
+  const output = {
+    total: runs.length,
+    runs: runs,
+  };
+  return JSON.stringify(output);
+}
+
+export function runStatus(stateDir: string, opts?: { json?: boolean }): void {
   pruneRuns(stateDir);
 
   let runs = loadRuns(stateDir);
   runs = detectStuck(runs);
 
-  // Persist any stuck/failures detected
   saveRuns(stateDir, runs);
+
+  if (opts?.json) {
+    process.stdout.write(formatStatusJson(runs) + '\n');
+    return;
+  }
 
   console.log(formatStatusTable(runs));
 }
