@@ -9,3 +9,4 @@ dist/
 .blackboxcli/
 env.local.sh
 /build.gradle
+.cursor

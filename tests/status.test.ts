@@ -1,5 +1,8 @@
-import { formatStatusTable, formatStatusJson } from '../src/status';
+import { formatStatusTable, formatStatusJson, formatStateReport, buildStateReport, AgentHealthEntry } from '../src/status';
 import { RunRecord } from '../src/run-store';
+import { writeFileSync, mkdirSync, rmSync } from 'fs';
+import path from 'path';
+import os from 'os';
 
 const baseRun: RunRecord = {
   runId: 'r3k2a1b9',
@@ -78,5 +81,131 @@ describe('formatStatusJson', () => {
   it('logFile not truncated', () => {
     const result = JSON.parse(formatStatusJson([baseRun]));
     expect(result.runs[0].logFile).toBe('/tmp/at-logs/at-test-opencode.log');
+  });
+});
+
+// --- State report with agent health ---
+
+const tmpDir = path.join(os.tmpdir(), 'at-status-test-' + process.pid);
+
+function writeTestStateFile(agentlyHealth: Record<string, unknown>) {
+  mkdirSync(tmpDir, { recursive: true });
+  const state = {
+    agents: agentlyHealth,
+    scheduler: { default: { index: 1 } },
+    runs: { maxEntries: 50 },
+  };
+  writeFileSync(path.join(tmpDir, 'state.json'), JSON.stringify(state, null, 2));
+}
+
+afterAll(() => {
+  rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe('buildStateReport', () => {
+  it('includes agents array in report', () => {
+    writeTestStateFile({
+      opencode: { failureTimes: [], disabledTo: null, deactivated: true },
+      gemini: { failureTimes: ['2026-05-23T09:25:00.000Z'], disabledTo: null },
+      blackbox: { failureTimes: [], disabledTo: null },
+    });
+
+    const report = buildStateReport(tmpDir);
+    expect(report.agents.length).toBeGreaterThanOrEqual(3);
+    expect(report.maxEntries).toBe(50);
+    expect(report.scheduler[0]?.key).toBe('default');
+  });
+
+  it('marks deactivated agents', () => {
+    writeTestStateFile({
+      opencode: { failureTimes: [], disabledTo: null, deactivated: true },
+    });
+
+    const report = buildStateReport(tmpDir);
+    const oc = report.agents.find((a) => a.name === 'opencode');
+    expect(oc).toBeDefined();
+    expect(oc!.deactivated).toBe(true);
+    expect(oc!.failures).toBe(0);
+  });
+
+  it('counts failures and tracks lastFailure', () => {
+    writeTestStateFile({
+      qwen: {
+        failureTimes: ['2026-05-23T09:25:00.000Z', '2026-05-23T09:45:00.000Z'],
+        disabledTo: null,
+      },
+    });
+
+    const report = buildStateReport(tmpDir);
+    const qwen = report.agents.find((a) => a.name === 'qwen');
+    expect(qwen).toBeDefined();
+    expect(qwen!.failures).toBe(2);
+    expect(qwen!.lastFailure).toBe('2026-05-23T09:45:00.000Z');
+  });
+
+  it('surfaces disabledTo when set', () => {
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    writeTestStateFile({
+      gemini: { failureTimes: ['2026-05-23T09:25:00.000Z'], disabledTo: future },
+    });
+
+    const report = buildStateReport(tmpDir);
+    const gem = report.agents.find((a) => a.name === 'gemini');
+    expect(gem).toBeDefined();
+    expect(gem!.disabledTo).toBe(future);
+  });
+
+  it('returns empty agents when no health data', () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(path.join(tmpDir, 'state.json'), JSON.stringify({ scheduler: {} }));
+
+    const report = buildStateReport(tmpDir);
+    expect(report.agents).toEqual([]);
+  });
+});
+
+describe('formatStateReport', () => {
+  it('shows DEACTIVATED label', () => {
+    writeTestStateFile({
+      goose: { failureTimes: [], disabledTo: null, deactivated: true },
+    });
+
+    const out = formatStateReport(tmpDir);
+    expect(out).toContain('DEACTIVATED');
+    expect(out).toContain('goose');
+  });
+
+  it('shows failure count and relative time', () => {
+    writeTestStateFile({
+      qwen: {
+        failureTimes: ['2026-05-23T09:25:00.000Z', '2026-05-23T09:45:00.000Z'],
+        disabledTo: null,
+      },
+    });
+
+    const out = formatStateReport(tmpDir);
+    expect(out).toContain('2 failures');
+    expect(out).toContain('last:');
+    expect(out).toContain('ago');
+  });
+
+  it('shows "ok" for healthy agents', () => {
+    writeTestStateFile({
+      blackbox: { failureTimes: [], disabledTo: null },
+    });
+
+    const out = formatStateReport(tmpDir);
+    expect(out).toContain('blackbox: ok');
+  });
+
+  it('shows disabled-until with relative time', () => {
+    const future = new Date(Date.now() + 3_600_000).toISOString();
+    writeTestStateFile({
+      gemini: { failureTimes: [], disabledTo: future },
+    });
+
+    const out = formatStateReport(tmpDir);
+    expect(out).toContain('disabled until');
+    expect(out).toContain('from now');
   });
 });
