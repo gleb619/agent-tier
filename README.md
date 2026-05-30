@@ -3,6 +3,8 @@
 `at` is a thin CLI that routes a coding prompt to one of many AI agent binaries via round-robin scheduling and automatic
 retry.
 
+![image.png](image.png)
+
 ## Install
 
 ```bash

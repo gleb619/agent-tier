@@ -80,8 +80,8 @@ export function saveHealth(stateFilePath: string, state: HealthState): void {
   writeFileSync(stateFilePath, JSON.stringify(full, null, 2), 'utf8');
 }
 
-export function isDeactivated(stateFilePath: string, name: string): boolean {
-  const state = loadHealth(stateFilePath);
+export function isDeactivated(stateFilePath: string, name: string, preloaded?: HealthState): boolean {
+  const state = preloaded ?? loadHealth(stateFilePath);
   return state.agents[name]?.deactivated === true;
 }
 
@@ -120,8 +120,8 @@ export function recordResult(stateFilePath: string, name: string, success: boole
   saveHealth(stateFilePath, state);
 }
 
-export function isHealthy(stateFilePath: string, name: string): boolean {
-  const state = loadHealth(stateFilePath);
+export function isHealthy(stateFilePath: string, name: string, preloaded?: HealthState): boolean {
+  const state = preloaded ?? loadHealth(stateFilePath);
   const entry = state.agents[name];
 
   if (!entry) return true;
@@ -136,8 +136,8 @@ export function isHealthy(stateFilePath: string, name: string): boolean {
   return Date.now() >= new Date(entry.disabledTo).getTime();
 }
 
-export function filterHealthy(stateFilePath: string, agents: AgentDef[]): AgentDef[] {
-  return agents.filter((a) => isHealthy(stateFilePath, a.name));
+export function filterHealthy(stateFilePath: string, agents: AgentDef[], preloaded?: HealthState): AgentDef[] {
+  return agents.filter((a) => isHealthy(stateFilePath, a.name, preloaded));
 }
 
 export function resetAgent(stateFilePath: string, name: string): void {

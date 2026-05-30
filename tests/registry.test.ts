@@ -2,7 +2,7 @@ import { AGENTS, getAgentsByTier, getAgentByName } from '../src/agents/registry'
 
 describe('AgentRegistry', () => {
   it('has 15 agents defined', () => {
-    expect(AGENTS).toHaveLength(15);
+    expect(AGENTS).toHaveLength(16);
   });
 
   it('has 3 tier-1 agents', () => {
@@ -14,7 +14,7 @@ describe('AgentRegistry', () => {
   });
 
   it('has 5 tier-3 agents', () => {
-    expect(getAgentsByTier(3)).toHaveLength(5);
+    expect(getAgentsByTier(3)).toHaveLength(6);
   });
 
   it('has 2 tier-4 agents', () => {

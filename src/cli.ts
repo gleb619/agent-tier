@@ -46,6 +46,7 @@ program
   .option('--state-dir <path>', 'State directory (default: .at/ in CWD if exists, else ~/.at/)')
   .option('--log-dir <path>', 'Log file directory for detached mode', '/tmp/at-logs')
   .option('--timeout <ms>', 'Force-kill agent after N milliseconds (default: 3600000 = 1h)', '3600000')
+  .option('-m, --model <name>', 'Model name to pass to the agent')
   .option(
     '--json',
     'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{}}',
@@ -80,6 +81,7 @@ program
           agent: opts.agent,
           tier: opts.tier,
           prompt,
+          model: opts.model as string | undefined,
           stream: opts.stream as boolean,
           stateDir: opts.stateDir as string | undefined,
           retries: opts.retries,
@@ -267,7 +269,7 @@ program
   });
 
 // No-arg invocation → launch interactive TUI via Bun
-if (process.argv.length === 2) {
+if (process.argv.length === 2 && process.stdin.isTTY) {
   const { execFileSync } = require("child_process") as typeof import("child_process");
   const path = require("path") as typeof import("path");
   const tuiEntry = path.join(__dirname, "..", "src", "tui", "index.tsx");

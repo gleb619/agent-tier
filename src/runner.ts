@@ -5,7 +5,7 @@ import path from 'path';
 import { AgentDef } from './agents/registry';
 import { RunOptions } from './resolver';
 import { pickAgent, getStateFile } from './scheduler';
-import { filterHealthy, recordResult, isDeactivated } from './health';
+import { filterHealthy, recordResult, isDeactivated, loadHealth } from './health';
 import { addRun, updateRun } from './run-store';
 import { getStateFilePath } from './state-dir';
 
@@ -208,7 +208,6 @@ export async function run(
   agents: AgentDef[],
   spawner: Spawner = defaultSpawner,
 ): Promise<number> {
-  activeChildren.length = 0;
 
   const cleanup = () => {
     killActiveChildren();
@@ -220,10 +219,11 @@ export async function run(
   try {
     const candidatePool = agents;
     const stateFilePath = getStateFilePath(options.stateDir);
+    const healthState = loadHealth(stateFilePath);
     let candidates: AgentDef[];
 
     if (options.agent !== 'auto') {
-      if (isDeactivated(stateFilePath, options.agent)) {
+      if (isDeactivated(stateFilePath, options.agent, healthState)) {
         throw new Error(
           `Agent "${options.agent}" is deactivated. Enable it first with: at enable ${options.agent}`,
         );
@@ -234,11 +234,11 @@ export async function run(
     } else {
       const tierAgents = candidatePool.filter((a) => a.tier === options.tier);
       if (tierAgents.length === 0) throw new Error(`No agents defined for tier ${options.tier}`);
-      const enabled = tierAgents.filter((a) => !isDeactivated(stateFilePath, a.name));
+      const enabled = tierAgents.filter((a) => !isDeactivated(stateFilePath, a.name, healthState));
       if (enabled.length === 0) {
         throw new Error(`All tier-${options.tier} agents are deactivated`);
       }
-      const healthy = filterHealthy(stateFilePath, enabled);
+      const healthy = filterHealthy(stateFilePath, enabled, healthState);
       if (healthy.length === 0) {
         console.warn(`[at] all tier-${options.tier} agents are temporarily disabled, using full enabled pool`);
         candidates = enabled;
@@ -291,6 +291,8 @@ export const defaultSpawner: Spawner = (agent, options) => {
         finishedAt: new Date().toISOString(),
         exitCode: 1,
       });
+      const sfp = getStateFilePath(options.stateDir);
+      recordResult(sfp, agent.name, false);
     });
     child.on('close', (code) => {
       const exitCode = code ?? 1;
@@ -299,6 +301,8 @@ export const defaultSpawner: Spawner = (agent, options) => {
         finishedAt: new Date().toISOString(),
         exitCode,
       });
+      const sfp = getStateFilePath(options.stateDir);
+      recordResult(sfp, agent.name, exitCode === 0);
     });
     return Promise.resolve(0);
   }

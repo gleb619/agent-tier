@@ -34,11 +34,12 @@ src/agents/registry.ts  AgentDef[] — name, tier, bin(), buildArgs(), buildEnv(
 
 ### Tiers
 
-| Tier | Agents | Role |
-|------|--------|------|
-| 1 | glm-code, codex, kimi | architect / review |
-| 2 *(default)* | blackbox, opencode, qwen | dev / QA |
-| 3 | kilo, gemini, goose, aider, pi | experimental / boilerplate |
+| Tier          | Agents                                    | Role                       |
+|---------------|-------------------------------------------|----------------------------|
+| 1             | glm-code, codex, kimi                     | architect / review         |
+| 2 *(default)* | blackbox, mm-code, opencode, qwen, pi     | dev / QA                   |
+| 3             | kilo, gemini, goose, aider, cursor, cline | experimental / boilerplate |
+| 4             | mock, mock-long                           | dry-run / test agents      |
 
 ### Key design points
 

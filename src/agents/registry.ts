@@ -23,7 +23,7 @@ export const AGENTS: AgentDef[] = [
     name: 'codex',
     tier: 1,
     bin: () => process.env.CODEX_BIN ?? `${NODE_BIN}/codex`,
-    buildArgs: (prompt) => ['exec', prompt],
+    buildArgs: (prompt) => ['exec', '--yolo', '--skip-git-repo-check', prompt],
   },
   {
     name: 'kimi',
@@ -119,6 +119,16 @@ export const AGENTS: AgentDef[] = [
     buildEnv: () => ({
       OLLAMA_API_BASE: process.env.OLLAMA_API_BASE ?? 'http://127.0.0.1:11434',
     }),
+  },
+
+  {
+    name: 'cursor',
+    tier: 3,
+    bin: () => process.env.CURSOR_BIN ?? `${LOCAL_BIN}/cursor-agent`,
+    buildArgs: (prompt, model) =>
+      model
+        ? ['-p', prompt, '--yolo', '--trust', '--model', model]
+        : ['-p', prompt, '--yolo', '--trust'],
   },
 
   {
