@@ -1,14 +1,16 @@
 import { Command } from 'commander';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { spawn } from 'child_process';
+import path from 'path';
 import { resolveStateDir } from '../state-dir';
 import { runStatus } from '../status';
 import { loadRuns } from '../run-store';
+import { chopLines } from '../chop';
 
 function showRunLogs(
   stateDir: string,
   runId: string,
-  opts: { lines?: number; head?: boolean; tail?: boolean; follow?: boolean } = {},
+  opts: { lines?: number; head?: boolean; tail?: boolean; follow?: boolean; noChop?: boolean } = {},
 ): void {
   const runs = loadRuns(stateDir);
   const run = runs.find((r) => r.runId === runId || r.runId.startsWith(runId));
@@ -20,21 +22,28 @@ function showRunLogs(
 
   if (opts.follow) {
     try {
-      spawn('tail', ['-f', run.logFile], { stdio: 'inherit' });
-      return;
+      const logStreamerJs = path.join(__dirname, '..', 'log-streamer.js');
+      const useStreamer = !opts.noChop && existsSync(logStreamerJs);
+      if (useStreamer) {
+        spawn('node', [logStreamerJs, '--log', run.logFile, '--pid', String(process.pid)], { stdio: 'inherit' });
+        return;
+      }
     } catch {
-      // fall through to reading + watching
+      // fall through to plain tail
     }
+    spawn('tail', ['-f', run.logFile], { stdio: 'inherit' });
+    return;
   }
 
   try {
     const logs = readFileSync(run.logFile, 'utf8');
+    const finalOutput = opts.noChop ? logs : chopLines(logs);
     if (opts.lines !== undefined) {
-      const lines = logs.split('\n');
+      const lines = finalOutput.split('\n');
       const slice = opts.head ? lines.slice(0, opts.lines) : lines.slice(-opts.lines);
       process.stdout.write(slice.join('\n') + '\n');
     } else {
-      process.stdout.write(logs);
+      process.stdout.write(finalOutput);
     }
   } catch {
     console.error(`[at] cannot read log: ${run.logFile}`);
@@ -50,6 +59,7 @@ export function registerStatusCommand(program: Command): void {
     .option('--head', 'Show lines from the beginning of the log')
     .option('--tail', 'Show lines from the end of the log (default when -n is used)')
     .option('-f, --follow', 'Stream new log lines as they arrive (requires runId)')
+    .option('--no-chop', 'Disable log filtering (ANSI, spinners, repeated lines)')
     .option('--json', 'Output as JSON without text trimming', false)
     .action((runId: string | undefined, opts: Record<string, unknown>) => {
       try {
@@ -60,6 +70,7 @@ export function registerStatusCommand(program: Command): void {
             head: opts.head as boolean,
             tail: opts.tail as boolean,
             follow: opts.follow as boolean,
+            noChop: (opts.noChop as boolean) ?? false,
           });
         } else {
           runStatus(stateDir, { json: opts.json as boolean });

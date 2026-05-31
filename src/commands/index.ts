@@ -5,6 +5,7 @@ import { registerInitCommand } from './init';
 import { registerStatusCommand } from './status';
 import { registerHealthCommands } from './health';
 import { registerCodegraphCommand } from './codegraph';
+import { registerComposeCommand } from '../compose/delivery/cli';
 
 export function registerCommands(program: Command): void {
   registerDefaultCommand(program);
@@ -13,4 +14,5 @@ export function registerCommands(program: Command): void {
   registerStatusCommand(program);
   registerHealthCommands(program);
   registerCodegraphCommand(program);
+  registerComposeCommand(program);
 }

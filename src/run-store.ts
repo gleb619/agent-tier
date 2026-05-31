@@ -20,7 +20,7 @@ export interface RunsIndex {
   runs: RunRecord[];
 }
 
-const DEFAULT_MAX_RUNS = 10;
+const DEFAULT_MAX_RUNS = 30;
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const STUCK_SILENCE_MS = 30 * 60 * 1000; // 30 min of no log writes
 

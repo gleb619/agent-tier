@@ -13,3 +13,4 @@ env.local.sh
 /docs/plans/*
 /CLAUDE.original.md
 /test_result.txt
+/docs/tasks/*

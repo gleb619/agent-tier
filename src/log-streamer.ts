@@ -1,49 +1,13 @@
-import { readFileSync, existsSync, readSync, openSync, closeSync } from 'fs';
-import path from 'path';
-import os from 'os';
+import { existsSync, openSync, closeSync, readSync } from 'fs';
+import { loadFilterConfig, buildDropPatterns, shouldDrop, FilterConfig } from './chop';
 
-interface FilterConfig {
-  drop?: string[];
-  groupRepeated?: boolean;
+interface ParseArgsResult {
+  log: string;
+  pid: number;
+  config?: string;
 }
 
-const BUILTIN_DROP_PATTERNS: string[] = [
-  // ANSI escape sequences
-  '^\\x1b\\[[0-9;]*[a-zA-Z]',
-  // Spinner / progress bar characters
-  "^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏].*",
-  // Carriage-return progress lines
-  '^\\r',
-  // Common noisy prefixes
-  '^\\s*\\.+\\s*$',
-];
-
-function loadConfig(configPath?: string): FilterConfig {
-  const paths = [];
-  if (configPath) paths.push(configPath);
-  paths.push(path.join(os.homedir(), '.config', 'chop', 'filters.json'));
-
-  for (const p of paths) {
-    if (existsSync(p)) {
-      try {
-        const raw = readFileSync(p, 'utf8');
-        const parsed = JSON.parse(raw) as FilterConfig;
-        return {
-          drop: parsed.drop ?? [],
-          groupRepeated: parsed.groupRepeated ?? true,
-        };
-      } catch {
-        // ignore bad config
-      }
-    }
-  }
-  return {
-    drop: BUILTIN_DROP_PATTERNS,
-    groupRepeated: true,
-  };
-}
-
-function parseArgs(): { log: string; pid: number; config?: string } {
+function parseArgs(): ParseArgsResult {
   const args = process.argv.slice(2);
   let log = '';
   let pid = 0;
@@ -68,27 +32,9 @@ function parseArgs(): { log: string; pid: number; config?: string } {
   return { log, pid, config };
 }
 
-function buildDropPatterns(config: FilterConfig): RegExp[] {
-  const patterns = config.drop ?? BUILTIN_DROP_PATTERNS;
-  return patterns.map((p) => {
-    try {
-      return new RegExp(p);
-    } catch {
-      return null;
-    }
-  }).filter((r): r is RegExp => r !== null);
-}
-
-function shouldDrop(line: string, patterns: RegExp[]): boolean {
-  for (const re of patterns) {
-    if (re.test(line)) return true;
-  }
-  return false;
-}
-
 function main() {
   const { log, pid, config } = parseArgs();
-  const filterConfig = loadConfig(config);
+  const filterConfig = loadFilterConfig(config);
   const dropPatterns = buildDropPatterns(filterConfig);
   const groupRepeated = filterConfig.groupRepeated ?? true;
 
