@@ -2,7 +2,9 @@ import { writeFileSync, unlinkSync, mkdirSync, readFileSync } from 'fs';
 import path from 'path';
 import os from 'os';
 
-const LOCK_DIR = path.join(os.homedir(), '.at', 'locks');
+export function getLockDir(stateFilePath: string): string {
+  return path.join(path.dirname(stateFilePath), 'locks');
+}
 
 export interface LockInfo {
 	pid: number;
@@ -34,9 +36,10 @@ export async function acquireLock(
 	stateFilePath: string,
 	timeoutMs = 5000
 ): Promise<string> {
-	mkdirSync(LOCK_DIR, { recursive: true });
+	const lockDir = getLockDir(stateFilePath);
+	mkdirSync(lockDir, { recursive: true });
 
-	const lockPath = path.join(LOCK_DIR, pathToLockName(stateFilePath));
+	const lockPath = path.join(lockDir, pathToLockName(stateFilePath));
 	const info: LockInfo = {
 		pid: process.pid,
 		hostname: os.hostname(),
