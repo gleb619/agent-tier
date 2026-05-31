@@ -8,5 +8,6 @@ export default defineConfig({
     hookTimeout: 360000,
     globals: true,
     environment: 'node',
+    setupFiles: ['tests/setup.ts'],
   },
 });
