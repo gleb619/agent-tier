@@ -19,7 +19,13 @@ export function loadGenericAgents(): AgentDef[] {
   }
 
   for (const entry of entries) {
+    if (entry.includes(path.sep)) continue;
+
     const entryPath = path.join(baseDir, entry);
+    const resolvedEntry = path.resolve(entryPath);
+    const resolvedBase = path.resolve(baseDir);
+    if (!resolvedEntry.startsWith(resolvedBase + path.sep)) continue;
+
     try {
       if (!statSync(entryPath).isDirectory()) continue;
 

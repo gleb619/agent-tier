@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import path from 'path';
 import { AgentDef } from './agents/registry';
+import { withLock } from './lock';
 
 export interface SchedulerState {
   index: number;
@@ -35,17 +36,19 @@ export function getStateFile(_tier: number, stateDir: string, prefix = 'at'): st
   return path.join(stateDir, 'state.json');
 }
 
-export function pickAgent(agents: AgentDef[], stateFilePath: string, key = 'default'): AgentDef {
-  const state = loadStateFile(stateFilePath);
-  if (!state.scheduler) state.scheduler = {};
+export async function pickAgent(agents: AgentDef[], stateFilePath: string, key = 'default'): Promise<AgentDef> {
+  return withLock(stateFilePath, () => {
+    const state = loadStateFile(stateFilePath);
+    if (!state.scheduler) state.scheduler = {};
 
-  let sched: SchedulerState = { index: -1 };
-  if (state.scheduler[key]) {
-    sched = state.scheduler[key];
-  }
+    let sched: SchedulerState = { index: -1 };
+    if (state.scheduler[key]) {
+      sched = state.scheduler[key];
+    }
 
-  const nextIndex = (sched.index + 1) % agents.length;
-  state.scheduler[key] = { index: nextIndex };
-  saveStateFile(stateFilePath, state);
-  return agents[nextIndex];
+    const nextIndex = (sched.index + 1) % agents.length;
+    state.scheduler[key] = { index: nextIndex };
+    saveStateFile(stateFilePath, state);
+    return agents[nextIndex];
+  });
 }

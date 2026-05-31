@@ -10,3 +10,6 @@ dist/
 env.local.sh
 /build.gradle
 .cursor
+/docs/plans/*
+/CLAUDE.original.md
+/test_result.txt

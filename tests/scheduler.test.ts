@@ -35,35 +35,35 @@ describe('pickAgent', () => {
     try { fs.rmdirSync(stateDir); } catch { /* not empty */ }
   });
 
-  it('starts at index 0 with no state file', () => {
+  it('starts at index 0 with no state file', async () => {
     // Delete the file so pickAgent starts fresh
     if (fs.existsSync(stateFile)) fs.unlinkSync(stateFile);
-    expect(pickAgent(agents, stateFile).name).toBe('a');
+    expect((await pickAgent(agents, stateFile)).name).toBe('a');
   });
 
-  it('advances to next agent on each call', () => {
-    expect(pickAgent(agents, stateFile).name).toBe('a');
-    expect(pickAgent(agents, stateFile).name).toBe('b');
-    expect(pickAgent(agents, stateFile).name).toBe('c');
+  it('advances to next agent on each call', async () => {
+    expect((await pickAgent(agents, stateFile)).name).toBe('a');
+    expect((await pickAgent(agents, stateFile)).name).toBe('b');
+    expect((await pickAgent(agents, stateFile)).name).toBe('c');
   });
 
-  it('wraps around to 0 after last agent', () => {
-    pickAgent(agents, stateFile);
-    pickAgent(agents, stateFile);
-    pickAgent(agents, stateFile);
-    expect(pickAgent(agents, stateFile).name).toBe('a');
+  it('wraps around to 0 after last agent', async () => {
+    await pickAgent(agents, stateFile);
+    await pickAgent(agents, stateFile);
+    await pickAgent(agents, stateFile);
+    expect((await pickAgent(agents, stateFile)).name).toBe('a');
   });
 
-  it('persists index to state file after each pick', () => {
-    pickAgent(agents, stateFile);
+  it('persists index to state file after each pick', async () => {
+    await pickAgent(agents, stateFile);
     const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
     expect(state.scheduler.default.index).toBe(0);
   });
 
-  it('uses different keys for different scheduler contexts', () => {
-    expect(pickAgent(agents, stateFile, 'tier-1').name).toBe('a');
-    expect(pickAgent(agents, stateFile, 'tier-1').name).toBe('b');
+  it('uses different keys for different scheduler contexts', async () => {
+    expect((await pickAgent(agents, stateFile, 'tier-1')).name).toBe('a');
+    expect((await pickAgent(agents, stateFile, 'tier-1')).name).toBe('b');
     // Different key starts fresh
-    expect(pickAgent(agents, stateFile, 'tier-2').name).toBe('a');
+    expect((await pickAgent(agents, stateFile, 'tier-2')).name).toBe('a');
   });
 });

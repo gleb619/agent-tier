@@ -67,6 +67,7 @@ describe('loadConfig', () => {
   });
 
   it('returns parsed config when HMAC matches', () => {
+    process.env.AT_HMAC_SECRET = 'test-secret';
     const configData = JSON.stringify({ tierOverrides: { pi: 2, goose: 1 } });
     const hmac = computeHmac(configData);
     mockReadFileSync.mockImplementation((p) => {
@@ -78,6 +79,7 @@ describe('loadConfig', () => {
     expect(result).toEqual({ tierOverrides: { pi: 2, goose: 1 } });
     expect(console.warn).not.toHaveBeenCalled();
     expect(console.error).not.toHaveBeenCalled();
+    delete process.env.AT_HMAC_SECRET;
   });
 });
 

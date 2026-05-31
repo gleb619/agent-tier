@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
 import { getStateFilePath } from './state-dir';
+import { withLock } from './lock';
 
 export interface RunRecord {
   runId: string;
@@ -44,7 +45,6 @@ function readJsonl(filePath: string): RunRecord[] {
   try {
     const raw = readFileSync(filePath, 'utf8');
     const lines = raw.split('\n').filter((l) => l.trim().length > 0);
-    // Attempt to migrate old plain-JSON format { runs: [...] }
     if (lines.length === 1) {
       try {
         const parsed = JSON.parse(lines[0]) as RunsIndex;
@@ -75,42 +75,49 @@ export function saveRuns(stateDir: string, runs: RunRecord[]): void {
   writeJsonl(getRunsFile(stateDir), runs);
 }
 
-export function addRun(stateDir: string, record: RunRecord): void {
-  const max = getMaxRuns(stateDir);
-  const runs = loadRuns(stateDir);
-  runs.push(record);
-  // Sort by startedAt descending (newest first)
-  runs.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-  const pruned = runs.slice(0, max);
-  saveRuns(stateDir, pruned);
+export async function addRun(stateDir: string, record: RunRecord): Promise<void> {
+  const runsFile = getRunsFile(stateDir);
+  return withLock(runsFile, () => {
+    const max = getMaxRuns(stateDir);
+    const runs = readJsonl(runsFile);
+    runs.push(record);
+    runs.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    const pruned = runs.slice(0, max);
+    writeJsonl(runsFile, pruned);
+  });
 }
 
-export function updateRun(stateDir: string, runId: string, updates: Partial<RunRecord>): void {
-  const runs = loadRuns(stateDir);
-  const run = runs.find((r) => r.runId === runId);
-  if (run) {
-    Object.assign(run, updates);
-    saveRuns(stateDir, runs);
-  }
+export async function updateRun(stateDir: string, runId: string, updates: Partial<RunRecord>): Promise<void> {
+  const runsFile = getRunsFile(stateDir);
+  return withLock(runsFile, () => {
+    const runs = readJsonl(runsFile);
+    const run = runs.find((r) => r.runId === runId);
+    if (run) {
+      Object.assign(run, updates);
+      writeJsonl(runsFile, runs);
+    }
+  });
 }
 
-export function pruneRuns(
+export async function pruneRuns(
   stateDir: string,
   ttlMs: number = getTtl(),
   maxRuns: number = getMaxRuns(stateDir),
-): void {
-  const runs = loadRuns(stateDir);
-  const cutoff = Date.now() - ttlMs;
-  const filtered = runs.filter((r) => {
-    const end = r.finishedAt ? new Date(r.finishedAt).getTime() : new Date(r.startedAt).getTime();
-    return end >= cutoff;
+): Promise<void> {
+  const runsFile = getRunsFile(stateDir);
+  return withLock(runsFile, () => {
+    const runs = readJsonl(runsFile);
+    const cutoff = Date.now() - ttlMs;
+    const filtered = runs.filter((r) => {
+      const end = r.finishedAt ? new Date(r.finishedAt).getTime() : new Date(r.startedAt).getTime();
+      return end >= cutoff;
+    });
+    filtered.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    const pruned = filtered.slice(0, maxRuns);
+    if (pruned.length !== runs.length) {
+      writeJsonl(runsFile, pruned);
+    }
   });
-  // Also enforce max entries cap (keep newest)
-  filtered.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-  const pruned = filtered.slice(0, maxRuns);
-  if (pruned.length !== runs.length) {
-    saveRuns(stateDir, pruned);
-  }
 }
 
 export function isPidAlive(pid: number): boolean {

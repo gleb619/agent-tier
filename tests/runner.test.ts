@@ -58,7 +58,7 @@ beforeEach(() => {
   });
   (scheduler.getStateFile as Mock).mockReturnValue(path.join(defaultStateDir, 'state.json'));
   (health.filterHealthy as Mock).mockImplementation((_stateFile: string, agents: AgentDef[]) => agents);
-  (health.recordResult as Mock).mockImplementation(() => {});
+  (health.recordResult as Mock).mockImplementation(() => Promise.resolve());
   (health.isDeactivated as Mock).mockReturnValue(false);
 });
 
@@ -207,7 +207,7 @@ describe('defaultSpawner', () => {
       logDir: tmpLogDir,
       prompt: 'hello',
     };
-    expect(() => defaultSpawner(agent, options)).toThrow('no PID assigned');
+    await expect(defaultSpawner(agent, options)).rejects.toThrow('no PID assigned');
     const files = readdirSync(tmpLogDir);
     expect(files.length).toBe(1);
     const logPath = path.join(tmpLogDir, files[0]);
@@ -229,7 +229,7 @@ describe('defaultSpawner', () => {
       logDir: tmpLogDir,
       prompt: 'hello',
     };
-    expect(() => defaultSpawner(agent, options)).toThrow('no PID assigned');
+    await expect(defaultSpawner(agent, options)).rejects.toThrow('no PID assigned');
     const files = readdirSync(tmpLogDir);
     expect(files.length).toBe(1);
     const logPath = path.join(tmpLogDir, files[0]);

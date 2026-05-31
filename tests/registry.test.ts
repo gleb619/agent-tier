@@ -72,3 +72,46 @@ describe('AgentRegistry', () => {
     expect(getAgentByName('gemini')!.promptMode).toBe('stdin');
   });
 });
+
+describe('getAgentsByTier', () => {
+  it('returns tier 1 agents: glm-code, codex, kimi', () => {
+    const tier1 = getAgentsByTier(1);
+    expect(tier1).toHaveLength(3);
+    expect(tier1.map(a => a.name)).toEqual(expect.arrayContaining(['glm-code', 'codex', 'kimi']));
+  });
+
+  it('returns tier 2 agents: blackbox, mm-code, opencode, qwen, pi', () => {
+    const tier2 = getAgentsByTier(2);
+    expect(tier2).toHaveLength(5);
+    expect(tier2.map(a => a.name)).toEqual(expect.arrayContaining(['blackbox', 'mm-code', 'opencode', 'qwen', 'pi']));
+  });
+
+  it('returns tier 3 agents', () => {
+    const tier3 = getAgentsByTier(3);
+    expect(tier3.length).toBeGreaterThan(0);
+    const names = tier3.map(a => a.name);
+    expect(names).toContain('gemini');
+    expect(names).toContain('aider');
+  });
+
+  it('returns tier 4 agents: mock, mock-long', () => {
+    const tier4 = getAgentsByTier(4);
+    expect(tier4).toHaveLength(2);
+  });
+
+  it('returns empty for agents not in that tier', () => {
+    const tier4 = getAgentsByTier(4);
+    expect(tier4.map(a => a.name)).not.toContain('glm-code');
+  });
+});
+
+describe('getAgentByName', () => {
+  it('returns agent definition for known name', () => {
+    const agent = getAgentByName('gemini');
+    expect(agent?.tier).toBe(3);
+  });
+
+  it('returns undefined for unknown name', () => {
+    expect(getAgentByName('nonexistent')).toBeUndefined();
+  });
+});

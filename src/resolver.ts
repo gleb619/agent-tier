@@ -45,6 +45,12 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
   const tierNum = Number(argv.tier ?? 2);
   if (![1, 2, 3, 4].includes(tierNum)) throw new Error(`tier must be 1, 2, 3, or 4 (got ${argv.tier})`);
 
+  const timeoutMs = Number(argv.timeout ?? 3600000);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('timeout must be a positive number (ms)');
+
+  const retriesNum = Number(argv.retries ?? 0);
+  if (!Number.isFinite(retriesNum) || retriesNum < 0 || !Number.isInteger(retriesNum)) throw new Error('retries must be a non-negative integer');
+
   return {
     agent: argv.agent ?? 'auto',
     tier: tierNum as 1 | 2 | 3 | 4,
@@ -54,10 +60,10 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     env: argv.env,
     stream: argv.stream ?? false,
     stateDir: resolveStateDir(argv.stateDir),
-    retries: Number(argv.retries ?? 0),
+    retries: retriesNum,
     logDir: argv.logDir ?? '/tmp/at-logs',
     noChop: argv.noChop ?? false,
-    timeout: Number(argv.timeout ?? 3600000),
+    timeout: timeoutMs,
   };
 }
 

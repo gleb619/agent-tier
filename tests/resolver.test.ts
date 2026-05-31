@@ -68,3 +68,60 @@ describe('resolveFromArgs', () => {
     expect(resolveFromArgs({ prompt: 'hello', stateDir: '/custom/.at' }).stateDir).toBe('/custom/.at');
   });
 });
+
+describe('parseJsonInput edge cases', () => {
+  it('throws on malformed JSON', () => {
+    expect(() => parseJsonInput('{invalid json}')).toThrow();
+  });
+
+  it('throws on empty string', () => {
+    expect(() => parseJsonInput('')).toThrow();
+  });
+
+  it('defaults agent to auto when agent field is missing', () => {
+    expect(parseJsonInput(JSON.stringify({ prompt: 'hello' })).agent).toBe('auto');
+  });
+
+  it('throws when prompt field is missing', () => {
+    expect(() => parseJsonInput(JSON.stringify({ agent: 'blackbox' }))).toThrow('prompt');
+  });
+
+  it('returns valid parsed input with all fields', () => {
+    const opts = parseJsonInput(JSON.stringify({
+      agent: 'kimi',
+      prompt: 'fix the bug',
+      model: 'claude-3-5-sonnet',
+      cwd: '/home/user/project',
+      env: { NODE_ENV: 'test', DEBUG: 'true' },
+    }));
+    expect(opts.agent).toBe('kimi');
+    expect(opts.prompt).toBe('fix the bug');
+    expect(opts.model).toBe('claude-3-5-sonnet');
+    expect(opts.cwd).toBe('/home/user/project');
+    expect(opts.env).toEqual({ NODE_ENV: 'test', DEBUG: 'true' });
+  });
+
+  it('handles JSON with only required fields (agent + prompt)', () => {
+    const opts = parseJsonInput(JSON.stringify({
+      agent: 'blackbox',
+      prompt: 'minimal test',
+    }));
+    expect(opts.agent).toBe('blackbox');
+    expect(opts.prompt).toBe('minimal test');
+    expect(opts.model).toBeUndefined();
+    expect(opts.cwd).toBeUndefined();
+    expect(opts.env).toBeUndefined();
+  });
+
+  it('handles extra fields gracefully', () => {
+    const opts = parseJsonInput(JSON.stringify({
+      agent: 'opencode',
+      prompt: 'hello',
+      unknownField: 'should be ignored',
+      anotherExtra: 12345,
+      nested: { foo: 'bar' },
+    }));
+    expect(opts.agent).toBe('opencode');
+    expect(opts.prompt).toBe('hello');
+  });
+});

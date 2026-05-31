@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import path from 'path';
 import { AgentDef } from './agents/registry';
+import { withLock } from './lock';
 
 export interface AgentHealth {
   failureTimes: string[];
@@ -85,50 +86,63 @@ export function isDeactivated(stateFilePath: string, name: string, preloaded?: H
   return state.agents[name]?.deactivated === true;
 }
 
-export function setDeactivated(stateFilePath: string, name: string, deactivated: boolean): void {
-  const state = loadHealth(stateFilePath);
-  if (!state.agents[name]) {
-    state.agents[name] = { failureTimes: [], disabledTo: null };
-  }
-
-  if (deactivated) {
-    state.agents[name].deactivated = true;
-  } else {
-    delete state.agents[name].deactivated;
-  }
-  saveHealth(stateFilePath, state);
-}
-
-export function recordResult(stateFilePath: string, name: string, success: boolean): void {
-  const state = loadHealth(stateFilePath);
-
-  if (success) {
-    state.agents[name] = { failureTimes: [], disabledTo: null };
-  } else {
-    const current = state.agents[name] ?? { failureTimes: [], disabledTo: null };
-    current.failureTimes = pruneOldFailures([...current.failureTimes, new Date().toISOString()]);
-    current.disabledTo = null;
-
-    const count = current.failureTimes.length;
-    if (count >= getThreshold()) {
-      const duration = blockDurationFor(count);
-      current.disabledTo = new Date(Date.now() + duration).toISOString();
+export async function setDeactivated(stateFilePath: string, name: string, deactivated: boolean): Promise<void> {
+  return withLock(stateFilePath, () => {
+    const state = loadHealth(stateFilePath);
+    if (!state.agents[name]) {
+      state.agents[name] = { failureTimes: [], disabledTo: null };
     }
-    state.agents[name] = current;
-  }
 
-  saveHealth(stateFilePath, state);
+    if (deactivated) {
+      state.agents[name].deactivated = true;
+    } else {
+      delete state.agents[name].deactivated;
+    }
+    saveHealth(stateFilePath, state);
+  });
 }
 
-export function isHealthy(stateFilePath: string, name: string, preloaded?: HealthState): boolean {
+export async function recordResult(stateFilePath: string, name: string, success: boolean): Promise<void> {
+  return withLock(stateFilePath, () => {
+    const state = loadHealth(stateFilePath);
+
+    if (success) {
+      const current = state.agents[name] ?? { failureTimes: [], disabledTo: null };
+      current.failureTimes = pruneOldFailures(current.failureTimes);
+      current.disabledTo = null;
+      state.agents[name] = current;
+    } else {
+      const current = state.agents[name] ?? { failureTimes: [], disabledTo: null };
+      current.failureTimes = pruneOldFailures([...current.failureTimes, new Date().toISOString()]);
+      current.disabledTo = null;
+
+      const count = current.failureTimes.length;
+      if (count >= getThreshold()) {
+        const duration = blockDurationFor(count);
+        current.disabledTo = new Date(Date.now() + duration).toISOString();
+      }
+      state.agents[name] = current;
+    }
+
+    saveHealth(stateFilePath, state);
+  });
+}
+
+export async function isHealthy(stateFilePath: string, name: string, preloaded?: HealthState): Promise<boolean> {
   const state = preloaded ?? loadHealth(stateFilePath);
   const entry = state.agents[name];
 
   if (!entry) return true;
 
+  const originalLen = entry.failureTimes.length;
+  const originalDisabledTo = entry.disabledTo;
   entry.failureTimes = pruneOldFailures(entry.failureTimes);
   if (entry.failureTimes.length === 0) {
     entry.disabledTo = null;
+  }
+
+  if (originalLen !== entry.failureTimes.length || originalDisabledTo !== entry.disabledTo) {
+    await withLock(stateFilePath, () => saveHealth(stateFilePath, state));
   }
 
   if (!entry.disabledTo) return true;
@@ -136,12 +150,15 @@ export function isHealthy(stateFilePath: string, name: string, preloaded?: Healt
   return Date.now() >= new Date(entry.disabledTo).getTime();
 }
 
-export function filterHealthy(stateFilePath: string, agents: AgentDef[], preloaded?: HealthState): AgentDef[] {
-  return agents.filter((a) => isHealthy(stateFilePath, a.name, preloaded));
+export async function filterHealthy(stateFilePath: string, agents: AgentDef[], preloaded?: HealthState): Promise<AgentDef[]> {
+  const results = await Promise.all(agents.map(a => isHealthy(stateFilePath, a.name, preloaded)));
+  return agents.filter((_, i) => results[i]);
 }
 
-export function resetAgent(stateFilePath: string, name: string): void {
-  const state = loadHealth(stateFilePath);
-  state.agents[name] = { failureTimes: [], disabledTo: null };
-  saveHealth(stateFilePath, state);
+export async function resetAgent(stateFilePath: string, name: string): Promise<void> {
+  return withLock(stateFilePath, () => {
+    const state = loadHealth(stateFilePath);
+    state.agents[name] = { failureTimes: [], disabledTo: null };
+    saveHealth(stateFilePath, state);
+  });
 }

@@ -57,7 +57,7 @@ interface LaunchResult {
   agent: AgentDef;
 }
 
-function launchAgent(agent: AgentDef, options: RunOptions): LaunchResult {
+async function launchAgent(agent: AgentDef, options: RunOptions): Promise<LaunchResult> {
   const bin = agent.bin();
   const args = agent.buildArgs(options.prompt, options.model);
   const extraEnv = agent.buildEnv?.(options.model) ?? {};
@@ -94,7 +94,7 @@ function launchAgent(agent: AgentDef, options: RunOptions): LaunchResult {
   }
 
   trackChild(child.pid, true);
-  addRun(options.stateDir, {
+  await addRun(options.stateDir, {
     runId,
     agent: agent.name,
     tier: agent.tier,
@@ -185,7 +185,7 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   if (signal === 'SIGKILL') {
     try { process.kill(-child.pid!, 'SIGKILL'); } catch {}
     try { appendFileSync(logFile, `[at] timeout: killed after ${timeoutMs}ms\n`); } catch {}
-    updateRun(options.stateDir, runId, {
+    await updateRun(options.stateDir, runId, {
       status: 'failed',
       finishedAt: new Date().toISOString(),
       exitCode: 1,
@@ -194,7 +194,7 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   }
 
   const exitCode = code ?? 1;
-  updateRun(options.stateDir, runId, {
+  await updateRun(options.stateDir, runId, {
     status: exitCode === 0 ? 'done' : 'failed',
     finishedAt: new Date().toISOString(),
     exitCode,
@@ -238,7 +238,7 @@ export async function run(
       if (enabled.length === 0) {
         throw new Error(`All tier-${options.tier} agents are deactivated`);
       }
-      const healthy = filterHealthy(stateFilePath, enabled, healthState);
+      const healthy = await filterHealthy(stateFilePath, enabled, healthState);
       if (healthy.length === 0) {
         console.warn(`[at] all tier-${options.tier} agents are temporarily disabled, using full enabled pool`);
         candidates = enabled;
@@ -249,19 +249,19 @@ export async function run(
 
     const isNamed = options.agent !== 'auto';
     const stateFile = getStateFile(options.tier, options.stateDir);
-    const agent = isNamed ? candidates[0] : pickAgent(candidates, stateFile);
+    const agent = isNamed ? candidates[0] : await pickAgent(candidates, stateFile);
 
     try {
       const exitCode = await spawner(agent, options);
       if (options.stream) {
-        recordResult(stateFilePath, agent.name, exitCode === 0);
+        await recordResult(stateFilePath, agent.name, exitCode === 0);
         if (exitCode !== 0) {
           throw new AgentError(`${agent.name} exited with code ${exitCode}`, exitCode);
         }
       }
       return 0;
     } catch (err) {
-      recordResult(stateFilePath, agent.name, false);
+      await recordResult(stateFilePath, agent.name, false);
       if (err instanceof AgentError) throw err;
       throw err;
     }
@@ -274,8 +274,8 @@ export async function run(
   }
 }
 
-export const defaultSpawner: Spawner = (agent, options) => {
-  const result = launchAgent(agent, options);
+export const defaultSpawner: Spawner = async (agent, options) => {
+  const result = await launchAgent(agent, options);
   const { child, runId, logFile } = result;
 
   child.removeAllListeners('error');
@@ -290,9 +290,9 @@ export const defaultSpawner: Spawner = (agent, options) => {
         status: 'failed',
         finishedAt: new Date().toISOString(),
         exitCode: 1,
-      });
+      }).catch(() => {});
       const sfp = getStateFilePath(options.stateDir);
-      recordResult(sfp, agent.name, false);
+      recordResult(sfp, agent.name, false).catch(() => {});
     });
     child.on('close', (code) => {
       const exitCode = code ?? 1;
@@ -300,11 +300,11 @@ export const defaultSpawner: Spawner = (agent, options) => {
         status: exitCode === 0 ? 'done' : 'failed',
         finishedAt: new Date().toISOString(),
         exitCode,
-      });
+      }).catch(() => {});
       const sfp = getStateFilePath(options.stateDir);
-      recordResult(sfp, agent.name, exitCode === 0);
+      recordResult(sfp, agent.name, exitCode === 0).catch(() => {});
     });
-    return Promise.resolve(0);
+    return 0;
   }
 };
 
@@ -321,7 +321,7 @@ const ADJECTIVES = [
 const STELLAR_BODIES = [
   'jupiter', 'mars', 'venus', 'saturn', 'mercury', 'neptune', 'uranus', 'earth', 'pluto', 'ceres',
   'halley', 'encke', 'tempel', 'borrelly', 'wild', 'schwassmann', 'kopff', 'daniel', 'brorsen', 'finlay',
-  'cygnusx1', 'sagra', 'ton618', 'm87', 'andromeda', 'sombrero', 'whirlpool', 'pinwheel', 'cartwheel', 'sunflower',
+  'cygnus1', 'sagra', 'ton618', 'm87', 'andromeda', 'sombrero', 'whirlpool', 'pinwheel', 'cartwheel', 'sunflower',
   'sirius', 'canopus', 'rigel', 'vega', 'arcturus', 'altair', 'aldebaran', 'antares', 'spica', 'pollux'
 ];
 

@@ -25,6 +25,9 @@ export function signConfig(): void {
   const data = readFileSync(CONFIG_FILE, 'utf8');
   mkdirSync(CONFIG_DIR, { recursive: true });
   writeFileSync(HMAC_FILE, computeHmac(data), 'utf8');
+  if (!process.env.AT_HMAC_SECRET) {
+    console.warn('[at] warning: AT_HMAC_SECRET not set — config HMAC uses default secret. Set AT_HMAC_SECRET for real integrity protection.');
+  }
   console.log(`[at] config signed: ${HMAC_FILE}`);
 }
 
@@ -47,6 +50,10 @@ export function loadConfig(): AtConfig | null {
   if (storedHmac !== computeHmac(data)) {
     console.error('[at] config HMAC mismatch — config may be tampered. Run: at config sign');
     return null;
+  }
+
+  if (!process.env.AT_HMAC_SECRET) {
+    console.warn('[at] warning: AT_HMAC_SECRET not set — config HMAC uses default secret. Set AT_HMAC_SECRET for real integrity protection.');
   }
 
   try {
