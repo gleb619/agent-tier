@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import path from 'path'
-import { makeStores } from '../helpers/in-memory-stores'
+import { makeStores } from '../helpers/stores'
 import { createAgent, createTask, createRun } from '../../../src/compose/domain'
 
 describe('AgentStore', () => {

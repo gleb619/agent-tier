@@ -1,6 +1,7 @@
 import { parseJsonInput, resolveFromArgs } from '../src/resolver';
 import path from 'path';
 import os from 'os';
+import { resolveStateDir } from '../src/state-dir';
 
 describe('parseJsonInput', () => {
   it('parses full JSON payload', () => {
@@ -37,7 +38,7 @@ describe('resolveFromArgs', () => {
     expect(opts.agent).toBe('auto');
     expect(opts.tier).toBe(2);
     expect(opts.stream).toBe(false);
-    expect(opts.stateDir).toBe(path.join(os.homedir(), '.at'));
+    expect(opts.stateDir).toBe(resolveStateDir());
     expect(opts.retries).toBe(0);
     expect(opts.logDir).toBe('/tmp/at-logs');
     expect(opts.noChop).toBe(false);
