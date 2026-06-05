@@ -29,10 +29,7 @@ export function saveStateFile(stateFilePath: string, state: StateFile): void {
   writeFileSync(stateFilePath, JSON.stringify(state, null, 2), 'utf8');
 }
 
-export function getStateFile(_tier: number, stateDir: string, prefix = 'at'): string {
-  // Kept for API compat but now returns the single state.json path
-  void _tier;
-  void prefix;
+export function getStateFile(stateDir: string): string {
   return path.join(stateDir, 'state.json');
 }
 

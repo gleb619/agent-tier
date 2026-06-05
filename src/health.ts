@@ -130,9 +130,10 @@ export async function recordResult(stateFilePath: string, name: string, success:
 
 export async function isHealthy(stateFilePath: string, name: string, preloaded?: HealthState): Promise<boolean> {
   const state = preloaded ?? loadHealth(stateFilePath);
-  const entry = state.agents[name];
+  const raw = state.agents[name];
+  if (!raw || !raw.failureTimes) return true;
 
-  if (!entry) return true;
+  const entry = { ...raw };
 
   const originalLen = entry.failureTimes.length;
   const originalDisabledTo = entry.disabledTo;
@@ -142,7 +143,8 @@ export async function isHealthy(stateFilePath: string, name: string, preloaded?:
   }
 
   if (originalLen !== entry.failureTimes.length || originalDisabledTo !== entry.disabledTo) {
-    await withLock(stateFilePath, () => saveHealth(stateFilePath, state));
+    const updated: HealthState = { ...state, agents: { ...state.agents, [name]: entry } };
+    await withLock(stateFilePath, () => saveHealth(stateFilePath, updated));
   }
 
   if (!entry.disabledTo) return true;

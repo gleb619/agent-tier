@@ -50,14 +50,14 @@ export class AgentError extends Error {
 
 export type Spawner = (agent: AgentDef, options: RunOptions) => Promise<number>;
 
-interface LaunchResult {
+export interface LaunchResult {
   child: ReturnType<typeof spawn>;
   runId: string;
   logFile: string;
   agent: AgentDef;
 }
 
-async function launchAgent(agent: AgentDef, options: RunOptions): Promise<LaunchResult> {
+export async function launchAgent(agent: AgentDef, options: RunOptions): Promise<LaunchResult> {
   const bin = agent.bin();
   const args = agent.buildArgs(options.prompt, options.model);
   const extraEnv = agent.buildEnv?.(options.model) ?? {};
@@ -217,7 +217,6 @@ export async function run(
   process.once('SIGINT', cleanup);
 
   try {
-    const candidatePool = agents;
     const stateFilePath = getStateFilePath(options.stateDir);
     const healthState = loadHealth(stateFilePath);
     let candidates: AgentDef[];
@@ -228,11 +227,11 @@ export async function run(
           `Agent "${options.agent}" is deactivated. Enable it first with: at enable ${options.agent}`,
         );
       }
-      const named = candidatePool.find((a) => a.name === options.agent);
+      const named = agents.find((a) => a.name === options.agent);
       if (!named) throw new Error(`Unknown agent: ${options.agent}`);
       candidates = [named];
     } else {
-      const tierAgents = candidatePool.filter((a) => a.tier === options.tier);
+      const tierAgents = agents.filter((a) => a.tier === options.tier);
       if (tierAgents.length === 0) throw new Error(`No agents defined for tier ${options.tier}`);
       const enabled = tierAgents.filter((a) => !isDeactivated(stateFilePath, a.name, healthState));
       if (enabled.length === 0) {
@@ -248,23 +247,34 @@ export async function run(
     }
 
     const isNamed = options.agent !== 'auto';
-    const stateFile = getStateFile(options.tier, options.stateDir);
-    const agent = isNamed ? candidates[0] : await pickAgent(candidates, stateFile);
+    const stateFile = getStateFile(options.stateDir);
+    const maxAttempts = isNamed ? 1 : 1 + Math.min(options.retries, candidates.length - 1);
+    let agent = isNamed ? candidates[0] : await pickAgent(candidates, stateFile);
 
-    try {
-      const exitCode = await spawner(agent, options);
-      if (options.stream) {
-        await recordResult(stateFilePath, agent.name, exitCode === 0);
-        if (exitCode !== 0) {
-          throw new AgentError(`${agent.name} exited with code ${exitCode}`, exitCode);
-        }
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) {
+        agent = await pickAgent(candidates, stateFile);
+        console.warn('[at] retrying with next agent...');
       }
-      return 0;
-    } catch (err) {
-      await recordResult(stateFilePath, agent.name, false);
-      if (err instanceof AgentError) throw err;
-      throw err;
+
+      try {
+        const exitCode = await spawner(agent, options);
+        if (options.stream) {
+          await recordResult(stateFilePath, agent.name, exitCode === 0);
+          if (exitCode !== 0) {
+            throw new AgentError(`${agent.name} exited with code ${exitCode}`, exitCode);
+          }
+        }
+        return 0;
+      } catch (err) {
+        await recordResult(stateFilePath, agent.name, false);
+        const isLast = attempt === maxAttempts - 1;
+        if (isLast || !(err instanceof AgentError)) throw err;
+      }
     }
+
+    // Unreachable, but satisfies strict return
+    throw new AgentError('all retry attempts exhausted', 1);
   } finally {
     process.off('SIGTERM', cleanup);
     process.off('SIGINT', cleanup);

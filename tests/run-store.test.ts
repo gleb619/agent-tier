@@ -6,8 +6,8 @@ import {
   updateRun,
   pruneRuns,
   detectStuck,
-  isPidAlive,
 } from '../src/run-store';
+import { isPidAlive } from '../src/process-utils';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';

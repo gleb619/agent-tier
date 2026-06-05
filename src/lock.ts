@@ -1,6 +1,7 @@
 import { writeFileSync, unlinkSync, mkdirSync, readFileSync } from 'fs';
 import path from 'path';
 import os from 'os';
+import { isPidAlive } from './process-utils';
 
 export function getLockDir(stateFilePath: string): string {
   return path.join(path.dirname(stateFilePath), 'locks');
@@ -11,15 +12,6 @@ export interface LockInfo {
 	hostname: string;
 	startedAt: string;
 	stateFile: string;
-}
-
-function isPidAlive(pid: number): boolean {
-	try {
-		process.kill(pid, 0);
-		return true;
-	} catch {
-		return false;
-	}
 }
 
 function sleep(ms: number): Promise<void> {

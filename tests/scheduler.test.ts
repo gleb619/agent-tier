@@ -12,11 +12,7 @@ const agents = [makeAgent('a'), makeAgent('b'), makeAgent('c')];
 
 describe('getStateFile', () => {
   it('returns state.json inside the given state dir', () => {
-    expect(getStateFile(2, '/home/user/.at')).toBe('/home/user/.at/state.json');
-  });
-
-  it('ignores tier and prefix', () => {
-    expect(getStateFile(1, '/tmp/test', 'at-foo')).toBe('/tmp/test/state.json');
+    expect(getStateFile('/home/user/.at')).toBe('/home/user/.at/state.json');
   });
 });
 

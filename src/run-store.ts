@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
 import { getStateFilePath } from './state-dir';
 import { withLock } from './lock';
+import { isPidAlive } from './process-utils';
 
 export interface RunRecord {
   runId: string;
@@ -118,15 +119,6 @@ export async function pruneRuns(
       writeJsonl(runsFile, pruned);
     }
   });
-}
-
-export function isPidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export function getLogMtime(logFile: string): number | null {

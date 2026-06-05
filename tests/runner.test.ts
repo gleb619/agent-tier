@@ -69,22 +69,33 @@ describe('run — auto mode', () => {
     expect(spawner).toHaveBeenCalledTimes(1);
   });
 
-  it('does not retry on first failure', async () => {
+  it('does not retry when retries is 0', async () => {
     const spawner: Spawner = vi.fn().mockResolvedValue(1);
-    await expect(run(baseOptions, agents, spawner)).rejects.toThrow();
+    await expect(run({ ...baseOptions, retries: 0 }, agents, spawner)).rejects.toThrow();
     expect(spawner).toHaveBeenCalledTimes(1);
   });
 
-  it('does not retry even when retries option is set', async () => {
+  it('retries up to retries count when retries option is set', async () => {
     const spawner: Spawner = vi.fn().mockResolvedValue(1);
     await expect(run({ ...baseOptions, retries: 2 }, agents, spawner)).rejects.toThrow();
-    expect(spawner).toHaveBeenCalledTimes(1);
+    // 1 initial + 2 retries = 3, but pool is 3 so max attempts = 1 + min(2, 2) = 3
+    expect(spawner).toHaveBeenCalledTimes(3);
   });
 
-  it('does not retry even when retries exceed pool', async () => {
+  it('caps retries at pool size minus one', async () => {
     const spawner: Spawner = vi.fn().mockResolvedValue(1);
     await expect(run({ ...baseOptions, retries: 10 }, agents, spawner)).rejects.toThrow();
-    expect(spawner).toHaveBeenCalledTimes(1);
+    // pool has 3 agents, so max attempts = 1 + min(10, 2) = 3
+    expect(spawner).toHaveBeenCalledTimes(3);
+  });
+
+  it('succeeds on retry after initial failure', async () => {
+    const spawner: Spawner = vi.fn()
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0);
+    const exitCode = await run({ ...baseOptions, retries: 2 }, agents, spawner);
+    expect(exitCode).toBe(0);
+    expect(spawner).toHaveBeenCalledTimes(2);
   });
 
   it('throws after all agents fail', async () => {
