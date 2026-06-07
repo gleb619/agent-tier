@@ -1,5 +1,8 @@
 import { Command } from 'commander';
 import { spawn } from 'child_process';
+import { execFile as _execFile } from 'child_process';
+import { promisify } from 'util';
+const execFileAsync = promisify(_execFile);
 
 function getCodegraphBin(): string {
   return process.env.CODEGRAPH_BIN || 'codegraph';
@@ -13,6 +16,16 @@ function runCodegraph(args: string[]): void {
     process.exit(1);
   });
   child.on('exit', (code) => process.exit(code ?? 1));
+}
+
+export async function getCodegraphContext(task: string, maxNodes = 30): Promise<string> {
+  const bin = getCodegraphBin();
+  try {
+    const { stdout } = await execFileAsync(bin, ['context', task, '--max-nodes', String(maxNodes)]);
+    return stdout || '[codegraph context: empty result]';
+  } catch (err) {
+    return `[codegraph context unavailable: ${err instanceof Error ? err.message : String(err)}]`;
+  }
 }
 
 export function registerCodegraphCommand(program: Command): void {
