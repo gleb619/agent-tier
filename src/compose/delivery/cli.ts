@@ -1,5 +1,6 @@
 import { Command } from 'commander'
-import { buildFullContainer } from './container'
+import { ComposeWorkspace } from '../infrastructure/workspace/compose-workspace'
+import { PipelineService } from '../application/pipeline/pipeline-service'
 
 export function registerComposeCommand(program: Command): void {
   program
@@ -7,9 +8,8 @@ export function registerComposeCommand(program: Command): void {
     .description('Orchestrate multiple AI agents to complete a goal')
     .option('-p, --prompt <text>', 'Goal prompt')
     .option('--goal <text>', 'Alias for --prompt')
-    .option('--stream', 'Stream output from agents')
-    .option('--config <path>', 'Path to compose config file')
-    .option('--team <name>', 'Team name (future use)')
+    .option('--test-cmd <cmd>', 'Test command to run in test stage', 'npm test')
+    .option('--max-nodes <number>', 'Max codegraph nodes for arch context', (v) => parseInt(v, 10), 30)
     .action(async (options) => {
       const prompt = options.prompt || options.goal
       if (!prompt) {
@@ -17,33 +17,27 @@ export function registerComposeCommand(program: Command): void {
         process.exit(1)
       }
 
-      const container = buildFullContainer(options.config)
+      const goalId = crypto.randomUUID()
+      const workspace = new ComposeWorkspace(goalId)
+      await workspace.ensure()
 
-      const goal = await container.services.goal.create({
-        title: prompt.slice(0, 80),
-        prompt,
+      console.log('[compose] Goal workspace: ' + workspace.goalDir)
+
+      const pipeline = new PipelineService(workspace, prompt, {
+        testCmd: options.testCmd,
+        maxNodes: options.maxNodes,
       })
 
-      await container.orchestrator.start()
-      console.log('[compose] Orchestrator started. Goal: ' + goal.title)
-
-      if (options.stream) {
-        container.eventBus.on('orchestrator:tick', (e) => {
-          console.log('[tick]', JSON.stringify(e.payload))
-        })
-      }
-
-      process.on('SIGINT', async () => {
-        await container.orchestrator.stop()
+      process.on('SIGINT', () => {
+        console.log('\n[compose] Interrupted. Resume by re-running with same goal — unchecked tasks in tasks.md will continue.')
         process.exit(0)
       })
+      process.on('SIGTERM', () => process.exit(0))
 
-      process.on('SIGTERM', async () => {
-        await container.orchestrator.stop()
-        process.exit(0)
+      await pipeline.run(() => {
+        console.log('[compose] Pipeline complete. Results in: ' + workspace.goalDir)
       })
 
-      // Keep process alive until SIGINT/SIGTERM
-      await new Promise(() => {})
+      process.exit(0)
     })
 }
