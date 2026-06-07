@@ -78,11 +78,25 @@ export function parseJsonInput(raw: string): ParsedJson {
   const prompt = (parsed.prompt as string | undefined)?.trim() ?? '';
   if (!prompt) throw new Error('JSON input: prompt is required');
 
+  const rawEnv = parsed.env;
+  let env: Record<string, string> | undefined;
+  if (rawEnv !== undefined) {
+    if (typeof rawEnv !== 'object' || rawEnv === null || Array.isArray(rawEnv)) {
+      throw new Error('JSON input: env must be a plain object');
+    }
+    for (const [k, v] of Object.entries(rawEnv as Record<string, unknown>)) {
+      if (typeof v !== 'string') {
+        throw new Error('JSON input: env values must be strings (got ' + typeof v + ' for key "' + k + '")');
+      }
+    }
+    env = rawEnv as Record<string, string>;
+  }
+
   return {
     agent: (parsed.agent as string | undefined) ?? 'auto',
     prompt,
     model: parsed.model as string | undefined,
     cwd: parsed.cwd as string | undefined,
-    env: parsed.env as Record<string, string | undefined> as Record<string, string> | undefined,
+    env,
   };
 }

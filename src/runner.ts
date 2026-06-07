@@ -249,11 +249,11 @@ export async function run(
     const isNamed = options.agent !== 'auto';
     const stateFile = getStateFile(options.stateDir);
     const maxAttempts = isNamed ? 1 : 1 + Math.min(options.retries, candidates.length - 1);
-    let agent = isNamed ? candidates[0] : await pickAgent(candidates, stateFile);
+    let agent = isNamed ? candidates[0] : await pickAgent(candidates, stateFile, `tier-${options.tier}`);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) {
-        agent = await pickAgent(candidates, stateFile);
+        agent = await pickAgent(candidates, stateFile, `tier-${options.tier}`);
         console.warn('[at] retrying with next agent...');
       }
 

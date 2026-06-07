@@ -125,4 +125,13 @@ describe('parseJsonInput edge cases', () => {
     expect(opts.agent).toBe('opencode');
     expect(opts.prompt).toBe('hello');
   });
+  it('throws when env contains a non-string value', () => {
+    expect(() =>
+      parseJsonInput(JSON.stringify({
+        agent: 'blackbox',
+        prompt: 'hello',
+        env: { FOO: 'bar', BAD: 123 },
+      }))
+    ).toThrow('JSON input: env values must be strings (got number for key "BAD")');
+  });
 });

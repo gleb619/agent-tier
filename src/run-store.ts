@@ -81,8 +81,7 @@ export async function addRun(stateDir: string, record: RunRecord): Promise<void>
   return withLock(runsFile, () => {
     const max = getMaxRuns(stateDir);
     const runs = readJsonl(runsFile);
-    runs.push(record);
-    runs.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    runs.unshift(record);
     const pruned = runs.slice(0, max);
     writeJsonl(runsFile, pruned);
   });
@@ -129,6 +128,7 @@ export function getLogMtime(logFile: string): number | null {
   }
 }
 
+/** Read-only: returns annotated copy; caller must persist via saveRuns() if needed. */
 export function detectStuck(runs: RunRecord[]): RunRecord[] {
   const now = Date.now();
   return runs.map((r) => {

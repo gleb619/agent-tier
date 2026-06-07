@@ -48,6 +48,13 @@ function pruneOldFailures(times: string[]): string[] {
   return times.filter((t) => new Date(t).getTime() >= cutoff);
 }
 
+function pruneEntry(entry: AgentHealth): { pruned: AgentHealth; dirty: boolean } {
+  const failureTimes = pruneOldFailures(entry.failureTimes);
+  const disabledTo = failureTimes.length === 0 ? null : entry.disabledTo;
+  const dirty = failureTimes.length !== entry.failureTimes.length || disabledTo !== entry.disabledTo;
+  return { pruned: { ...entry, failureTimes, disabledTo }, dirty };
+}
+
 function blockDurationFor(count: number): number {
   const durations = getBlockDurations();
   let ms = durations[0]?.[1] ?? 30 * 60 * 1000;
@@ -133,28 +140,42 @@ export async function isHealthy(stateFilePath: string, name: string, preloaded?:
   const raw = state.agents[name];
   if (!raw || !raw.failureTimes) return true;
 
-  const entry = { ...raw };
+  const { pruned, dirty } = pruneEntry(raw);
 
-  const originalLen = entry.failureTimes.length;
-  const originalDisabledTo = entry.disabledTo;
-  entry.failureTimes = pruneOldFailures(entry.failureTimes);
-  if (entry.failureTimes.length === 0) {
-    entry.disabledTo = null;
-  }
-
-  if (originalLen !== entry.failureTimes.length || originalDisabledTo !== entry.disabledTo) {
-    const updated: HealthState = { ...state, agents: { ...state.agents, [name]: entry } };
+  if (dirty) {
+    const updated: HealthState = { ...state, agents: { ...state.agents, [name]: pruned } };
     await withLock(stateFilePath, () => saveHealth(stateFilePath, updated));
   }
 
-  if (!entry.disabledTo) return true;
+  if (!pruned.disabledTo) return true;
 
-  return Date.now() >= new Date(entry.disabledTo).getTime();
+  return Date.now() >= new Date(pruned.disabledTo).getTime();
 }
 
 export async function filterHealthy(stateFilePath: string, agents: AgentDef[], preloaded?: HealthState): Promise<AgentDef[]> {
-  const results = await Promise.all(agents.map(a => isHealthy(stateFilePath, a.name, preloaded)));
-  return agents.filter((_, i) => results[i]);
+  let state = preloaded ?? loadHealth(stateFilePath);
+  let dirty = false;
+
+  for (const a of agents) {
+    const raw = state.agents[a.name];
+    if (!raw || !raw.failureTimes) continue;
+
+    const { pruned, dirty: d } = pruneEntry(raw);
+    if (d) {
+      state = { ...state, agents: { ...state.agents, [a.name]: pruned } };
+      dirty = true;
+    }
+  }
+
+  if (dirty) {
+    await withLock(stateFilePath, () => saveHealth(stateFilePath, state));
+  }
+
+  return agents.filter(a => {
+    const entry = state.agents[a.name];
+    if (!entry || !entry.disabledTo) return true;
+    return Date.now() >= new Date(entry.disabledTo).getTime();
+  });
 }
 
 export async function resetAgent(stateFilePath: string, name: string): Promise<void> {
