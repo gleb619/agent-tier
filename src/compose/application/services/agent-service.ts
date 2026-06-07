@@ -1,5 +1,5 @@
 import type { IEventBus } from '../event-bus'
-import { createAgent, type Agent, type AgentConfig } from '../../domain'
+import { createAgent, type Agent, type AgentConfig, type TaskStage } from '../../domain'
 import type { IAgentStore } from '../ports'
 import type { Task } from '../../domain'
 
@@ -37,6 +37,11 @@ export class AgentService {
 
   private scoreAgent(agent: Agent, task: Task): number {
     let score = 0
+
+    // Stage-based scoring
+    const stage: TaskStage = task.stage ?? 'dev'
+    if ((stage === 'arch' || stage === 'review') && agent.role === 'architect') score += 40
+    if ((stage === 'dev' || stage === 'test') && agent.role === 'developer') score += 40
 
     // Skill/role match against task scope
     const taskScope = task.scope ?? []

@@ -1,6 +1,6 @@
 const NODE_BIN = process.env.NODE_BIN ?? require('path').dirname(process.execPath);
 const LOCAL_BIN = process.env.LOCAL_BIN ?? `${process.env.HOME}/.local/bin`;
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'minimax-m2.7:cloud';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'minimax-m3:cloud';
 
 export interface AgentDef {
   name: string;

@@ -413,4 +413,113 @@ describe('Orchestrator', () => {
       expect(updatedTask?.status).toBe('failed')
     })
   })
+
+  describe('pipeline advancement', () => {
+    it('creates dev task when arch task completes successfully', async () => {
+      const agent = createAgent({ name: 'a1', adapter: 'fake', role: 'arch' })
+      const goalId = crypto.randomUUID()
+      const archTask = createTask({
+        title: '[arch] test goal',
+        stage: 'arch',
+        goalId,
+        maxAttempts: 1,
+      })
+
+      const goalStore: FakeGoalStore = {
+        goals: new Map([[goalId, { id: goalId, prompt: 'test goal', title: 'test' }]]),
+        async get(id: string) { return this.goals.get(id) },
+        async getAll() { return [...this.goals.values()] },
+        async save() {},
+        async delete() {},
+      }
+
+      const eventBus = new EventBus()
+      const agentStore = makeFakeAgentStore([agent])
+      const taskStore = makeFakeTaskStore([archTask])
+      const runStore = makeFakeRunStore()
+      const agentService = new AgentService(agentStore as IAgentStore, eventBus)
+      const taskService = new TaskService(taskStore as ITaskStore, eventBus)
+      const runService = new RunService(runStore as IRunStore, eventBus)
+      const goalService = new GoalService(goalStore as IGoalStore, eventBus)
+      const fakeAdapter = makeFakeAdapter()
+      const adapters = new Map([['fake', fakeAdapter as unknown as IAgentAdapter]])
+      const processManager = makeFakeProcessManager()
+      const workspaceManager = makeFakeWorkspaceManager()
+
+      const orchestrator = new Orchestrator(
+        { agent: agentService, task: taskService, run: runService, goal: goalService },
+        adapters,
+        processManager as unknown as IProcessManager,
+        workspaceManager as unknown as IWorkspaceManager,
+        eventBus,
+        { pollIntervalMs: 30, maxRetryAttempts: 1 },
+      )
+
+      await orchestrator.start()
+      await waitFor(200)
+      await orchestrator.stop()
+
+      // Should have created a dev task
+      const allTasks = [...taskStore.tasks.values()]
+      const devTask = allTasks.find(t => t.stage === 'dev')
+      expect(devTask).toBeDefined()
+      expect(devTask!.goalId).toBe(goalId)
+      expect(devTask!.dependsOn).toContain(archTask.id)
+      expect(devTask!.priority).toBe('high')
+    })
+
+    it('emits goal:complete when review task completes', async () => {
+      const agent = createAgent({ name: 'a1', adapter: 'fake', role: 'review' })
+      const goalId = crypto.randomUUID()
+      const reviewTask = createTask({
+        title: '[review] test goal',
+        stage: 'review',
+        goalId,
+        maxAttempts: 1,
+      })
+
+      const goalStore: FakeGoalStore = {
+        goals: new Map([[goalId, { id: goalId, prompt: 'test goal', title: 'test' }]]),
+        async get(id: string) { return this.goals.get(id) },
+        async getAll() { return [...this.goals.values()] },
+        async save() {},
+        async delete() {},
+      }
+
+      const eventBus = new EventBus()
+      const agentStore = makeFakeAgentStore([agent])
+      const taskStore = makeFakeTaskStore([reviewTask])
+      const runStore = makeFakeRunStore()
+      const agentService = new AgentService(agentStore as IAgentStore, eventBus)
+      const taskService = new TaskService(taskStore as ITaskStore, eventBus)
+      const runService = new RunService(runStore as IRunStore, eventBus)
+      const goalService = new GoalService(goalStore as IGoalStore, eventBus)
+      const fakeAdapter = makeFakeAdapter()
+      const adapters = new Map([['fake', fakeAdapter as unknown as IAgentAdapter]])
+      const processManager = makeFakeProcessManager()
+      const workspaceManager = makeFakeWorkspaceManager()
+
+      const orchestrator = new Orchestrator(
+        { agent: agentService, task: taskService, run: runService, goal: goalService },
+        adapters,
+        processManager as unknown as IProcessManager,
+        workspaceManager as unknown as IWorkspaceManager,
+        eventBus,
+        { pollIntervalMs: 30, maxRetryAttempts: 1 },
+      )
+
+      const completeEvents: unknown[] = []
+      eventBus.on('goal:complete' as any, (e: any) => completeEvents.push(e))
+
+      await orchestrator.start()
+      await waitFor(200)
+      await orchestrator.stop()
+
+      expect(completeEvents.length).toBe(1)
+      expect(completeEvents[0]).toMatchObject({
+        type: 'goal:complete',
+        payload: { goalId },
+      })
+    })
+  })
 })

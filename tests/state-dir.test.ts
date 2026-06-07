@@ -18,14 +18,22 @@ describe('getRunsFilePath', () => {
 
 describe('resolveStateDir', () => {
   let tmpDir: string;
+  let savedStateDir: string | undefined;
 
   beforeEach(() => {
+    savedStateDir = process.env.AT_STATE_DIR;
+    delete process.env.AT_STATE_DIR;
     tmpDir = path.join(os.tmpdir(), `at-state-dir-test-${Date.now()}`);
   });
 
   afterEach(() => {
     if (fs.existsSync(tmpDir)) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+    if (savedStateDir !== undefined) {
+      process.env.AT_STATE_DIR = savedStateDir;
+    } else {
+      delete process.env.AT_STATE_DIR;
     }
   });
 

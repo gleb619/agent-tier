@@ -9,7 +9,7 @@ export interface ComposeOptions {
 }
 
 export async function compose(goalText: string, options?: ComposeOptions): Promise<void> {
-  const container = buildFullContainer(options?.configPath)
+  const container = await buildFullContainer(options?.configPath)
 
   await container.services.goal.create({
     title: goalText.slice(0, 80),

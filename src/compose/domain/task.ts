@@ -1,5 +1,6 @@
 type TaskStatus = 'todo' | 'in_progress' | 'review' | 'done' | 'failed' | 'cancelled' | 'retrying'
 type TaskPriority = 'low' | 'medium' | 'high' | 'critical'
+type TaskStage = 'arch' | 'dev' | 'test' | 'review'
 
 interface Task {
   id: string
@@ -7,6 +8,7 @@ interface Task {
   description?: string
   status: TaskStatus
   priority: TaskPriority
+  stage: TaskStage
   assignee?: string
   labels: string[]
   dependsOn: string[]
@@ -23,6 +25,7 @@ function createTask(input: {
   title: string
   description?: string
   priority?: TaskPriority
+  stage?: TaskStage
   scope?: string[]
   dependsOn?: string[]
   goalId?: string
@@ -35,6 +38,7 @@ function createTask(input: {
     description: input.description,
     status: 'todo',
     priority: input.priority ?? 'medium',
+    stage: input.stage ?? 'dev',
     labels: [],
     dependsOn: input.dependsOn ?? [],
     scope: input.scope ?? [],
@@ -46,5 +50,5 @@ function createTask(input: {
   }
 }
 
-export type { Task, TaskStatus, TaskPriority }
+export type { Task, TaskStatus, TaskPriority, TaskStage }
 export { createTask }

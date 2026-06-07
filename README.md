@@ -149,7 +149,7 @@ Round-robin order: kilo → gemini → goose → aider → pi → kilo → …
 The three Ollama-based agents (`goose`, `aider`, `pi`) share common configuration:
 
 - **Host:** `OLLAMA_HOST` (default: `http://127.0.0.1:11434`)
-- **Model:** `OLLAMA_MODEL` (default: `minimax-m2.7:cloud`)
+- **Model:** `OLLAMA_MODEL` (default: `minimax-m3:cloud`)
 - **Per-run model override:** set env var `OLLAMA_AGENT_MODEL` before calling `at`
 
 Note: `aider` additionally uses `OLLAMA_API_BASE` (default same as `OLLAMA_HOST`). `pi` requires an Ollama provider

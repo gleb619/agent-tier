@@ -62,14 +62,6 @@ export class AgentAdapter implements IAgentAdapter {
   ): AsyncGenerator<AdapterAgentEvent> {
     const rl = readline.createInterface({ input: child.stdout!, crlfDelay: Infinity })
 
-    const lines: string[] = []
-    const lineEvent = new Promise<void>((resolve) => {
-      rl.on('line', (line) => {
-        lines.push(line)
-        resolve()
-      })
-    })
-
     let exitCode = 0
     let done = false
     let tokenUsage: TokenUsage | undefined
@@ -91,6 +83,15 @@ export class AgentAdapter implements IAgentAdapter {
     }
 
     rl.close()
+
+    // Stream stderr lines
+    if (child.stderr) {
+      const errRl = readline.createInterface({ input: child.stderr, crlfDelay: Infinity })
+      for await (const line of errRl) {
+        yield { type: 'error' as const, message: line }
+      }
+      errRl.close()
+    }
 
     yield { type: 'done', exitCode, tokenUsage }
   }

@@ -93,9 +93,23 @@ export function buildLightContainer(configPath?: string): LightContainer {
   }
 }
 
-export function buildFullContainer(configPath?: string): FullContainer {
+export async function buildFullContainer(configPath?: string): Promise<FullContainer> {
   const config = loadConfig(configPath)
   const light = buildLightContainer(configPath)
+
+  // Seed domain agents from the at registry
+  const existingAgents = await light.services.agent.list()
+  const existingNames = new Set(existingAgents.map(a => a.name))
+  for (const agentDef of AGENTS) {
+    if (!existingNames.has(agentDef.name)) {
+      await light.services.agent.create({
+        name: agentDef.name,
+        adapter: agentDef.name,
+        role: agentDef.tier === 1 ? 'architect' : agentDef.tier === 2 ? 'developer' : 'assistant',
+        config: { tier: agentDef.tier },
+      })
+    }
+  }
 
   // Adapters from agent registry
   const adapters = new Map<string, AgentAdapter>()

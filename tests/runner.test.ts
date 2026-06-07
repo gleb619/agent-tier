@@ -34,7 +34,7 @@ function makeAgent(name: string): AgentDef {
   return { name, tier: 2, bin: () => '/usr/bin/true', buildArgs: (p) => [p] };
 }
 
-const defaultStateDir = path.join(os.homedir(), '.at');
+const defaultStateDir = process.env.AT_STATE_DIR ?? path.join(os.homedir(), '.at');
 
 const baseOptions: RunOptions = {
   agent: 'auto',

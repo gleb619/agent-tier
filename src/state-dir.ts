@@ -38,6 +38,9 @@ export function findProjectRoot(startDir: string): string | undefined {
 export function resolveStateDir(explicit?: string): string {
   if (explicit) return explicit;
 
+  // Allow tests (and users) to override via env var
+  if (process.env.AT_STATE_DIR) return process.env.AT_STATE_DIR;
+
   // Check project root (git root)
   const projectRoot = findProjectRoot(process.cwd());
   if (projectRoot) {

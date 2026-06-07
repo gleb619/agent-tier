@@ -5,8 +5,7 @@ import type {
   IWorkspaceManager,
 } from './ports'
 import type { Agent, Task, Run, TokenUsage } from '../domain'
-import type { TaskStatus, TaskPriority } from '../domain'
-import { transitionTask, transitionRun } from '../domain'
+import type { TaskStatus, TaskPriority, TaskStage } from '../domain'
 import type { AgentService } from './services/agent-service'
 import type { TaskService } from './services/task-service'
 import type { RunService } from './services/run-service'
@@ -227,7 +226,7 @@ class Orchestrator {
     await this.services.run.complete(run.id, { status: 'failed' })
 
     // Transition task
-    const task = await this.services.task['store']?.get?.(run.taskId)
+    const task = await this.services.task.get(run.taskId)
     if (task) {
       await this.services.task.updateStatus(run.taskId, 'failed')
       await this.handleTaskFailure(task, 'process died unexpectedly')
@@ -246,7 +245,7 @@ class Orchestrator {
     await this.services.run.complete(run.id, { status: 'timed_out' })
 
     // Transition task
-    const task = await this.services.task['store']?.get?.(run.taskId)
+    const task = await this.services.task.get(run.taskId)
     if (task) {
       await this.services.task.updateStatus(run.taskId, 'failed')
       await this.handleTaskFailure(task, 'execution timed out')
@@ -498,7 +497,7 @@ class Orchestrator {
     await this.services.run.complete(runId, { status, tokenUsage })
 
     // Get task
-    const task = await this.services.task['store']?.get?.(taskId)
+    const task = await this.services.task.get(taskId)
     if (!task) return
 
     if (status === 'succeeded') {
@@ -512,6 +511,9 @@ class Orchestrator {
         tokenUsage?.total ?? 0,
       )
 
+      // Advance pipeline (arch→dev→test→review→goal:complete)
+      await this.advancePipeline(task, status)
+
       // Emit completion
       this.eventBus.emit({
         id: crypto.randomUUID(),
@@ -523,6 +525,48 @@ class Orchestrator {
       // Handle failure
       await this.services.agent.updateStats(agentId, 'failed', tokenUsage?.total ?? 0)
       await this.handleTaskFailure(task, 'run failed')
+    }
+  }
+
+  private async advancePipeline(task: Task, status: string): Promise<void> {
+    if (status !== 'succeeded' || !task.goalId) return
+
+    const stageMap: Partial<Record<TaskStage, TaskStage>> = {
+      arch: 'dev',
+      dev: 'test',
+      test: 'review',
+    }
+
+    const nextStage = stageMap[task.stage]
+
+    if (nextStage) {
+      const goal = await this.services.goal.get(task.goalId)
+      if (!goal) return
+
+      await this.services.task.create({
+        title: '[' + nextStage + '] ' + goal.prompt.slice(0, 60),
+        description: this.stageDescription(nextStage, goal.prompt),
+        stage: nextStage,
+        goalId: task.goalId,
+        priority: nextStage === 'dev' ? 'high' : 'medium',
+        dependsOn: [task.id],
+      })
+    } else if (task.stage === 'review') {
+      this.eventBus.emit({
+        id: crypto.randomUUID(),
+        type: 'goal:complete',
+        timestamp: new Date().toISOString(),
+        payload: { goalId: task.goalId },
+      })
+    }
+  }
+
+  private stageDescription(stage: TaskStage, prompt: string): string {
+    switch (stage) {
+      case 'dev':    return 'Implement the following based on the architectural plan:\n' + prompt
+      case 'test':   return 'Write and run tests for the implementation:\n' + prompt
+      case 'review': return 'Review the implementation and tests for correctness and quality:\n' + prompt
+      default:       return prompt
     }
   }
 
@@ -540,7 +584,7 @@ class Orchestrator {
 
   async cascadeFail(taskId: string, reason: string): Promise<void> {
     // Find all tasks that depend on this task
-    const allTasks = await this.services.task['store']?.getAll?.() ?? []
+    const allTasks = await this.services.task.getAll()
     const dependentTasks = allTasks.filter(t => t.dependsOn.includes(taskId))
 
     for (const depTask of dependentTasks) {
@@ -550,8 +594,7 @@ class Orchestrator {
       }
 
       // Transition to failed
-      const updated = transitionTask(depTask, 'failed')
-      await this.services.task['store']?.save?.(updated)
+      await this.services.task.updateStatus(depTask.id, 'failed')
 
       // Emit cascade failed event
       this.eventBus.emit({

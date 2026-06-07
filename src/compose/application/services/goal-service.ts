@@ -63,6 +63,10 @@ export class GoalService {
     })
   }
 
+  async get(id: string): Promise<Goal | undefined> {
+    return this.store.get(id)
+  }
+
   async abandon(id: string): Promise<void> {
     const goal = await this.store.get(id)
     if (!goal) return

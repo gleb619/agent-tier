@@ -242,6 +242,13 @@ interface GoalDeletedEvent {
   payload: { goalId: string }
 }
 
+interface GoalCompleteEvent {
+  id: string
+  type: 'goal:complete'
+  timestamp: string
+  payload: { goalId: string }
+}
+
 // ── Discriminated unions ──
 
 type DomainEvent =
@@ -255,7 +262,7 @@ type DomainEvent =
   | MessageSentEvent | MessageDeliveredEvent
   | TeamCreatedEvent | TeamMemberJoinedEvent | TeamMemberLeftEvent | TeamTaskClaimedEvent
   | TeamDisbandedEvent | TeamTaskAddedEvent
-  | GoalCreatedEvent | GoalStatusChangedEvent | GoalUpdatedEvent | GoalDeletedEvent
+  | GoalCreatedEvent | GoalStatusChangedEvent | GoalUpdatedEvent | GoalDeletedEvent | GoalCompleteEvent
 
 type TaskEvent = Extract<DomainEvent, { type: `task:${string}` }>
 type AgentEvent = Extract<DomainEvent, { type: `agent:${string}` }>
@@ -412,7 +419,7 @@ export type {
   MessageSentEvent, MessageDeliveredEvent,
   TeamCreatedEvent, TeamMemberJoinedEvent, TeamMemberLeftEvent, TeamTaskClaimedEvent,
   TeamDisbandedEvent, TeamTaskAddedEvent,
-  GoalCreatedEvent, GoalStatusChangedEvent, GoalUpdatedEvent, GoalDeletedEvent,
+  GoalCreatedEvent, GoalStatusChangedEvent, GoalUpdatedEvent, GoalDeletedEvent, GoalCompleteEvent,
 }
 
 export {

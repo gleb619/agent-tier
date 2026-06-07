@@ -1,37 +1,23 @@
 /**
  * Vitest global setup.
- * Creates .at/ directory at project root so resolveStateDir()
- * finds local state instead of falling back to ~/.at/.
+ * Sets AT_STATE_DIR to a unique temp directory per test run so tests
+ * never pollute real ~/.at/runs.jsonl.
  */
-import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import path from 'path';
+import os from 'os';
 
-const projectRoot = path.resolve(__dirname, '..');
-const atDir = path.join(projectRoot, '.at');
+// Set AT_STATE_DIR at module level — before any imports resolve
+process.env.AT_STATE_DIR = path.join(os.tmpdir(), `at-test-${process.pid}`);
+
+const atDir = process.env.AT_STATE_DIR;
 
 beforeAll(() => {
   mkdirSync(atDir, { recursive: true });
-  // Seed minimal state.json so resolveStateDir detects .at/
-  const stateFile = path.join(atDir, 'state.json');
-  if (!existsSync(stateFile)) {
-    writeFileSync(stateFile, '{}', 'utf8');
-  }
+  writeFileSync(path.join(atDir, 'state.json'), '{}', 'utf8');
 });
 
 afterAll(() => {
-  // Reset to empty state — don't delete the dir itself
-  const stateFile = path.join(atDir, 'state.json');
-  if (existsSync(stateFile)) {
-    writeFileSync(stateFile, '{}', 'utf8');
-  }
-  // Clean up any lock files
-  const locksDir = path.join(atDir, 'locks');
-  if (existsSync(locksDir)) {
-    rmSync(locksDir, { recursive: true, force: true });
-  }
-  // Clean up runs.jsonl if created
-  const runsFile = path.join(atDir, 'runs.jsonl');
-  if (existsSync(runsFile)) {
-    rmSync(runsFile, { force: true });
-  }
+  rmSync(atDir, { recursive: true, force: true });
+  delete process.env.AT_STATE_DIR;
 });

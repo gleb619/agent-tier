@@ -7,7 +7,7 @@ export {
   isDomainError,
 } from './errors'
 export { createAgent, type Agent, type AgentConfig, type AgentStats, type AgentStatus } from './agent'
-export { createTask, type Task, type TaskStatus, type TaskPriority } from './task'
+export { createTask, type Task, type TaskStatus, type TaskPriority, type TaskStage } from './task'
 export { createRun, type Run, type RunStatus, type TokenUsage } from './run'
 export { createGoal, type Goal, type GoalStatus } from './goal'
 export { createTeam, type Team, type TeamStatus } from './team'

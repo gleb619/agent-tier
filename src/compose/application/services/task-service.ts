@@ -1,11 +1,12 @@
 import type { IEventBus } from '../event-bus'
-import { createTask, transitionTask, type Task, type TaskStatus, type TaskPriority } from '../../domain'
+import { createTask, transitionTask, type Task, type TaskStatus, type TaskPriority, type TaskStage } from '../../domain'
 import type { ITaskStore } from '../ports'
 
 export interface CreateTaskInput {
   title: string
   description?: string
   priority?: TaskPriority
+  stage?: TaskStage
   scope?: string[]
   dependsOn?: string[]
   goalId?: string
@@ -96,5 +97,13 @@ export class TaskService {
         return dep?.status === 'done'
       })
     })
+  }
+
+  async get(taskId: string): Promise<Task | undefined> {
+    return this.store.get(taskId)
+  }
+
+  async getAll(): Promise<Task[]> {
+    return this.store.getAll()
   }
 }
