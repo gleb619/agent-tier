@@ -2,6 +2,7 @@ import { execFile as _execFile } from 'child_process'
 import { promisify } from 'util'
 import { getCodegraphContext } from '../../../commands/codegraph'
 import type { ComposeWorkspace } from '../../infrastructure/workspace/compose-workspace'
+import { probeCodegraphQuery } from './pi-context-probe'
 
 const execFileAsync = promisify(_execFile)
 
@@ -14,7 +15,8 @@ export interface ArchStageConfig {
 
 export async function runArchStage(config: ArchStageConfig): Promise<void> {
   const { workspace, goalPrompt, maxNodes = 30 } = config
-  const context = await getCodegraphContext(config.codegraphTask ?? goalPrompt, maxNodes)
+  const codegraphQuery = config.codegraphTask ?? (await probeCodegraphQuery(goalPrompt))
+  const context = await getCodegraphContext(codegraphQuery, maxNodes)
   await workspace.write('context.md', context)
   const prompt = buildArchPrompt(goalPrompt, context)
   await execFileAsync('at', ['-t', '1', '-s', '-p', prompt], { cwd: workspace.goalDir })

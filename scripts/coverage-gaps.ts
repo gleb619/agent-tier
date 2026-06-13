@@ -1,232 +1,178 @@
-#!/usr/bin/env node
+#!/usr/bin/env ts-node
+
+/**
+ * Coverage Gap Analysis — finds untested files/functions
+ * Usage: npm run test:gaps
+ *
+ * Runs vitest with coverage, then parses the output to find
+ * files and functions with no test coverage.
+ */
 
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// ANSI color codes
-const colors = {
+// Resolve project root — use process.cwd() so ts-node works regardless of __dirname
+const projectRoot = process.cwd();
+
+const C = {
   red: '\x1b[31m',
   yellow: '\x1b[33m',
   green: '\x1b[32m',
-  reset: '\x1b[0m'
+  cyan: '\x1b[36m',
+  bold: '\x1b[1m',
+  reset: '\x1b[0m',
 };
 
-function runVitestWithCoverage() {
+function runVitestWithCoverage(): void {
+  console.log(`${C.cyan}Running vitest with coverage...${C.reset}\n`);
   try {
-    console.log('Running vitest with coverage...');
-    execSync('npx vitest run --coverage', { stdio: 'inherit' });
-  } catch (error) {
-    console.warn('Warning: Vitest execution failed, but continuing with available coverage data...');
-    // Continue anyway to show partial data
+    execSync('npx vitest run --coverage', {
+      stdio: 'inherit',
+      cwd: projectRoot
+    });
+  } catch {
+    console.warn(`\n${C.yellow}Warning: vitest exited non-zero, analyzing available coverage data${C.reset}`);
   }
 }
 
-function getAllTsFiles() {
-  const srcDir = path.join(__dirname, '..', 'src');
-  const excludeDirs = ['tui', 'types'];
-  
-  function getFilesRecursive(dir) {
-    const files = [];
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      
+function getAllSrcFiles(): string[] {
+  const srcDir = path.join(projectRoot, 'src');
+  const excludeDirs = new Set(['tui', 'types']);
+  const results: string[] = [];
+
+  function walk(dir: string): void {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        // Skip excluded directories
-        if (excludeDirs.includes(entry.name)) {
-          continue;
-        }
-        files.push(...getFilesRecursive(fullPath));
-      } else if (entry.isFile() && entry.name.endsWith('.ts')) {
-        files.push(fullPath);
+        if (!excludeDirs.has(entry.name)) walk(full);
+      } else if (entry.name.endsWith('.ts')) {
+        results.push(full);
       }
     }
-    
-    return files;
   }
-  
-  return getFilesRecursive(srcDir);
+
+  walk(srcDir);
+  return results.sort();
 }
 
-function readCoverageSummary() {
-  const summaryPath = path.join(__dirname, '..', 'coverage', 'coverage-summary.json');
+interface FileResult {
+  absPath: string;
+  relPath: string;
+  linePct: number | null;       // null = not in coverage data
+  uncoveredFns: string[] | null; // null = not in coverage data
+}
+
+function analyze(): FileResult[] {
+  const summaryPath = path.join(projectRoot, 'coverage', 'coverage-summary.json');
+  const finalPath = path.join(projectRoot, 'coverage', 'coverage-final.json');
+
   if (!fs.existsSync(summaryPath)) {
-    return null;
-  }
-  
-  try {
-    const data = fs.readFileSync(summaryPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error reading coverage-summary.json:', error.message);
-    return null;
-  }
-}
-
-function readCoverageFinal() {
-  const finalPath = path.join(__dirname, '..', 'coverage', 'coverage-final.json');
-  if (!fs.existsSync(finalPath)) {
-    return null;
-  }
-  
-  try {
-    const data = fs.readFileSync(finalPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error reading coverage-final.json:', error.message);
-    return null;
-  }
-}
-
-function getUncoveredFunctions(coverageData, filePath) {
-  const relativePath = path.relative(path.join(__dirname, '..'), filePath);
-  
-  if (!coverageData || !coverageData[relativePath]) {
-    return null; // Indicates no tests
-  }
-  
-  const fileCoverage = coverageData[relativePath];
-  
-  if (!fileCoverage.fnMap || !fileCoverage.f) {
-    return [];
-  }
-  
-  const uncovered = [];
-  const fnMap = fileCoverage.fnMap;
-  const hitCounts = fileCoverage.f;
-  
-  for (const fnId in fnMap) {
-    if (hitCounts[fnId] === 0) {
-      uncovered.push(fnMap[fnId].name);
-    }
-  }
-  
-  return uncovered;
-}
-
-function getLineCoveragePercentage(coverageData, filePath) {
-  const relativePath = path.relative(path.join(__dirname, '..'), filePath);
-  
-  if (!coverageData || !coverageData[relativePath]) {
-    return null; // Indicates no tests
-  }
-  
-  const fileCoverage = coverageData[relativePath];
-  return fileCoverage.lines ? fileCoverage.lines.pct : 0;
-}
-
-function colorizeCoverage(percentage) {
-  if (percentage === null) {
-    return `${colors.yellow}NO TESTS${colors.reset}`;
-  }
-  
-  if (percentage === 0) {
-    return `${colors.red}${percentage.toFixed(1)}%${colors.reset}`;
-  }
-  
-  if (percentage < 50) {
-    return `${colors.yellow}${percentage.toFixed(1)}%${colors.reset}`;
-  }
-  
-  if (percentage >= 80) {
-    return `${colors.green}${percentage.toFixed(1)}%${colors.reset}`;
-  }
-  
-  return `${percentage.toFixed(1)}%`;
-}
-
-function main() {
-  // Run vitest with coverage
-  runVitestWithCoverage();
-  
-  // Read coverage data
-  const summaryData = readCoverageSummary();
-  const finalData = readCoverageFinal();
-  
-  if (!summaryData) {
-    console.error('No coverage data found. Make sure tests are running and generating coverage.');
+    console.error(`${C.red}No coverage data. Run "npm run test:coverage" first.${C.reset}`);
     process.exit(1);
   }
-  
-  // Get all TypeScript files
-  const allTsFiles = getAllTsFiles();
-  
-  // Prepare results
-  const results = [];
-  
-  for (const filePath of allTsFiles) {
-    const relativePath = path.relative(path.join(__dirname, '..'), filePath);
-    const linePct = getLineCoveragePercentage(finalData, filePath);
-    const uncoveredFunctions = getUncoveredFunctions(finalData, filePath);
-    
-    results.push({
-      filePath: relativePath,
-      linePct,
-      uncoveredFunctions,
-      hasTests: linePct !== null
-    });
-  }
-  
-  // Sort: 0% coverage first, then ascending by line coverage %
-  results.sort((a, b) => {
-    // Files with no tests (null) go to the end
-    if (a.linePct === null && b.linePct === null) return 0;
-    if (a.linePct === null) return 1;
-    if (b.linePct === null) return -1;
-    
-    // 0% coverage first
-    if (a.linePct === 0 && b.linePct !== 0) return -1;
-    if (a.linePct !== 0 && b.linePct === 0) return 1;
-    
-    // Then sort by ascending percentage
-    return a.linePct - b.linePct;
+
+  const summary: Record<string, any> = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+  const finalData: Record<string, any> | null = fs.existsSync(finalPath)
+    ? JSON.parse(fs.readFileSync(finalPath, 'utf8'))
+    : null;
+
+  const srcFiles = getAllSrcFiles();
+
+  return srcFiles.map(absPath => {
+    // Coverage uses absolute paths as keys
+    const summaryEntry = summary[absPath];
+    const finalEntry = finalData?.[absPath];
+
+    if (!summaryEntry) {
+      return { absPath, relPath: path.relative(projectRoot, absPath), linePct: null, uncoveredFns: null };
+    }
+
+    const linePct: number = summaryEntry.lines?.pct ?? 0;
+
+    // Extract uncovered function names from Istanbul format
+    let uncoveredFns: string[] = [];
+    if (finalEntry?.fnMap && finalEntry?.f) {
+      for (const id of Object.keys(finalEntry.fnMap)) {
+        if (finalEntry.f[id] === 0) {
+          const name = finalEntry.fnMap[id].name;
+          if (name && name !== '<anonymous>') {
+            uncoveredFns.push(name);
+          }
+        }
+      }
+    }
+
+    return { absPath, relPath: path.relative(projectRoot, absPath), linePct, uncoveredFns };
   });
-  
-  // Print table header
-  console.log('\nCoverage Gap Analysis:');
-  console.log('='.repeat(80));
-  console.log(`${'Coverage'.padEnd(10)} | ${'File Path'.padEnd(50)} | Uncovered Functions`);
-  console.log('-'.repeat(80));
-  
-  let totalFiles = 0;
-  let uncoveredFiles = 0;
-  let totalUncoveredFunctions = 0;
-  
-  // Print results
-  for (const result of results) {
-    totalFiles++;
-    
-    const coverageStr = colorizeCoverage(result.linePct);
-    const filePathStr = result.filePath.padEnd(50);
-    
-    let functionsStr;
-    if (result.uncoveredFunctions === null) {
-      functionsStr = `${colors.yellow}NO TESTS${colors.reset}`;
-    } else if (result.uncoveredFunctions.length === 0) {
-      functionsStr = 'none';
-    } else {
-      functionsStr = result.uncoveredFunctions.join(', ');
-    }
-    
-    console.log(`${coverageStr.padEnd(10)} | ${filePathStr} | ${functionsStr}`);
-    
-    if (result.linePct === 0 || result.linePct === null) {
-      uncoveredFiles++;
-    }
-    
-    if (result.uncoveredFunctions && result.uncoveredFunctions.length > 0) {
-      totalUncoveredFunctions += result.uncoveredFunctions.length;
-    }
-  }
-  
-  // Print summary
-  console.log('-'.repeat(80));
-  console.log(`Summary: ${totalFiles} total files, ${uncoveredFiles} files needing coverage, ${totalUncoveredFunctions} uncovered functions`);
-  
-  // Print legend
-  console.log(`\nLegend: ${colors.red}red${colors.reset} = 0% coverage, ${colors.yellow}yellow${colors.reset} = <50% coverage, ${colors.green}green${colors.reset} = >=80% coverage`);
 }
 
-main();
+function colorize(pct: number | null): string {
+  if (pct === null) return `${C.yellow}NO TESTS${C.reset}`;
+  const s = pct.toFixed(1).padStart(6) + '%';
+  if (pct === 0) return `${C.red}${s}${C.reset}`;
+  if (pct < 50) return `${C.yellow}${s}${C.reset}`;
+  if (pct >= 80) return `${C.green}${s}${C.reset}`;
+  return s;
+}
+
+function printReport(results: FileResult[]): void {
+  // Sort: null first (treated as -∞), then ascending by coverage %
+  results.sort((a, b) => {
+    const aVal = a.linePct === null ? -1 : a.linePct;
+    const bVal = b.linePct === null ? -1 : b.linePct;
+    return aVal - bVal;
+  });
+
+  const maxPathLen = Math.max(...results.map(r => r.relPath.length), 20);
+
+  console.log(`\n${C.bold}Coverage Gap Analysis${C.reset}`);
+  console.log('═'.repeat(90));
+  console.log(
+    '  ' + 'Coverage'.padEnd(10) + ' │ ' +
+    'File'.padEnd(maxPathLen) + ' │ ' +
+    'Uncovered Functions'
+  );
+  console.log('─'.repeat(90));
+
+  let totalFiles = 0;
+  let needCoverage = 0;
+  let totalUncoveredFns = 0;
+
+  for (const r of results) {
+    totalFiles++;
+    if (r.linePct === null || r.linePct === 0) needCoverage++;
+
+    const cov = colorize(r.linePct).padEnd(10 + (r.linePct === null ? 0 : 0));
+    const fp = r.relPath.padEnd(maxPathLen);
+
+    let fns: string;
+    if (r.uncoveredFns === null) {
+      fns = `${C.yellow}NO TESTS${C.reset}`;
+    } else if (r.uncoveredFns.length === 0) {
+      fns = '✓ all covered';
+    } else {
+      fns = r.uncoveredFns.join(', ');
+      totalUncoveredFns += r.uncoveredFns.length;
+    }
+
+    console.log(`  ${cov} │ ${fp} │ ${fns}`);
+  }
+
+  console.log('─'.repeat(90));
+  console.log(
+    `${C.bold}Summary:${C.reset} ${totalFiles} files, ` +
+    `${C.red}${needCoverage} need coverage${C.reset}, ` +
+    `${totalUncoveredFns} uncovered functions`
+  );
+  console.log(
+    `\nLegend: ${C.red}red${C.reset} = 0%, ` +
+    `${C.yellow}yellow${C.reset} = <50%, ` +
+    `${C.green}green${C.reset} = ≥80%`
+  );
+}
+
+// ── Main ──
+runVitestWithCoverage();
+const results = analyze();
+printReport(results);

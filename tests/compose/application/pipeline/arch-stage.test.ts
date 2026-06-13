@@ -13,6 +13,10 @@ vi.mock('child_process', async (importOriginal) => {
   return { ...orig, execFile: vi.fn() }
 })
 
+vi.mock('../../../../src/compose/application/pipeline/pi-context-probe', () => ({
+  probeCodegraphQuery: vi.fn().mockImplementation((goal: string) => Promise.resolve(goal)),
+}))
+
 import { runArchStage } from '../../../../src/compose/application/pipeline/arch-stage'
 import { execFile } from 'child_process'
 
