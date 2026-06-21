@@ -61,6 +61,14 @@ describe('resolveFromArgs', () => {
     expect(resolveFromArgs({ prompt: 'hello', agent: 'glm-code' }).agent).toBe('glm-code');
   });
 
+  it('treats empty-string agent as auto', () => {
+    expect(resolveFromArgs({ prompt: 'test', agent: '' }).agent).toBe('auto');
+  });
+
+  it('treats whitespace-only agent as auto', () => {
+    expect(resolveFromArgs({ prompt: 'test', agent: '   ' }).agent).toBe('auto');
+  });
+
   it('accepts custom timeout', () => {
     expect(resolveFromArgs({ prompt: 'hello', timeout: '5000' }).timeout).toBe(5000);
   });

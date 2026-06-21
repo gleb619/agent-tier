@@ -77,3 +77,60 @@ export function isAgentEnabled(agent: string): boolean {
 export function getCliPath(): string {
   return path.resolve(__dirname, '../dist/cli.js');
 }
+
+/**
+ * External/environmental agent-failure signatures — the agent binary ran but
+ * failed for reasons outside `at`'s control: auth, account/offer deprecation,
+ * quota/rate-limit, missing credentials. These are NOT code regressions in `at`
+ * and must not fail the test suite. Mirror the "binary not found" SKIP idiom.
+ */
+const EXTERNAL_FAILURE_PATTERNS: RegExp[] = [
+  /Error authenticating/i,
+  /IneligibleTierError/i,
+  /no longer supported/i,
+  /not authenticated|not logged in|login required/i,
+  /invalid.{0,12}(api.?key|credentials)|missing.{0,12}(api.?key|token)/i,
+  /UNAUTHORIZED|HTTP 401|status.{0,4}401/i,
+  /rate.?limit|HTTP 429|status.{0,4}429|quota exceeded/i,
+];
+
+export type AgentExitClass = 'success' | 'external-failure' | 'code-failure';
+
+/**
+ * Read the agent's log file content for a run. `at` prints the log path in its
+ * banner (`Log: /tmp/at-logs/at-<ts>-<agent>.log`); parse it from `capturedOutput`.
+ * Falls back to the most-recently-modified matching log in the default log dir.
+ *
+ * Needed because stream mode (chop-streamer) filters arbitrary child stderr, so
+ * auth/eligibility errors reach the log file but NOT `at`'s stdout.
+ */
+export function readAgentLog(agent: string, capturedOutput: string): string {
+  const logDir = process.env.AT_LOGS_DIR ?? '/tmp/at-logs';
+  const fromBanner = /Log:\s*(\S*at-[^\s]*\.log)/.exec(capturedOutput);
+  const candidates: string[] = [];
+  if (fromBanner?.[1]) candidates.push(fromBanner[1]);
+  try {
+    for (const f of fs.readdirSync(logDir)) {
+      if (f.includes(`-${agent}.log`)) candidates.push(path.join(logDir, f));
+    }
+  } catch { /* dir may not exist */ }
+  let latest = '';
+  let latestMtime = 0;
+  for (const c of candidates) {
+    try {
+      const st = fs.statSync(c);
+      if (st.mtimeMs > latestMtime) { latestMtime = st.mtimeMs; latest = c; }
+    } catch { /* ignore */ }
+  }
+  try {
+    return latest ? fs.readFileSync(latest, 'utf8') : '';
+  } catch {
+    return '';
+  }
+}
+
+/** Classify an agent run's exit: success, external/env failure (SKIP), or code failure (FAIL). */
+export function classifyAgentExit(exitCode: number, output: string): AgentExitClass {
+  if (exitCode === 0) return 'success';
+  return EXTERNAL_FAILURE_PATTERNS.some((p) => p.test(output)) ? 'external-failure' : 'code-failure';
+}

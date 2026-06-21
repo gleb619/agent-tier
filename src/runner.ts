@@ -257,17 +257,21 @@ export async function run(
         console.warn('[at] retrying with next agent...');
       }
 
+      let healthRecorded = false;
       try {
         const exitCode = await spawner(agent, options);
         if (options.stream) {
           await recordResult(stateFilePath, agent.name, exitCode === 0);
+          healthRecorded = true;
           if (exitCode !== 0) {
             throw new AgentError(`${agent.name} exited with code ${exitCode}`, exitCode);
           }
         }
         return 0;
       } catch (err) {
-        await recordResult(stateFilePath, agent.name, false);
+        if (!healthRecorded) {
+          await recordResult(stateFilePath, agent.name, false);
+        }
         const isLast = attempt === maxAttempts - 1;
         if (isLast || !(err instanceof AgentError)) throw err;
       }

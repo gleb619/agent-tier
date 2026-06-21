@@ -52,7 +52,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
   if (!Number.isFinite(retriesNum) || retriesNum < 0 || !Number.isInteger(retriesNum)) throw new Error('retries must be a non-negative integer');
 
   return {
-    agent: argv.agent ?? 'auto',
+    agent: argv.agent?.trim() || 'auto',
     tier: tierNum as 1 | 2 | 3 | 4,
     prompt,
     model: argv.model,

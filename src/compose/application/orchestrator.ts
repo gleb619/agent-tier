@@ -139,15 +139,19 @@ class Orchestrator {
       await this.dispatch()
       await this.collect()
     } catch (err) {
-      this.eventBus.emit({
-        id: crypto.randomUUID(),
-        type: 'orchestrator:error',
-        timestamp: new Date().toISOString(),
-        payload: {
-          error: err instanceof Error ? err.message : String(err),
-          fatal: false,
-        },
-      })
+      try {
+        this.eventBus.emit({
+          id: crypto.randomUUID(),
+          type: 'orchestrator:error',
+          timestamp: new Date().toISOString(),
+          payload: {
+            error: err instanceof Error ? err.message : String(err),
+            fatal: false,
+          },
+        })
+      } catch (emitErr) {
+        console.error('[orchestrator] error event failed to emit:', emitErr)
+      }
     }
   }
 

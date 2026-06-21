@@ -105,7 +105,7 @@ describe('run-store', () => {
       saveRuns(TEST_STATE_DIR, []);
     });
 
-    it('autoprunes to default max of 10', async () => {
+    it('stores runs in descending startedAt order and keeps all when below default max', async () => {
       const now = Date.now();
       for (let i = 0; i < 12; i++) {
         await addRun(TEST_STATE_DIR, {
