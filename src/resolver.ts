@@ -13,6 +13,7 @@ export interface RunOptions {
   logDir: string;
   noChop: boolean;
   timeout: number;
+  callback?: string;
 }
 
 interface ArgvOptions {
@@ -28,6 +29,7 @@ interface ArgvOptions {
   logDir?: string;
   noChop?: boolean;
   timeout?: string | number;
+  callback?: string;
 }
 
 export interface ParsedJson {
@@ -36,6 +38,7 @@ export interface ParsedJson {
   model?: string;
   cwd?: string;
   env?: Record<string, string>;
+  callback?: string;
 }
 
 export function resolveFromArgs(argv: ArgvOptions): RunOptions {
@@ -64,6 +67,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     logDir: argv.logDir ?? '/tmp/at-logs',
     noChop: argv.noChop ?? false,
     timeout: timeoutMs,
+    callback: argv.callback?.trim() || undefined,
   };
 }
 
@@ -98,5 +102,6 @@ export function parseJsonInput(raw: string): ParsedJson {
     model: parsed.model as string | undefined,
     cwd: parsed.cwd as string | undefined,
     env,
+    callback: (parsed.callback as string | undefined)?.trim() || undefined,
   };
 }

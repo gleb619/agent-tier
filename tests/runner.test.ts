@@ -248,4 +248,98 @@ describe('defaultSpawner', () => {
     expect(content.length).toBeGreaterThan(0);
     expect(content).toContain('Failed to spawn');
   });
+
+  it('executes callback in stream mode with context env vars', async () => {
+    const markerFile = path.join(tmpLogDir, 'callback-marker-stream.txt');
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/echo',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+      callback: `sh -c 'echo "agent=$AT_AGENT status=$AT_STATUS exit=$AT_EXIT_CODE tier=$AT_TIER" > ${markerFile}'`,
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(0);
+    const content = readFileSync(markerFile, 'utf8').trim();
+    expect(content).toContain('agent=test');
+    expect(content).toContain('status=done');
+    expect(content).toContain('exit=0');
+    expect(content).toContain('tier=2');
+  });
+
+  it('executes callback on failure with failed status', async () => {
+    const markerFile = path.join(tmpLogDir, 'callback-marker-fail.txt');
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/bash',
+      buildArgs: () => ['-c', 'exit 7'],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+      callback: `sh -c 'echo "status=$AT_STATUS exit=$AT_EXIT_CODE" > ${markerFile}'`,
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(7);
+    const content = readFileSync(markerFile, 'utf8').trim();
+    expect(content).toContain('status=failed');
+    expect(content).toContain('exit=7');
+  });
+
+  it('does not fail main run when callback exits non-zero', async () => {
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/echo',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+      callback: 'exit 42',
+    };
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('callback exited with code 42'));
+    warnSpy.mockRestore();
+  });
+
+  it('executes callback in detached mode after child exits', async () => {
+    const markerFile = path.join(tmpLogDir, 'callback-marker-detached.txt');
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/echo',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: false,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+      callback: `sh -c 'echo "agent=$AT_AGENT status=$AT_STATUS" > ${markerFile}'`,
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(0);
+    // Fire-and-forget: wait briefly for the close event and callback to fire
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const content = readFileSync(markerFile, 'utf8').trim();
+    expect(content).toContain('agent=test');
+    expect(content).toContain('status=done');
+  });
 });

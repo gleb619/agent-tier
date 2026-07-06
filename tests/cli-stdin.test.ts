@@ -102,3 +102,39 @@ describe('--json stdin mode', () => {
     expect(result.stdout + result.stderr).toContain('error');
   });
 });
+
+describe('--callback flag', () => {
+  beforeAll(() => {
+    buildCli();
+  }, 60000);
+
+  it('runs callback after agent exits in stream mode', async () => {
+    const markerFile = path.join(os.tmpdir(), `at-callback-cli-${Date.now()}.txt`);
+    const result = runCli([
+      '-a', 'mock',
+      '-s',
+      '-p', 'callback test',
+      '--callback', `sh -c 'echo "status=$AT_STATUS agent=$AT_AGENT" > ${markerFile}'`,
+    ]);
+    expect(result.exitCode).toBe(0);
+    const content = readFileSync(markerFile, 'utf8').trim();
+    expect(content).toContain('status=done');
+    expect(content).toContain('agent=mock');
+  });
+
+  it('runs callback from JSON input', async () => {
+    const markerFile = path.join(os.tmpdir(), `at-callback-json-${Date.now()}.txt`);
+    const result = runCli(
+      ['--json'],
+      JSON.stringify({
+        prompt: 'json callback test',
+        agent: 'mock',
+        callback: `sh -c 'echo "json-status=$AT_STATUS" > ${markerFile}'`,
+      }),
+    );
+    expect(result.exitCode).toBe(0);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const content = readFileSync(markerFile, 'utf8').trim();
+    expect(content).toContain('json-status=done');
+  });
+});

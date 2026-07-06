@@ -28,6 +28,10 @@ export function registerDefaultCommand(program: Command): void {
     .option('--timeout <ms>', 'Force-kill agent after N milliseconds (default: 3600000 = 1h)', '3600000')
     .option('-m, --model <name>', 'Model name to pass to the agent')
     .option(
+      '--callback <command>',
+      'Shell command to run after the agent job finishes. Exposes AT_RUN_ID, AT_AGENT, AT_TIER, AT_EXIT_CODE, AT_LOG_FILE, AT_PROMPT, AT_STATUS env vars',
+    )
+    .option(
       '--json',
       'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{}}',
       false,
@@ -53,6 +57,7 @@ export function registerDefaultCommand(program: Command): void {
             logDir: opts.logDir,
             noChop: !(opts.chop as boolean),
             timeout: opts.timeout,
+            callback: parsed.callback ?? opts.callback,
           });
         } else {
           const stdinData = !opts.prompt && !process.stdin.isTTY ? await readStdin() : '';
@@ -68,6 +73,7 @@ export function registerDefaultCommand(program: Command): void {
             logDir: opts.logDir,
             noChop: !(opts.chop as boolean),
             timeout: opts.timeout,
+            callback: opts.callback,
           });
         }
 

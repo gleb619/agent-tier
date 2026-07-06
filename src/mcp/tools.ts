@@ -5,7 +5,7 @@ import { AGENTS, AgentDef } from '../agents/registry';
 import { loadGenericAgents } from '../agents/generic-loader';
 import { loadConfig, applyTierOverrides } from '../config';
 import { resolveFromArgs } from '../resolver';
-import { launchAgent, Spawner, run } from '../runner';
+import { launchAgent, Spawner, run, executeCallback } from '../runner';
 import { loadHealth, isDeactivated, setDeactivated, isHealthy } from '../health';
 import { loadRuns, detectStuck, updateRun } from '../run-store';
 import { getStateFilePath } from '../state-dir';
@@ -23,6 +23,7 @@ export const AT_TOOLS: Tool[] = [
         model: { type: 'string', description: 'Model name to pass to agent' },
         retries: { type: 'number', description: 'Max extra retry attempts (default: 0)' },
         timeout: { type: 'number', description: 'Timeout ms (default: 3600000)' },
+        callback: { type: 'string', description: 'Shell command to run after the agent job finishes' },
       },
       required: ['prompt'],
     },
@@ -121,6 +122,7 @@ async function handleRunPrompt(args: Record<string, unknown>, stateDir: string):
     model: args.model as string | undefined,
     retries: args.retries as number | undefined,
     timeout: args.timeout as number | undefined,
+    callback: args.callback as string | undefined,
     stream: true,
     stateDir,
     logDir: '/tmp/at-mcp-logs',
@@ -162,10 +164,21 @@ async function handleRunPrompt(args: Record<string, unknown>, stateDir: string):
     }
 
     const exitCode = code ?? 1;
+    const status = exitCode === 0 ? 'done' : 'failed';
     await updateRun(options.stateDir, runId, {
-      status: exitCode === 0 ? 'done' : 'failed',
+      status,
       finishedAt: new Date().toISOString(),
       exitCode,
+    });
+
+    executeCallback(options.callback, {
+      runId,
+      agent: agentDef.name,
+      tier: agentDef.tier,
+      exitCode,
+      logFile,
+      prompt: options.prompt,
+      status,
     });
 
     return exitCode;

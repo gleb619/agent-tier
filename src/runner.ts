@@ -1,4 +1,4 @@
-import { spawn, execSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { mkdirSync, openSync, closeSync, writeSync, appendFileSync, existsSync } from 'fs';
 import path from 'path';
 
@@ -55,6 +55,37 @@ export interface LaunchResult {
   runId: string;
   logFile: string;
   agent: AgentDef;
+}
+
+export interface CallbackContext {
+  runId: string;
+  agent: string;
+  tier: number;
+  exitCode: number;
+  logFile: string;
+  prompt: string;
+  status: 'done' | 'failed';
+}
+
+export function executeCallback(command: string | undefined, context: CallbackContext): void {
+  if (!command || !command.trim()) return;
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    AT_RUN_ID: context.runId,
+    AT_AGENT: context.agent,
+    AT_TIER: String(context.tier),
+    AT_EXIT_CODE: String(context.exitCode),
+    AT_LOG_FILE: context.logFile,
+    AT_PROMPT: context.prompt,
+    AT_STATUS: context.status,
+  };
+
+  const cmd = command.trim();
+  const result = spawnSync(cmd, [], { env, stdio: 'inherit', shell: true });
+  if (result.status !== 0) {
+    console.warn(`[at] callback exited with code ${result.status ?? 1}: ${cmd}`);
+  }
 }
 
 export async function launchAgent(agent: AgentDef, options: RunOptions): Promise<LaunchResult> {
@@ -194,10 +225,21 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   }
 
   const exitCode = code ?? 1;
+  const status = exitCode === 0 ? 'done' : 'failed';
   await updateRun(options.stateDir, runId, {
-    status: exitCode === 0 ? 'done' : 'failed',
+    status,
     finishedAt: new Date().toISOString(),
     exitCode,
+  });
+
+  executeCallback(options.callback, {
+    runId,
+    agent: agent.name,
+    tier: agent.tier,
+    exitCode,
+    logFile,
+    prompt: options.prompt,
+    status,
   });
 
   return exitCode;
@@ -310,13 +352,23 @@ export const defaultSpawner: Spawner = async (agent, options) => {
     });
     child.on('close', (code) => {
       const exitCode = code ?? 1;
+      const status = exitCode === 0 ? 'done' : 'failed';
       updateRun(options.stateDir, runId, {
-        status: exitCode === 0 ? 'done' : 'failed',
+        status,
         finishedAt: new Date().toISOString(),
         exitCode,
       }).catch(() => {});
       const sfp = getStateFilePath(options.stateDir);
       recordResult(sfp, agent.name, exitCode === 0).catch(() => {});
+      executeCallback(options.callback, {
+        runId,
+        agent: agent.name,
+        tier: agent.tier,
+        exitCode,
+        logFile,
+        prompt: options.prompt,
+        status,
+      });
     });
     return 0;
   }

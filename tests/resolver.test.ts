@@ -76,6 +76,18 @@ describe('resolveFromArgs', () => {
   it('uses explicit stateDir when provided', () => {
     expect(resolveFromArgs({ prompt: 'hello', stateDir: '/custom/.at' }).stateDir).toBe('/custom/.at');
   });
+
+  it('passes through callback command', () => {
+    expect(resolveFromArgs({ prompt: 'hello', callback: 'echo done' }).callback).toBe('echo done');
+  });
+
+  it('normalizes whitespace-only callback to undefined', () => {
+    expect(resolveFromArgs({ prompt: 'hello', callback: '   ' }).callback).toBeUndefined();
+  });
+
+  it('normalizes empty callback to undefined', () => {
+    expect(resolveFromArgs({ prompt: 'hello', callback: '' }).callback).toBeUndefined();
+  });
 });
 
 describe('parseJsonInput edge cases', () => {
@@ -141,5 +153,15 @@ describe('parseJsonInput edge cases', () => {
         env: { FOO: 'bar', BAD: 123 },
       }))
     ).toThrow('JSON input: env values must be strings (got number for key "BAD")');
+  });
+
+  it('includes callback in parsed JSON', () => {
+    const opts = parseJsonInput(JSON.stringify({ agent: 'blackbox', prompt: 'hello', callback: 'echo done' }));
+    expect(opts.callback).toBe('echo done');
+  });
+
+  it('normalizes whitespace-only callback in JSON to undefined', () => {
+    const opts = parseJsonInput(JSON.stringify({ agent: 'blackbox', prompt: 'hello', callback: '   ' }));
+    expect(opts.callback).toBeUndefined();
   });
 });

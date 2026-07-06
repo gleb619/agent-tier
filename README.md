@@ -41,6 +41,7 @@ Options:
   -t, --tier <number>     Tier: 1=architect, 2=dev (default), 3=experimental
   -s, --stream            Stream output to terminal (default: detached + log file)
   -r, --retries <number>  Max retry attempts on non-zero exit (default: 2)
+  --callback <command>    Shell command to run after the agent job finishes
   --global-state          Single round-robin counter shared across all tiers
   --log-dir <path>        Log directory for detached and stream mode (default: /tmp/at-logs)
   --json                  Read JSON from stdin (see JSON mode below)
