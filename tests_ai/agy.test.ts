@@ -2,15 +2,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn } from 'child_process';
 import { createSandbox, cleanupSandbox, agentBinExists, getCliPath, classifyAgentExit, readAgentLog, DEFAULT_TIMEOUT, Sandbox } from './setup';
 
-describe('gemini agent', () => {
+describe('agy agent', () => {
   let sandbox: Sandbox;
 
   beforeEach(() => { sandbox = createSandbox(); });
   afterEach(() => { cleanupSandbox(sandbox); });
 
   it('should create test_result.txt with hello world', async () => {
-    if (!agentBinExists('gemini')) {
-      console.log('SKIP: gemini binary not found');
+    if (!agentBinExists('agy')) {
+      console.log('SKIP: agy binary not found');
       return;
     }
 
@@ -19,7 +19,7 @@ describe('gemini agent', () => {
 
     let output = '';
     const exitCode = await new Promise<number>((resolve) => {
-      const child = spawn('node', [cliPath, '-s', '-a', 'gemini', '-p', prompt, '--timeout', String(DEFAULT_TIMEOUT)], {
+      const child = spawn('node', [cliPath, '-s', '-a', 'agy', '-p', prompt, '--timeout', String(DEFAULT_TIMEOUT)], {
         cwd: sandbox.dir,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -30,9 +30,9 @@ describe('gemini agent', () => {
 
     // External/auth failure (e.g. deprecated offer tier, expired creds) → SKIP, not FAIL.
     // Stream mode filters child stderr, so also scan the log file (authoritative).
-    const logContent = readAgentLog('gemini', output);
+    const logContent = readAgentLog('agy', output);
     if (classifyAgentExit(exitCode, `${output}\n${logContent}`) === 'external-failure') {
-      console.log(`SKIP: gemini external/auth failure (exit ${exitCode})`);
+      console.log(`SKIP: agy external/auth failure (exit ${exitCode})`);
       return;
     }
 

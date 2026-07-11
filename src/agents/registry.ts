@@ -82,9 +82,9 @@ export const AGENTS: AgentDef[] = [
     buildArgs: (prompt) => ['run', '--auto', prompt],
   },
   {
-    name: 'gemini',
+    name: 'agy',
     tier: 3,
-    bin: () => process.env.GEMINI_BIN ?? `${NODE_BIN}/gemini`,
+    bin: () => process.env.AGY_BIN ?? `${NODE_BIN}/agy`,
     buildArgs: () => ['--yolo', '--skip-trust'],
     promptMode: 'stdin',
   },

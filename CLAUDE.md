@@ -38,13 +38,13 @@ src/agents/registry.ts  AgentDef[] — name, tier, bin(), buildArgs(), buildEnv(
 |---------------|-------------------------------------------|----------------------------|
 | 1             | glm-code, codex, kimi                     | architect / review         |
 | 2 *(default)* | blackbox, mm-code, opencode, qwen, pi     | dev / QA                   |
-| 3             | kilo, gemini, goose, aider, cursor, cline | experimental / boilerplate |
+| 3             | kilo, agy, goose, aider, cursor, cline | experimental / boilerplate |
 | 4             | mock, mock-long                           | dry-run / test agents      |
 
 ### Key design points
 
 - **Binary resolution:** Each `AgentDef.bin()` checks env override (e.g. `OPENCODE_BIN`) then falls back to `$NODE_BIN/<name>`  `$LOCAL_BIN/<name>`. `NODE_BIN` defaults to dir of running `node` binary (`path.dirname(process.execPath)`); `LOCAL_BIN` to `~/.local/bin`. Override via `env.local.sh` (gitignored).
-- **promptMode:** Defaults to `'arg'` (prompt passed as CLI arg). Set to `'stdin'` (e.g. `gemini`) to pipe prompt to child's stdin instead.
+- **promptMode:** Defaults to `'arg'` (prompt passed as CLI arg). Set to `'stdin'` (e.g. `agy`) to pipe prompt to child's stdin instead.
 - **Detached mode (default):** Child is spawned detached; stdout/stderr go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Caller gets `[at] started <agent> (pid N) — logs: <path>` and blocks until child exits (enabling timeout, error detection, and retry).
 - **Stream mode (`-s`):** Child output is streamed to terminal and simultaneously written to `/tmp/at-logs/at-<timestamp>-<agent>.log`.
 - **Retry:** On non-zero exit, `runner` picks next agent in same tier and retries, up to `min(retries, candidates.length - 1)` additional attempts. Named agents (`-a <name>`) never retry.

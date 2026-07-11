@@ -78,7 +78,7 @@ echo '{"agent":"opencode","prompt":"fix the login bug"}' | at --json
 |---------------|--------------------------------|----------------------------|
 | 1             | glm-code, codex, kimi          | Architect / review         |
 | 2 *(default)* | blackbox, opencode, qwen       | Dev / QA                   |
-| 3             | kilo, gemini, goose, aider, pi | Experimental / boilerplate |
+| 3             | kilo, agy, goose, aider, pi | Experimental / boilerplate |
 
 Round-robin state is stored in `/tmp/at-<tier>-state.json`. Pass `--global-state` to use a single counter across all tiers.
 
@@ -138,12 +138,12 @@ Scaffolding, simple scripts, and throwaway generation. Three of these agents use
 | Agent    | Type   | Binary (env override)                  | Command pattern                                                            |
 |----------|--------|----------------------------------------|----------------------------------------------------------------------------|
 | `kilo`   | Cloud  | `KILO_BIN` → `~/.nvm/.../bin/kilo`     | `kilo run --auto "prompt"`                                                 |
-| `gemini` | Cloud  | `GEMINI_BIN` → `~/.nvm/.../bin/gemini` | `echo "prompt" \| gemini --yolo --skip-trust`                              |
+| `agy`    | Cloud  | `AGY_BIN` → `~/.nvm/.../bin/agy`       | `echo "prompt" \| agy --yolo --skip-trust`                                  |
 | `goose`  | Ollama | `GOOSE_BIN` → `~/.local/bin/goose`     | `goose run --text "prompt" --model ... --provider ollama --no-session -q`  |
 | `aider`  | Ollama | `AIDER_BIN` → `~/.local/bin/aider`     | `aider --model ollama/... --message "prompt" --yes-always --no-git --exit` |
 | `pi`     | Ollama | `PI_BIN` → `~/.nvm/.../bin/pi`         | `pi -p --provider ollama --model ... "prompt" --no-session`                |
 
-Round-robin order: kilo → gemini → goose → aider → pi → kilo → …
+Round-robin order: kilo → agy → goose → aider → pi → kilo → …
 
 #### Ollama agents
 
@@ -160,7 +160,7 @@ entry in `~/.pi/agent/models.json`.
 
 Most agents receive their prompt as a CLI argument (`promptMode: 'arg'`). One exception:
 
-- **`gemini`**: uses `promptMode: 'stdin'` — the prompt is piped to the agent's stdin rather than passed as an argument.
+- **`agy`**: uses `promptMode: 'stdin'` — the prompt is piped to the agent's stdin rather than passed as an argument.
   `at` handles this internally; no special flags needed.
 
 #### Generic agents (plugins)

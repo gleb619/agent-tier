@@ -68,8 +68,8 @@ describe('AgentRegistry', () => {
     expect(getAgentByName('opencode')!.buildArgs('hello')).not.toContain('-m');
   });
 
-  it('gemini uses stdin promptMode', () => {
-    expect(getAgentByName('gemini')!.promptMode).toBe('stdin');
+  it('agy uses stdin promptMode', () => {
+    expect(getAgentByName('agy')!.promptMode).toBe('stdin');
   });
 });
 
@@ -90,7 +90,7 @@ describe('getAgentsByTier', () => {
     const tier3 = getAgentsByTier(3);
     expect(tier3.length).toBeGreaterThan(0);
     const names = tier3.map(a => a.name);
-    expect(names).toContain('gemini');
+    expect(names).toContain('agy');
     expect(names).toContain('aider');
   });
 
@@ -107,7 +107,7 @@ describe('getAgentsByTier', () => {
 
 describe('getAgentByName', () => {
   it('returns agent definition for known name', () => {
-    const agent = getAgentByName('gemini');
+    const agent = getAgentByName('agy');
     expect(agent?.tier).toBe(3);
   });
 

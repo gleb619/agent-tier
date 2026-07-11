@@ -106,7 +106,7 @@ describe('buildStateReport', () => {
   it('includes agents array in report', () => {
     writeTestStateFile({
       opencode: { failureTimes: [], disabledTo: null, deactivated: true },
-      gemini: { failureTimes: ['2026-05-23T09:25:00.000Z'], disabledTo: null },
+      agy: { failureTimes: ['2026-05-23T09:25:00.000Z'], disabledTo: null },
       blackbox: { failureTimes: [], disabledTo: null },
     });
 
@@ -146,11 +146,11 @@ describe('buildStateReport', () => {
   it('surfaces disabledTo when set', () => {
     const future = new Date(Date.now() + 3_600_000).toISOString();
     writeTestStateFile({
-      gemini: { failureTimes: ['2026-05-23T09:25:00.000Z'], disabledTo: future },
+      agy: { failureTimes: ['2026-05-23T09:25:00.000Z'], disabledTo: future },
     });
 
     const report = buildStateReport(tmpDir);
-    const gem = report.agents.find((a) => a.name === 'gemini');
+    const gem = report.agents.find((a) => a.name === 'agy');
     expect(gem).toBeDefined();
     expect(gem!.disabledTo).toBe(future);
   });
@@ -201,7 +201,7 @@ describe('formatStateReport', () => {
   it('shows disabled-until with relative time', () => {
     const future = new Date(Date.now() + 3_600_000).toISOString();
     writeTestStateFile({
-      gemini: { failureTimes: [], disabledTo: future },
+      agy: { failureTimes: [], disabledTo: future },
     });
 
     const out = formatStateReport(tmpDir);

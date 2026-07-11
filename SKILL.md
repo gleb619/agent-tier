@@ -52,7 +52,7 @@ Include:
 ```bash
 at -t 1   # architect: glm-code → codex → kimi
 at        # dev (default): blackbox → opencode → qwen
-at -t 3   # experimental: kilo → gemini → goose → aider → pi
+at -t 3   # experimental: kilo → agy → goose → aider → pi
 ```
 
 ### 3. Run the command

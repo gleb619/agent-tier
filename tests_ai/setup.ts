@@ -41,7 +41,7 @@ export function agentBinExists(agent: string): boolean {
     case 'opencode':  binPath = process.env.OPENCODE_BIN ?? `${NODE_BIN}/opencode`; break;
     case 'qwen':      binPath = process.env.QWEN_BIN ?? `${NODE_BIN}/qwen`; break;
     case 'kilo':      binPath = process.env.KILO_BIN ?? `${NODE_BIN}/kilo`; break;
-    case 'gemini':    binPath = process.env.GEMINI_BIN ?? `${NODE_BIN}/gemini`; break;
+    case 'agy':       binPath = process.env.AGY_BIN ?? `${NODE_BIN}/agy`; break;
     case 'goose':     binPath = process.env.GOOSE_BIN ?? `${LOCAL_BIN}/goose`; break;
     case 'aider':     binPath = process.env.AIDER_BIN ?? `${LOCAL_BIN}/aider`; break;
     case 'pi':        binPath = process.env.PI_BIN ?? `${NODE_BIN}/pi`; break;
