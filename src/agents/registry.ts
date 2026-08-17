@@ -28,7 +28,7 @@ export const AGENTS: AgentDef[] = [
   {
     name: 'kimi',
     tier: 1,
-    bin: () => process.env.KIMI_BIN ?? `${NODE_BIN}/kimi`,
+    bin: () => process.env.KIMI_BIN ?? `${LOCAL_BIN}/kimi`,
     buildArgs: (prompt) => ['-y', '-p', prompt],
   },
 
@@ -133,7 +133,7 @@ export const AGENTS: AgentDef[] = [
 
   {
     name: 'cline',
-    tier: 3,
+    tier: 2,
     bin: () => process.env.CLINE_BIN ?? `${NODE_BIN}/cline`,
     buildArgs: (prompt) => [
       '--auto-approve', 'true',

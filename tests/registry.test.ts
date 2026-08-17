@@ -9,12 +9,12 @@ describe('AgentRegistry', () => {
     expect(getAgentsByTier(1)).toHaveLength(3);
   });
 
-  it('has 5 tier-2 agents', () => {
-    expect(getAgentsByTier(2)).toHaveLength(5);
+  it('has 6 tier-2 agents', () => {
+    expect(getAgentsByTier(2)).toHaveLength(6);
   });
 
   it('has 5 tier-3 agents', () => {
-    expect(getAgentsByTier(3)).toHaveLength(6);
+    expect(getAgentsByTier(3)).toHaveLength(5);
   });
 
   it('has 2 tier-4 agents', () => {
@@ -80,10 +80,10 @@ describe('getAgentsByTier', () => {
     expect(tier1.map(a => a.name)).toEqual(expect.arrayContaining(['glm-code', 'codex', 'kimi']));
   });
 
-  it('returns tier 2 agents: blackbox, mm-code, opencode, qwen, pi', () => {
+  it('returns tier 2 agents: blackbox, mm-code, opencode, qwen, pi, cline', () => {
     const tier2 = getAgentsByTier(2);
-    expect(tier2).toHaveLength(5);
-    expect(tier2.map(a => a.name)).toEqual(expect.arrayContaining(['blackbox', 'mm-code', 'opencode', 'qwen', 'pi']));
+    expect(tier2).toHaveLength(6);
+    expect(tier2.map(a => a.name)).toEqual(expect.arrayContaining(['blackbox', 'mm-code', 'opencode', 'qwen', 'pi', 'cline']));
   });
 
   it('returns tier 3 agents', () => {

@@ -36,7 +36,7 @@ export function agentBinExists(agent: string): boolean {
   switch (agent) {
     case 'glm-code':  binPath = process.env.GLM_CODE_BIN ?? `${LOCAL_BIN}/glm-code`; break;
     case 'codex':     binPath = process.env.CODEX_BIN ?? `${NODE_BIN}/codex`; break;
-    case 'kimi':      binPath = process.env.KIMI_BIN ?? `${NODE_BIN}/kimi`; break;
+    case 'kimi':      binPath = process.env.KIMI_BIN ?? `${LOCAL_BIN}/kimi`; break;
     case 'blackbox':  binPath = process.env.BLACKBOX_BIN ?? `${LOCAL_BIN}/blackbox`; break;
     case 'opencode':  binPath = process.env.OPENCODE_BIN ?? `${NODE_BIN}/opencode`; break;
     case 'qwen':      binPath = process.env.QWEN_BIN ?? `${NODE_BIN}/qwen`; break;
