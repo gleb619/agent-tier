@@ -7,6 +7,7 @@ export interface AgentHealth {
   failureTimes: string[];
   disabledTo: string | null;
   deactivated?: boolean;
+  deactivatedAt?: string;
 }
 
 export interface HealthState {
@@ -15,6 +16,12 @@ export interface HealthState {
 
 const DEFAULT_WINDOW_MS = 60 * 60 * 1000;       // 60 min
 const DEFAULT_THRESHOLD = 3;
+const DEFAULT_DEACTIVATE_TTL_MS = 24 * 60 * 60 * 1000; // 24h auto-reactivate
+
+function getDeactivateTtlMs(): number {
+  const env = process.env.AT_DEACTIVATE_TTL_MS;
+  return env ? Number(env) : DEFAULT_DEACTIVATE_TTL_MS;
+}
 const DEFAULT_BLOCK_DURATIONS: [number, number][] = [
   [3, 30 * 60 * 1000],        // 3 failures → 30 min
   [5, 2 * 60 * 60 * 1000],    // 5 failures → 2h
@@ -90,7 +97,18 @@ export function saveHealth(stateFilePath: string, state: HealthState): void {
 
 export function isDeactivated(stateFilePath: string, name: string, preloaded?: HealthState): boolean {
   const state = preloaded ?? loadHealth(stateFilePath);
-  return state.agents[name]?.deactivated === true;
+  const entry = state.agents[name];
+  if (entry?.deactivated !== true) return false;
+
+  if (entry.deactivatedAt) {
+    const expired = Date.now() - new Date(entry.deactivatedAt).getTime() >= getDeactivateTtlMs();
+    if (expired) {
+      // TTL passed: auto-reactivate. Fire-and-forget since callers expect a sync bool.
+      void setDeactivated(stateFilePath, name, false);
+      return false;
+    }
+  }
+  return true;
 }
 
 export async function setDeactivated(stateFilePath: string, name: string, deactivated: boolean): Promise<void> {
@@ -102,8 +120,10 @@ export async function setDeactivated(stateFilePath: string, name: string, deacti
 
     if (deactivated) {
       state.agents[name].deactivated = true;
+      state.agents[name].deactivatedAt = new Date().toISOString();
     } else {
       delete state.agents[name].deactivated;
+      delete state.agents[name].deactivatedAt;
     }
     saveHealth(stateFilePath, state);
   });
