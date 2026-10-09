@@ -107,7 +107,7 @@ describe('TUI Launch', () => {
       expect(args).not.toContain('-a');
     });
 
-    it('passes retries via -r flag when retries > 0', () => {
+    it('passes retries via --retries flag when retries > 0', () => {
       submitPrompt('prompt', {
         tier: 2,
         agent: 'auto',
@@ -116,11 +116,11 @@ describe('TUI Launch', () => {
       });
 
       const args = (spawn as ReturnType<typeof vi.fn>).mock.calls[0][1];
-      expect(args).toContain('-r');
+      expect(args).toContain('--retries');
       expect(args).toContain('3');
     });
 
-    it('does not pass -r flag when retries is 0', () => {
+    it('does not pass --retries flag when retries is 0', () => {
       submitPrompt('prompt', {
         tier: 2,
         agent: 'auto',
@@ -129,7 +129,7 @@ describe('TUI Launch', () => {
       });
 
       const args = (spawn as ReturnType<typeof vi.fn>).mock.calls[0][1];
-      expect(args).not.toContain('-r');
+      expect(args).not.toContain('--retries');
     });
 
     it('spawns child process correctly in detached mode', () => {

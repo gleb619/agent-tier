@@ -75,11 +75,11 @@ run_one() {
   # Auto-responder: poll --pending, answer first question with "blue"
   local deadline=$((SECONDS + TIMEOUT)) answered_id=""
   while (( SECONDS < deadline )); do
-    if (( SECONDS > deadline - TIMEOUT + 5 )); then break; fi
+    kill -0 "$cli_pid" 2>/dev/null || break
     local pending
     pending="$($CLI discuss list "$runId" --pending --json --state-dir "$S" 2>/dev/null || true)"
-    if [[ "$pending" == *'"kind":"question"'* ]]; then
-      $CLI discuss answer blue -r "$runId" --state-dir "$S" >/dev/null 2>&1 && answered_id="y" || true
+    if grep -q 'question' <<<"$pending"; then
+      $CLI discuss answer blue -R "$runId" --state-dir "$S" >/dev/null 2>&1 && answered_id="y" || true
     fi
     sleep 1
   done
@@ -108,7 +108,7 @@ run_one() {
   [[ "$color_val" == "blue" ]] && color_ok="y"
 
   local thread
-  thread="$($CLI discuss list "$runId" --json --state-dir "$S" 2>/dev/null || true)"
+  thread="$($CLI discuss list "$runId" --json --state-dir "$S" 2>/dev/null | tr -d " \n" || true)"
   [[ "$thread" == *'"from":"agent"'*'"kind":"question"'* ]] && asked="y"
   [[ "$thread" == *'"from":"host"'*'"kind":"answer"'*blue* ]] && answered="y"
 

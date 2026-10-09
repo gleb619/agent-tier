@@ -1,6 +1,4 @@
 import { Command } from 'commander';
-import { readFileSync, existsSync } from 'fs';
-import path from 'path';
 import type { DiscussEntry } from '../notify/types';
 import {
   readThread,
@@ -16,16 +14,22 @@ interface AskOpts {
   options: string[];
   timeout: string;
   default?: string;
-  runId?: string;
+  run?: string;
 }
 
 function resolveRunId(runId?: string): string {
   const r = runId ?? process.env.AT_RUN_ID;
   if (!r) {
-    console.error('[at] discuss: missing runId (pass -r or set AT_RUN_ID)');
+    console.error('[at] discuss: missing runId (pass -R or set AT_RUN_ID)');
     process.exit(2);
   }
   return r;
+}
+
+/** Read global options from the subcommand context so inherited flags
+ *  (--state-dir, --json, etc.) are not shadowed by ancestor defaults. */
+function readGlobals(command: Command): Record<string, unknown> {
+  return command.optsWithGlobals();
 }
 
 export function registerDiscussCommand(program: Command): void {
@@ -40,16 +44,21 @@ export function registerDiscussCommand(program: Command): void {
     .option('-o, --options <opt>', 'Option label (repeat for multi-choice)', (v: string, prev: string[]) => prev.concat(v), [] as string[])
     .option('--timeout <seconds>', 'Seconds to wait (default 300)', '300')
     .option('--default <answer>', 'Fallback answer if host does not respond')
-    .option('-r, --run-id <runId>', 'Run id (defaults to AT_RUN_ID)')
-    .action(async (question: string, opts: AskOpts) => {
-      const runId = resolveRunId(opts.runId);
-      const id = await postDiscussEntry(runId, {
-        from: 'agent',
-        kind: 'question',
-        text: question,
-        options: opts.options.length ? opts.options : undefined,
-      });
-      const stateDir = resolveStateDir(process.env.AT_STATE_DIR);
+    .option('-R, --run <runId>', 'Run id (defaults to AT_RUN_ID)')
+    .action(async (question: string, opts: AskOpts, command: Command) => {
+      const globals = readGlobals(command);
+      const runId = resolveRunId(opts.run);
+      const stateDir = resolveStateDir(globals.stateDir as string | undefined);
+      const id = await postDiscussEntry(
+        runId,
+        {
+          from: 'agent',
+          kind: 'question',
+          text: question,
+          options: opts.options.length ? opts.options : undefined,
+        },
+        stateDir,
+      );
       const timeoutMs = Number(opts.timeout) * 1000;
       const ans = await waitForAnswer(stateDir, runId, id, timeoutMs, 200);
       if (ans) {
@@ -59,12 +68,16 @@ export function registerDiscussCommand(program: Command): void {
       if (opts.default !== undefined) {
         // Record the default as a synthetic answer so the question does not
         // appear in `list --pending` after timeout.
-        await postDiscussEntry(runId, {
-          from: 'host',
-          kind: 'answer',
-          text: opts.default,
-          replyTo: id,
-        });
+        await postDiscussEntry(
+          runId,
+          {
+            from: 'host',
+            kind: 'answer',
+            text: opts.default,
+            replyTo: id,
+          },
+          stateDir,
+        );
         process.stdout.write(opts.default + '\n');
         return;
       }
@@ -76,10 +89,12 @@ export function registerDiscussCommand(program: Command): void {
   discuss
     .command('note <text>')
     .description('Post a one-way progress note (mirrors as SSE message)')
-    .option('-r, --run-id <runId>', 'Run id (defaults to AT_RUN_ID)')
-    .action(async (text: string, opts: { runId?: string }) => {
-      const runId = resolveRunId(opts.runId);
-      await postDiscussEntry(runId, { from: 'agent', kind: 'note', text });
+    .option('-R, --run <runId>', 'Run id (defaults to AT_RUN_ID)')
+    .action(async (text: string, opts: { run?: string }, command: Command) => {
+      const globals = readGlobals(command);
+      const runId = resolveRunId(opts.run);
+      const stateDir = resolveStateDir(globals.stateDir as string | undefined);
+      await postDiscussEntry(runId, { from: 'agent', kind: 'note', text }, stateDir);
     });
 
   // ── inbox ──────────────────────────────────────────────────────────────────
@@ -88,10 +103,11 @@ export function registerDiscussCommand(program: Command): void {
     .description('Print host instructions ("say" messages); with --wait polls for more')
     .option('--wait <seconds>', 'Keep waiting up to N seconds for new messages', '0')
     .option('--since <id>', 'Only return messages after this entry id')
-    .option('-r, --run-id <runId>', 'Run id (defaults to AT_RUN_ID)')
-    .action(async (opts: { wait: string; since?: string; runId?: string }) => {
-      const runId = resolveRunId(opts.runId);
-      const stateDir = resolveStateDir(process.env.AT_STATE_DIR);
+    .option('-R, --run <runId>', 'Run id (defaults to AT_RUN_ID)')
+    .action(async (opts: { wait: string; since?: string; run?: string }, command: Command) => {
+      const globals = readGlobals(command);
+      const runId = resolveRunId(opts.run);
+      const stateDir = resolveStateDir(globals.stateDir as string | undefined);
       const waitMs = Number(opts.wait) * 1000;
       const deadline = Date.now() + waitMs;
       let lastId = opts.since;
@@ -117,15 +133,17 @@ export function registerDiscussCommand(program: Command): void {
     .description('Show thread or pending questions for a run')
     .option('--pending', 'Show only unanswered questions', false)
     .option('--json', 'Emit JSON instead of human-readable lines', false)
-    .action(async (runIdArg: string | undefined, opts: { pending: boolean; json: boolean }) => {
-      const runId = runIdArg ?? process.env.AT_RUN_ID;
+    .option('-R, --run <runId>', 'Run id (defaults to AT_RUN_ID)')
+    .action(async (runIdArg: string | undefined, opts: { pending: boolean; json: boolean; run?: string }, command: Command) => {
+      const globals = readGlobals(command);
+      const runId = runIdArg ?? opts.run ?? process.env.AT_RUN_ID;
       if (!runId) {
-        console.error('[at] discuss list: missing runId (pass arg or set AT_RUN_ID)');
+        console.error('[at] discuss list: missing runId (pass arg, -R, or set AT_RUN_ID)');
         process.exit(2);
       }
-      const stateDir = resolveStateDir(process.env.AT_STATE_DIR);
+      const stateDir = resolveStateDir(globals.stateDir as string | undefined);
       const entries = opts.pending ? unansweredQuestions(stateDir, runId) : readThread(stateDir, runId);
-      if (opts.json) {
+      if (globals.json) {
         process.stdout.write(JSON.stringify(entries, null, 2) + '\n');
         return;
       }
@@ -138,25 +156,31 @@ export function registerDiscussCommand(program: Command): void {
 
   // ── answer ─────────────────────────────────────────────────────────────────
   discuss
-    .command('answer [qid] <text>')
-    .description('Answer a pending question (defaults to latest unanswered)')
-    .option('-r, --run-id <runId>', 'Run id (defaults to AT_RUN_ID)')
-    .action(async (qid: string | undefined, text: string | undefined, opts: { runId?: string }) => {
-      // commander quirk: when only [qid] is optional we get (qid, text) but the
-      // positional order is reversed when text is missing. Detect & swap.
-      let actualQid = qid;
-      let actualText = text;
-      if (qid !== undefined && text === undefined) {
-        actualText = qid;
-        actualQid = undefined;
-      }
-      if (actualText === undefined) {
+    .command('answer <text...>')
+    .description('Answer a pending question (defaults to latest unanswered; first arg mN treated as qid)')
+    .option('-q, --qid <id>', 'Question id to answer (default: latest unanswered)')
+    .option('-R, --run <runId>', 'Run id (defaults to AT_RUN_ID)')
+    .action(async (textParts: string[], opts: { qid?: string; run?: string }, command: Command) => {
+      const globals = readGlobals(command);
+      const runId = resolveRunId(opts.run);
+      const stateDir = resolveStateDir(globals.stateDir as string | undefined);
+
+      if (textParts.length === 0) {
         console.error('[at] discuss answer: missing <text>');
         process.exit(2);
       }
-      const runId = resolveRunId(opts.runId);
-      const stateDir = resolveStateDir(process.env.AT_STATE_DIR);
-      let replyTo = actualQid;
+
+      let replyTo = opts.qid;
+      if (!replyTo && /^m\d+$/.test(textParts[0])) {
+        replyTo = textParts.shift();
+      }
+
+      const text = textParts.join(' ');
+      if (!text) {
+        console.error('[at] discuss answer: missing <text>');
+        process.exit(2);
+      }
+
       if (!replyTo) {
         const pending = latestUnansweredQuestion(stateDir, runId);
         if (!pending) {
@@ -165,28 +189,36 @@ export function registerDiscussCommand(program: Command): void {
         }
         replyTo = pending.id;
       }
-      await postDiscussEntry(runId, { from: 'host', kind: 'answer', text: actualText, replyTo });
+
+      await postDiscussEntry(
+        runId,
+        { from: 'host', kind: 'answer', text, replyTo },
+        stateDir,
+      );
     });
 
   // ── say ────────────────────────────────────────────────────────────────────
   discuss
     .command('say <text>')
     .description('Send host message/instruction to the agent (kind=say)')
-    .option('-r, --run-id <runId>', 'Run id (defaults to AT_RUN_ID)')
-    .action(async (text: string, opts: { runId?: string }) => {
-      const runId = resolveRunId(opts.runId);
-      await postDiscussEntry(runId, { from: 'host', kind: 'say', text });
+    .option('-R, --run <runId>', 'Run id (defaults to AT_RUN_ID)')
+    .action(async (text: string, opts: { run?: string }, command: Command) => {
+      const globals = readGlobals(command);
+      const runId = resolveRunId(opts.run);
+      const stateDir = resolveStateDir(globals.stateDir as string | undefined);
+      await postDiscussEntry(runId, { from: 'host', kind: 'say', text }, stateDir);
     });
 
   // ── watch ──────────────────────────────────────────────────────────────────
   discuss
     .command('watch')
     .description('Follow the discussion thread live; prompt on questions when interactive')
-    .option('-r, --run-id <runId>', 'Run id (defaults to AT_RUN_ID)')
+    .option('-R, --run <runId>', 'Run id (defaults to AT_RUN_ID)')
     .option('-i, --interval <ms>', 'Poll interval ms', '500')
-    .action(async (opts: { runId?: string; interval: string }) => {
-      const runId = resolveRunId(opts.runId);
-      const stateDir = resolveStateDir(process.env.AT_STATE_DIR);
+    .action(async (opts: { run?: string; interval: string }, command: Command) => {
+      const globals = readGlobals(command);
+      const runId = resolveRunId(opts.run);
+      const stateDir = resolveStateDir(globals.stateDir as string | undefined);
       const intervalMs = Number(opts.interval);
       let lastId: string | undefined;
       const seen = new Set<string>();
@@ -249,8 +281,3 @@ export function registerDiscussCommand(program: Command): void {
       });
     });
 }
-
-// Silence unused-import warning for readFileSync/existsSync kept for future file-based fallbacks.
-void readFileSync;
-void existsSync;
-void path;

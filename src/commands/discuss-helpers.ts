@@ -16,6 +16,7 @@ export interface PostResult {
 export async function postDiscussEntry(
   runId: string,
   entry: Omit<DiscussEntry, 'id' | 'ts'>,
+  stateDir?: string,
 ): Promise<string> {
   const sseUrl = process.env.AT_SSE_URL;
   if (sseUrl) {
@@ -32,9 +33,9 @@ export async function postDiscussEntry(
     const json = (await res.json()) as PostResult;
     return json.id;
   }
-  const stateDir = resolveStateDir(process.env.AT_STATE_DIR);
-  const id = nextDiscussId(stateDir, runId);
+  const resolved = stateDir ?? resolveStateDir(process.env.AT_STATE_DIR);
+  const id = nextDiscussId(resolved, runId);
   const full: DiscussEntry = { ...entry, id, ts: new Date().toISOString() };
-  appendDiscuss(stateDir, runId, full);
+  appendDiscuss(resolved, runId, full);
   return id;
 }

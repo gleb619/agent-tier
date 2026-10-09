@@ -42,6 +42,12 @@ describe('at discuss command', () => {
 
   async function runDiscuss(args: string[]): Promise<void> {
     const program = new Command();
+    // Mirror the root-level options that shadow discuss subcommand options
+    // in the real CLI (e.g. --json, --state-dir) without pulling in unrelated
+    // defaults like --timeout that conflict with ask's own --timeout.
+    program.option('--state-dir <path>', 'State directory');
+    program.option('--json', 'Read JSON from stdin', false);
+    program.option('--retries <number>', 'Retries', '0');
     registerDiscussCommand(program);
     await program.parseAsync(['node', 'at', 'discuss', ...args]);
   }
@@ -276,5 +282,118 @@ describe('at discuss command', () => {
     }
     const out = stdoutChunks.join('');
     expect(out).toContain('followup');
+  });
+  // ── --state-dir flag (regression) ─────────────────────────────────────────
+
+  it('list --pending --json reads from --state-dir even after subcommand', async () => {
+    // Use a separate directory and clear the env override so we know the
+    // option is driving resolution.
+    const altState = mkdtempSync(path.join(tmpdir(), 'at-discuss-alt-'));
+    delete process.env.AT_STATE_DIR;
+    appendDiscuss(altState, 'r-alt', {
+      id: 'm1', from: 'agent', kind: 'question', text: 'q?',
+      ts: new Date().toISOString(),
+    });
+
+    const stdoutChunks: string[] = [];
+    const origWrite = process.stdout.write.bind(process.stdout);
+    (process.stdout.write as unknown) = ((s: string | Buffer): boolean => {
+      stdoutChunks.push(String(s));
+      return true;
+    });
+    try {
+      await runDiscuss(['list', 'r-alt', '--pending', '--json', '--state-dir', altState]);
+    } finally {
+      (process.stdout.write as unknown) = origWrite;
+      rmSync(altState, { recursive: true, force: true });
+    }
+    const parsed = JSON.parse(stdoutChunks.join(''));
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({ kind: 'question', text: 'q?' });
+  });
+
+  it('answer uses -R/--run and defaults to latest unanswered', async () => {
+    process.env.AT_RUN_ID = 'r-answer-run';
+    appendDiscuss(stateDir, 'r-answer-run', {
+      id: 'm1', from: 'agent', kind: 'question', text: 'go?',
+      ts: new Date().toISOString(),
+    });
+    await runDiscuss(['answer', 'yes', '-R', 'r-answer-run']);
+    const entries = readThread(stateDir, 'r-answer-run');
+    const ans = entries.find((e) => e.kind === 'answer');
+    expect(ans).toBeDefined();
+    expect(ans?.replyTo).toBe('m1');
+    expect(ans?.text).toBe('yes');
+  });
+
+  it('answer treats first mN positional as qid', async () => {
+    process.env.AT_RUN_ID = 'r-answer-qid';
+    appendDiscuss(stateDir, 'r-answer-qid', {
+      id: 'm1', from: 'agent', kind: 'question', text: 'q1?',
+      ts: new Date().toISOString(),
+    });
+    appendDiscuss(stateDir, 'r-answer-qid', {
+      id: 'm2', from: 'agent', kind: 'question', text: 'q2?',
+      ts: new Date().toISOString(),
+    });
+    await runDiscuss(['answer', 'm2', 'answer-two']);
+    const entries = readThread(stateDir, 'r-answer-qid');
+    const ans = entries.find((e) => e.kind === 'answer' && e.replyTo === 'm2');
+    expect(ans).toBeDefined();
+    expect(ans?.text).toBe('answer-two');
+  });
+
+  it('answer accepts --qid to override latest unanswered', async () => {
+    process.env.AT_RUN_ID = 'r-answer-qid-opt';
+    appendDiscuss(stateDir, 'r-answer-qid-opt', {
+      id: 'm1', from: 'agent', kind: 'question', text: 'q1?',
+      ts: new Date().toISOString(),
+    });
+    appendDiscuss(stateDir, 'r-answer-qid-opt', {
+      id: 'm2', from: 'agent', kind: 'question', text: 'q2?',
+      ts: new Date().toISOString(),
+    });
+    await runDiscuss(['answer', '--qid', 'm1', 'answer-one']);
+    const entries = readThread(stateDir, 'r-answer-qid-opt');
+    const ans = entries.find((e) => e.kind === 'answer' && e.replyTo === 'm1');
+    expect(ans).toBeDefined();
+    expect(ans?.text).toBe('answer-one');
+  });
+
+  it('answer accepts -R/--run and --state-dir D', async () => {
+    const altState = mkdtempSync(path.join(tmpdir(), 'at-discuss-R-'));
+    delete process.env.AT_RUN_ID;
+    delete process.env.AT_STATE_DIR;
+    appendDiscuss(altState, 'r-R', {
+      id: 'm1', from: 'agent', kind: 'question', text: 'go?',
+      ts: new Date().toISOString(),
+    });
+
+    await runDiscuss(['answer', 'yes', '-R', 'r-R', '--state-dir', altState]);
+    const entries = readThread(altState, 'r-R');
+    const ans = entries.find((e) => e.kind === 'answer');
+    expect(ans).toBeDefined();
+    expect(ans?.replyTo).toBe('m1');
+    expect(ans?.text).toBe('yes');
+    rmSync(altState, { recursive: true, force: true });
+  });
+
+  it('answer accepts -R/--run and --state-dir D', async () => {
+    const altState = mkdtempSync(path.join(tmpdir(), 'at-discuss-R-'));
+    delete process.env.AT_RUN_ID;
+    delete process.env.AT_STATE_DIR;
+    appendDiscuss(altState, 'r-R', {
+      id: 'm1', from: 'agent', kind: 'question', text: 'go?',
+      ts: new Date().toISOString(),
+    });
+
+    await runDiscuss(['answer', 'yes', '-R', 'r-R', '--state-dir', altState]);
+    const entries = readThread(altState, 'r-R');
+    const ans = entries.find((e) => e.kind === 'answer');
+    expect(ans).toBeDefined();
+    expect(ans?.replyTo).toBe('m1');
+    expect(ans?.text).toBe('yes');
+    rmSync(altState, { recursive: true, force: true });
   });
 });

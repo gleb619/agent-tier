@@ -20,7 +20,7 @@ export function submitPrompt(prompt: string, opts: PromptSubmitOpts): void {
     args.push("-s");
   }
   if (opts.retries > 0) {
-    args.push("-r", String(opts.retries));
+    args.push("--retries", String(opts.retries));
   }
 
   if (opts.mode === "detached") {
