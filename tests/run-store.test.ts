@@ -240,7 +240,8 @@ describe('detectStuck', () => {
     const runs: RunRecord[] = [
       { ...mockRun, runId: 'stuck', pid: process.pid, status: 'running', startedAt: started31MinAgo, logFile: '/nonexistent/log.log' },
     ];
-    const result = detectStuck(runs);
+    // stub: process has done zero CPU (truly idle)
+    const result = detectStuck(runs, { getProcessTicks: () => 0 });
     expect(result[0].runId).toBe('stuck');
     expect(result[0].status).toBe('stuck');
   });
@@ -252,7 +253,7 @@ describe('detectStuck', () => {
     const runs: RunRecord[] = [
       { ...mockRun, runId: 'not-stuck', pid: process.pid, status: 'running', startedAt: started29MinAgo, logFile: '/nonexistent/log.log' },
     ];
-    const result = detectStuck(runs);
+    const result = detectStuck(runs, { getProcessTicks: () => 0 });
     expect(result[0].runId).toBe('not-stuck');
     expect(result[0].status).toBe('running');
   });
@@ -271,6 +272,60 @@ describe('detectStuck', () => {
     expect(result.find((r) => r.runId === 'stuck1')?.status).toBe('failed');
     expect(result.find((r) => r.runId === 'stuck2')?.status).toBe('failed');
     expect(result.find((r) => r.runId === 'ok')?.status).toBe('running');
+  });
+
+  it('keeps active process running when log silent (Claude-family buffering)', () => {
+    // Process is alive and accruing CPU, but log file has been silent > 30 min
+    // because claude -p buffers stdout until exit. Old heuristic flagged this as
+    // stuck; new heuristic checks process activity first.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-31T12:00:00Z'));
+    const started31MinAgo = new Date('2026-05-31T11:29:00Z').toISOString();
+    const runs: RunRecord[] = [
+      { ...mockRun, runId: 'active', pid: process.pid, status: 'running', startedAt: started31MinAgo, logFile: '/nonexistent/log.log' },
+    ];
+    // stub: process has done measurable CPU (>100ms)
+    const stubTicks = (_pid: number) => 150;
+    const result = detectStuck(runs, { getProcessTicks: stubTicks });
+    expect(result.find((r) => r.runId === 'active')?.status).toBe('running');
+  });
+
+  it('marks truly idle process as stuck when log silent > 30 min', () => {
+    // Alive but no CPU activity for 30+ min → real stuck
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-31T12:00:00Z'));
+    const started31MinAgo = new Date('2026-05-31T11:29:00Z').toISOString();
+    const runs: RunRecord[] = [
+      { ...mockRun, runId: 'idle', pid: process.pid, status: 'running', startedAt: started31MinAgo, logFile: '/nonexistent/log.log' },
+    ];
+    const stubTicks = (_pid: number) => 0;
+    const result = detectStuck(runs, { getProcessTicks: stubTicks });
+    expect(result.find((r) => r.runId === 'idle')?.status).toBe('stuck');
+  });
+
+  it('marks process with unknown ticks (procfs unavailable) as stuck when log silent', () => {
+    // Defensive: if /proc read fails, fall back to old heuristic
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-31T12:00:00Z'));
+    const started31MinAgo = new Date('2026-05-31T11:29:00Z').toISOString();
+    const runs: RunRecord[] = [
+      { ...mockRun, runId: 'unknown', pid: process.pid, status: 'running', startedAt: started31MinAgo, logFile: '/nonexistent/log.log' },
+    ];
+    const stubTicks = (_pid: number) => null;
+    const result = detectStuck(runs, { getProcessTicks: stubTicks });
+    expect(result.find((r) => r.runId === 'unknown')?.status).toBe('stuck');
+  });
+
+  it('marks process at exact CPU threshold (99ms) as stuck — below means idle', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-31T12:00:00Z'));
+    const started31MinAgo = new Date('2026-05-31T11:29:00Z').toISOString();
+    const runs: RunRecord[] = [
+      { ...mockRun, runId: 'borderline', pid: process.pid, status: 'running', startedAt: started31MinAgo, logFile: '/nonexistent/log.log' },
+    ];
+    const stubTicks = (_pid: number) => 99;
+    const result = detectStuck(runs, { getProcessTicks: stubTicks });
+    expect(result.find((r) => r.runId === 'borderline')?.status).toBe('stuck');
   });
 });
 

@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
 import { getStateFilePath } from './state-dir';
 import { withLock } from './lock';
-import { isPidAlive } from './process-utils';
+import { isPidAlive, getProcessTicks } from './process-utils';
 
 export interface RunRecord {
   runId: string;
@@ -31,6 +31,7 @@ export interface RunsIndex {
 const DEFAULT_MAX_RUNS = 30;
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const STUCK_SILENCE_MS = 30 * 60 * 1000; // 30 min of no log writes
+const STUCK_CPU_MS_THRESHOLD = 100; // any measurable work — jiffy granularity is 10ms
 
 export function getRunsFile(stateDir: string): string {
   return path.join(stateDir, 'runs.jsonl');
@@ -136,7 +137,11 @@ export function getLogMtime(logFile: string): number | null {
 }
 
 /** Read-only: returns annotated copy; caller must persist via saveRuns() if needed. */
-export function detectStuck(runs: RunRecord[]): RunRecord[] {
+export function detectStuck(
+  runs: RunRecord[],
+  opts?: { getProcessTicks?: (pid: number) => number | null },
+): RunRecord[] {
+  const ticks = opts?.getProcessTicks ?? getProcessTicks;
   const now = Date.now();
   return runs.map((r) => {
     if (r.status !== 'running') return r;
@@ -150,7 +155,19 @@ export function detectStuck(runs: RunRecord[]): RunRecord[] {
     }
 
     if (logSilence > STUCK_SILENCE_MS) {
-      return { ...r, status: 'stuck' as const };
+      // Claude-family agents (claude -p etc.) buffer stdout until exit, so
+      // the log stays empty for the whole run even while the process is
+      // actively running sub-agents. Use CPU activity as the tie-breaker:
+      // a process doing meaningful work is not stuck regardless of log silence.
+      const cpuMs = ticks(r.pid);
+      if (cpuMs === null) {
+        // /proc unreadable (gone, no perm). Fall back to old heuristic.
+        return { ...r, status: 'stuck' as const };
+      }
+      if (cpuMs < STUCK_CPU_MS_THRESHOLD) {
+        return { ...r, status: 'stuck' as const };
+      }
+      return r;
     }
 
     return r;
