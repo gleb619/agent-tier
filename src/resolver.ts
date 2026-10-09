@@ -24,10 +24,6 @@ export interface RunOptions {
   callback?: string;
   sse: boolean;
   ssePort: number;
-  /** Experimental: ask a local Ollama model to name the session (default: off). */
-  namer: boolean;
-  namerModel?: string;
-  namerUrl?: string;
   /** Set by `run()` after namer runs; consumed by `defaultSpawner`. */
   runName?: string;
   /**
@@ -59,9 +55,6 @@ interface ArgvOptions {
   callback?: string;
   sse?: boolean | string;
   ssePort?: string | number;
-  namer?: boolean;
-  namerModel?: string;
-  namerUrl?: string;
   verify?: string;
 }
 
@@ -74,9 +67,6 @@ export interface ParsedJson {
   callback?: string;
   sse?: boolean;
   ssePort?: number;
-  namer?: boolean;
-  namerModel?: string;
-  namerUrl?: string;
   verify?: string;
 }
 
@@ -137,9 +127,6 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     callback: argv.callback?.trim() || undefined,
     sse,
     ssePort,
-    namer: argv.namer === true,
-    namerModel: argv.namerModel?.trim() || undefined,
-    namerUrl: argv.namerUrl?.trim() || undefined,
     verify: argv.verify?.trim() || undefined,
   };
 }
@@ -187,9 +174,6 @@ export function parseJsonInput(raw: string): ParsedJson {
     callback: (parsed.callback as string | undefined)?.trim() || undefined,
     sse: parsed.sse === true,
     ssePort,
-    namer: parsed.namer === true,
-    namerModel: (parsed.namerModel as string | undefined)?.trim() || undefined,
-    namerUrl: (parsed.namerUrl as string | undefined)?.trim() || undefined,
     verify: (parsed.verify as string | undefined)?.trim() || undefined,
   };
 }

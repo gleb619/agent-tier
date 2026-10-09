@@ -412,8 +412,8 @@ export async function run(
     // when the orchestrator resolves.
     const runId = generateRunId();
     const namePromise: Promise<{ name: string; provider: string | null } | null> =
-      options.namer && !options.runName
-        ? generateSessionName(options.prompt, options.stateDir).catch(() => null)
+      !options.runName
+        ? (generateSessionName(options.prompt, options.stateDir) as Promise<{ name: string; provider: string | null }>).catch(() => null)
         : Promise.resolve(null);
 
     const stateFilePath = getStateFilePath(options.stateDir);
@@ -460,7 +460,7 @@ export async function run(
       try {
         const exitCode = await spawner(agent, options, runId);
         // Wire namer result to run-store now that runId is known (fire-and-forget)
-        if (options.namer && !options.runName) {
+        if (!options.runName) {
           namePromise.then(async (result) => {
             if (!result || result.provider === null) return; // fallback, no point updating
             void updateRun(options.stateDir, runId, { name: result.name }).catch(() => {});

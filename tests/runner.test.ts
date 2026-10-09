@@ -12,6 +12,9 @@ import os from 'os';
 vi.mock('../src/scheduler');
 vi.mock('../src/health');
 vi.mock('../src/run-watch');
+vi.mock('../src/namer', () => ({
+  generateSessionName: vi.fn(() => Promise.resolve({ name: 'test-name', provider: 'mock' as string | null })),
+}));
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   const { EventEmitter } = await import('events');
@@ -50,7 +53,6 @@ const baseOptions: RunOptions = {
   timeout: 3600000,
   sse: false,
   ssePort: 0,
-  namer: false,
 };
 
 const agents = [makeAgent('a'), makeAgent('b'), makeAgent('c')];
@@ -548,28 +550,12 @@ describe('defaultSpawner — --verify hook', () => {
   });
 });
 
-describe('run — namer integration (experimental)', () => {
-  // Mock the orchestrator's generateSessionName (T09 wiring target).
-  vi.mock('../src/namer', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('../src/namer')>();
-    return {
-      ...actual,
-      generateSessionName: vi.fn(),
-    };
-  });
-
-  it('does not call namer when namer flag is false', async () => {
-    const { generateSessionName } = await import('../src/namer');
-    const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    await run({ ...baseOptions, namer: false }, agents, spawner);
-    expect(generateSessionName).not.toHaveBeenCalled();
-  });
-
-  it('calls namer when namer flag is true (fire-and-forget)', async () => {
+describe('run — namer integration (always-on)', () => {
+  it('calls namer by default (fire-and-forget)', async () => {
     const { generateSessionName } = await import('../src/namer');
     (generateSessionName as Mock).mockResolvedValue({ name: 'refactor-auth-middleware-please', provider: 'local-ollama' });
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    await run({ ...baseOptions, namer: true, prompt: 'refactor auth' }, agents, spawner);
+    await run({ ...baseOptions, prompt: 'refactor auth' }, agents, spawner);
     expect(generateSessionName).toHaveBeenCalledTimes(1);
   });
 
@@ -580,7 +566,7 @@ describe('run — namer integration (experimental)', () => {
       expect((opts as RunOptions).runName).toBeUndefined();
       return 0;
     });
-    await run({ ...baseOptions, namer: true }, agents, spawner);
+    await run({ ...baseOptions }, agents, spawner);
     expect(spawner).toHaveBeenCalledTimes(1);
   });
 });

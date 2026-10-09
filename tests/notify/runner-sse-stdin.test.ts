@@ -71,7 +71,6 @@ describe('runner sse stdin (agy-style agents)', () => {
       timeout: 10000,
       sse: true,
       ssePort: 0,
-      namer: false,
     };
   }
 

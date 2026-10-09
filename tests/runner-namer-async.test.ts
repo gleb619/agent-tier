@@ -50,7 +50,6 @@ const baseOptions: RunOptions = {
   timeout: 3600000,
   sse: false,
   ssePort: 0,
-  namer: false,
 };
 
 const agents = [makeAgent('mock')];
@@ -71,15 +70,9 @@ beforeEach(() => {
 });
 
 describe('run — async namer (T09)', () => {
-  it('does NOT call namer when --namer flag is false', async () => {
+  it('calls namer by default', async () => {
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    await run({ ...baseOptions, namer: false }, agents, spawner);
-    expect(generateSessionNameMock).not.toHaveBeenCalled();
-  });
-
-  it('calls namer when --namer flag is true', async () => {
-    const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    await run({ ...baseOptions, namer: true }, agents, spawner);
+    await run({ ...baseOptions }, agents, spawner);
     expect(generateSessionNameMock).toHaveBeenCalledTimes(1);
     const call = generateSessionNameMock.mock.calls[0]!;
     expect(call[0]).toBe(baseOptions.prompt);
@@ -93,7 +86,7 @@ describe('run — async namer (T09)', () => {
     let spawnCalled = false;
     const spawner: Spawner = vi.fn(async () => { spawnCalled = true; return 0; });
 
-    const runP = run({ ...baseOptions, namer: true }, agents, spawner);
+    const runP = run({ ...baseOptions }, agents, spawner);
 
     // Wait one microtask — spawner must have been called already since namer is unresolved
     await Promise.resolve();
@@ -108,7 +101,7 @@ describe('run — async namer (T09)', () => {
 
   it('updateRun is called with the namer-resolved name (fire-and-forget)', async () => {
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    await run({ ...baseOptions, namer: true }, agents, spawner);
+    await run({ ...baseOptions }, agents, spawner);
     // Microtask flush — fire-and-forget runs after run() returns
     await new Promise((r) => setTimeout(r, 10));
     expect(updateRunMock).toHaveBeenCalledWith(
@@ -121,7 +114,7 @@ describe('run — async namer (T09)', () => {
   it('no updateRun when namer returns fallback (provider=null)', async () => {
     generateSessionNameMock.mockResolvedValue({ name: 'unnamed', provider: null });
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    await run({ ...baseOptions, namer: true }, agents, spawner);
+    await run({ ...baseOptions }, agents, spawner);
     await new Promise((r) => setTimeout(r, 10));
     expect(updateRunMock).not.toHaveBeenCalled();
   });
@@ -129,7 +122,7 @@ describe('run — async namer (T09)', () => {
   it('updateRun is called even if namer promise rejects (silent fail)', async () => {
     generateSessionNameMock.mockRejectedValue(new Error('namer crashed'));
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    await run({ ...baseOptions, namer: true }, agents, spawner);
+    await run({ ...baseOptions }, agents, spawner);
     await new Promise((r) => setTimeout(r, 10));
     expect(updateRunMock).not.toHaveBeenCalled(); // because .catch(() => null) → provider=null → no update
   });
@@ -138,7 +131,7 @@ describe('run — async namer (T09)', () => {
     let resolveName!: (v: { name: string; provider: string }) => void;
     generateSessionNameMock.mockImplementation(() => new Promise((r) => { resolveName = r; }));
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    const runP = run({ ...baseOptions, namer: true }, agents, spawner);
+    const runP = run({ ...baseOptions }, agents, spawner);
     // Wait for run() to finish
     await runP;
     // Now resolve namer — must not throw unhandled rejection
@@ -162,7 +155,7 @@ describe('run — SSE rename event (T10)', () => {
     vi.resetModules();
     const { run: runFresh } = await import('../src/runner');
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    await runFresh({ ...baseOptions, namer: true, sse: true }, agents, spawner);
+    await runFresh({ ...baseOptions, sse: true }, agents, spawner);
     await new Promise((r) => setTimeout(r, 10));
     const renameCall = hubPublish.mock.calls.find((c) => (c[0] as { type: string }).type === 'rename');
     expect(renameCall).toBeDefined();
@@ -183,7 +176,7 @@ describe('run — SSE rename event (T10)', () => {
     vi.resetModules();
     const { run: runFresh } = await import('../src/runner');
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    await runFresh({ ...baseOptions, namer: true, sse: true }, agents, spawner);
+    await runFresh({ ...baseOptions, sse: true }, agents, spawner);
     await new Promise((r) => setTimeout(r, 10));
     const renameCall = hubPublish.mock.calls.find((c) => (c[0] as { type: string }).type === 'rename');
     expect(renameCall).toBeUndefined();

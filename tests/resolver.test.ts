@@ -120,54 +120,6 @@ describe('resolveFromArgs', () => {
   });
 });
 
-describe('resolveFromArgs — namer flag (experimental)', () => {
-  it('defaults namer to false', () => {
-    expect(resolveFromArgs({ prompt: 'hello' }).namer).toBe(false);
-  });
-
-  it('enables namer when flag is true', () => {
-    expect(resolveFromArgs({ prompt: 'hello', namer: true }).namer).toBe(true);
-  });
-
-  it('passes through namerModel', () => {
-    expect(resolveFromArgs({ prompt: 'hello', namer: true, namerModel: 'gemma3:4b' }).namerModel).toBe('gemma3:4b');
-  });
-
-  it('passes through namerUrl', () => {
-    expect(resolveFromArgs({ prompt: 'hello', namer: true, namerUrl: 'http://x:11434' }).namerUrl).toBe('http://x:11434');
-  });
-
-  it('normalizes whitespace-only namerModel to undefined', () => {
-    expect(resolveFromArgs({ prompt: 'hello', namer: true, namerModel: '   ' }).namerModel).toBeUndefined();
-  });
-
-  it('normalizes empty namerUrl to undefined', () => {
-    expect(resolveFromArgs({ prompt: 'hello', namer: true, namerUrl: '' }).namerUrl).toBeUndefined();
-  });
-});
-
-describe('parseJsonInput — namer flag (experimental)', () => {
-  it('defaults namer to false when missing', () => {
-    expect(parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hi' })).namer).toBe(false);
-  });
-
-  it('reads namer=true from JSON', () => {
-    expect(parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hi', namer: true })).namer).toBe(true);
-  });
-
-  it('reads namerModel from JSON', () => {
-    expect(parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hi', namer: true, namerModel: 'gemma:7b' })).namerModel).toBe('gemma:7b');
-  });
-
-  it('reads namerUrl from JSON', () => {
-    expect(parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hi', namer: true, namerUrl: 'http://h:11434' })).namerUrl).toBe('http://h:11434');
-  });
-
-  it('normalizes whitespace-only namerModel in JSON to undefined', () => {
-    expect(parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hi', namer: true, namerModel: '   ' })).namerModel).toBeUndefined();
-  });
-});
-
 describe('parseJsonInput edge cases', () => {
   it('throws on malformed JSON', () => {
     expect(() => parseJsonInput('{invalid json}')).toThrow();

@@ -5,16 +5,6 @@ import { resolveFromArgs, parseJsonInput } from '../resolver';
 import { run } from '../runner';
 import { loadConfig, applyTierOverrides } from '../config';
 
-/** T11: warn (once per run) when deprecated --namer-model / --namer-url are set. */
-export function warnDeprecatedNamerFlags(opts: { namerModel?: unknown; namerUrl?: unknown }): void {
-  if (typeof opts.namerModel === 'string' && opts.namerModel.length > 0) {
-    console.warn('[at] --namer-model is deprecated; configure ~/.at/namer.json instead');
-  }
-  if (typeof opts.namerUrl === 'string' && opts.namerUrl.length > 0) {
-    console.warn('[at] --namer-url is deprecated; configure ~/.at/namer.json instead');
-  }
-}
-
 async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) return '';
   return new Promise((resolve) => {
@@ -52,20 +42,11 @@ export function registerDefaultCommand(program: Command): void {
     )
     .option('--sse [port]', 'Enable SSE live-progress hub (default port 7777, 0=random)')
     .option(
-      '--namer',
-      '[experimental] Ask a local Ollama model (default: gemma3:1b) to name the session from the prompt. Persisted on the run record and shown in `at status`. Off by default.',
-      false,
-    )
-    .option('--namer-model <name>', '[DEPRECATED] Use namer.json config; this flag is ignored')
-    .option('--namer-url <url>', '[DEPRECATED] Use namer.json config; this flag is ignored')
-    .option(
       '--json',
       'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0}',
       false,
     )
     .action(async (opts) => {
-      // T11: --namer-model / --namer-url are deprecated no-op shims.
-      warnDeprecatedNamerFlags(opts);
       try {
         let runOptions;
         const effectiveAgents = applyTierOverrides([...AGENTS, ...loadGenericAgents()], loadConfig());
@@ -91,9 +72,6 @@ export function registerDefaultCommand(program: Command): void {
             verify: parsed.verify ?? opts.verify,
             sse: parsed.sse,
             ssePort: parsed.ssePort,
-            namer: parsed.namer ?? (opts.namer as boolean),
-            namerModel: parsed.namerModel ?? (opts.namerModel as string | undefined),
-            namerUrl: parsed.namerUrl ?? (opts.namerUrl as string | undefined),
           });
         } else {
           const stdinData = !opts.prompt && !process.stdin.isTTY ? await readStdin() : '';
@@ -113,9 +91,6 @@ export function registerDefaultCommand(program: Command): void {
             callback: opts.callback,
             verify: opts.verify as string | undefined,
             sse: opts.sse,
-            namer: opts.namer as boolean,
-            namerModel: opts.namerModel as string | undefined,
-            namerUrl: opts.namerUrl as string | undefined,
           });
         }
 

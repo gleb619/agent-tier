@@ -51,7 +51,6 @@ describe('runner sse', () => {
       timeout: 10000,
       sse: true,
       ssePort: 0,
-      namer: false,
     };
   }
 
