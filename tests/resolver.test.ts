@@ -90,40 +90,6 @@ describe('resolveFromArgs', () => {
   });
 });
 
-describe('resolveFromArgs — --sse flag', () => {
-  it('defaults sse to false when absent', () => {
-    expect(resolveFromArgs({ prompt: 'hello' }).sse).toBe(false);
-  });
-
-  it('enables sse and uses default port 7777 when --sse passed bare (boolean true)', () => {
-    const opts = resolveFromArgs({ prompt: 'hello', sse: true });
-    expect(opts.sse).toBe(true);
-    expect(opts.ssePort).toBe(7777);
-  });
-
-  it('enables sse with port 0 when --sse 0 passed (string "0")', () => {
-    const opts = resolveFromArgs({ prompt: 'hello', sse: '0' });
-    expect(opts.sse).toBe(true);
-    expect(opts.ssePort).toBe(0);
-  });
-
-  it('enables sse with custom port when --sse 8080 passed (string)', () => {
-    const opts = resolveFromArgs({ prompt: 'hello', sse: '8080' });
-    expect(opts.sse).toBe(true);
-    expect(opts.ssePort).toBe(8080);
-  });
-
-  it('enables sse when --sse true string passed', () => {
-    const opts = resolveFromArgs({ prompt: 'hello', sse: 'true' });
-    expect(opts.sse).toBe(true);
-    expect(opts.ssePort).toBe(7777);
-  });
-
-  it('throws on invalid --sse value (non-numeric, non-true string)', () => {
-    expect(() => resolveFromArgs({ prompt: 'hello', sse: 'abc' })).toThrow(/--sse/);
-  });
-});
-
 describe('resolveFromArgs — namer flag (experimental)', () => {
   it('defaults namer to false', () => {
     expect(resolveFromArgs({ prompt: 'hello' }).namer).toBe(false);

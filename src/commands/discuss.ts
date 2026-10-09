@@ -57,6 +57,14 @@ export function registerDiscussCommand(program: Command): void {
         return;
       }
       if (opts.default !== undefined) {
+        // Record the default as a synthetic answer so the question does not
+        // appear in `list --pending` after timeout.
+        await postDiscussEntry(runId, {
+          from: 'host',
+          kind: 'answer',
+          text: opts.default,
+          replyTo: id,
+        });
         process.stdout.write(opts.default + '\n');
         return;
       }
