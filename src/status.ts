@@ -131,7 +131,8 @@ function formatNameCell(name: string): string {
 }
 
 export function formatStatusTable(runs: RunRecord[]): string {
-  if (runs.length === 0) return '[at] no runs found';
+  const headerSection = '# Runs\n\n';
+  if (runs.length === 0) return headerSection + '[at] no runs found';
 
   const now = Date.now();
   const rows = runs.map((r) => {
@@ -183,7 +184,7 @@ export function formatStatusTable(runs: RunRecord[]): string {
     padRight(r.log, colLog) + ' |',
   );
 
-  return [header, divider, ...lines].join('\n');
+  return headerSection + [header, divider, ...lines].join('\n');
 }
 
 export function formatStatusJson(runs: RunRecord[]): string {
@@ -194,7 +195,7 @@ export function formatStateReport(stateDir: string): string {
   const report = buildStateReport(stateDir);
   const lines: string[] = [];
 
-  lines.push('### State');
+  lines.push('## State');
   lines.push('');
   lines.push('**Scheduler:**');
 

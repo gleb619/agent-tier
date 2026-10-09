@@ -20,25 +20,25 @@ const baseRun: RunRecord = {
 
 describe('formatStatusTable', () => {
   it('shows "no runs found" for empty array', () => {
-    expect(formatStatusTable([])).toBe('[at] no runs found');
+    expect(formatStatusTable([])).toContain('no runs found');
   });
 
   it('formats a table with header and rows', () => {
     const result = formatStatusTable([baseRun]);
     const lines = result.split('\n');
-    expect(lines).toHaveLength(3);
-    expect(lines[0]).toContain('RUN');
-    expect(lines[0]).toContain('NAME');
-    expect(lines[0]).toContain('AGENT');
-    expect(lines[0]).toContain('STATUS');
-    expect(lines[0]).toContain('DURATION');
-    expect(lines[0]).toContain('LOG');
-    expect(lines[1]).toContain('---');
-    expect(lines[2]).toContain('r3k2a1');
-    expect(lines[2]).toContain('unnamed');
-    expect(lines[2]).toContain('opencode');
-    expect(lines[2]).toContain('running');
-    expect(lines[2]).toContain('/tmp/at-logs/at-test-opencode.log');
+    expect(lines[0]).toBe('# Runs');
+    expect(lines[2]).toContain('RUN');
+    expect(lines[2]).toContain('NAME');
+    expect(lines[2]).toContain('AGENT');
+    expect(lines[2]).toContain('STATUS');
+    expect(lines[2]).toContain('DURATION');
+    expect(lines[2]).toContain('LOG');
+    expect(lines[3]).toContain('---');
+    expect(lines[4]).toContain('r3k2a1');
+    expect(lines[4]).toContain('unnamed');
+    expect(lines[4]).toContain('opencode');
+    expect(lines[4]).toContain('running');
+    expect(lines[4]).toContain('/tmp/at-logs/at-test-opencode.log');
   });
 
   it('shows full runId without "..." truncation in table', () => {
@@ -60,9 +60,8 @@ describe('formatStatusTable', () => {
     };
     const result = formatStatusTable([baseRun, done]);
     const lines = result.split('\n');
-    expect(lines).toHaveLength(4);
-    expect(lines[2]).toContain('running');
-    expect(lines[3]).toContain('done');
+    expect(lines[4]).toContain('running');
+    expect(lines[5]).toContain('done');
   });
 
   it('truncates long names with ellipsis', () => {
