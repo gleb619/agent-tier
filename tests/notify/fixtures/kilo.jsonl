@@ -1,0 +1,3 @@
+{"type":"step_start","timestamp":1791520740045,"sessionID":"ses_kilo_abc","part":{"id":"prt_1","type":"step-start","messageID":"msg_1"}}
+{"type":"text","timestamp":1791520740805,"sessionID":"ses_kilo_abc","part":{"id":"prt_2","type":"text","text":"Hi","messageID":"msg_1"},"time":{"start":1791520740799,"end":1791520740803}}
+{"type":"step_finish","timestamp":1791520740813,"sessionID":"ses_kilo_abc","part":{"id":"prt_3","type":"step-finish","reason":"stop","messageID":"msg_1","tokens":{"total":100,"input":99,"output":1,"reasoning":0},"cost":0}}

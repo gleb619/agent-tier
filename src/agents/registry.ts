@@ -34,12 +34,6 @@ export const AGENTS: AgentDef[] = [
 
   // Tier 2: dev / QA (default)
   {
-    name: 'blackbox',
-    tier: 2,
-    bin: () => process.env.BLACKBOX_BIN ?? `${LOCAL_BIN}/blackbox`,
-    buildArgs: (prompt) => ['-p', prompt, '--yolo'],
-  },
-  {
     name: 'mm-code',
     tier: 2,
     bin: () => process.env.MM_CODE_BIN ?? `${LOCAL_BIN}/mm-code`,
@@ -89,38 +83,11 @@ export const AGENTS: AgentDef[] = [
     promptMode: 'stdin',
   },
   {
-    name: 'goose',
+    name: 'kiro',
     tier: 3,
-    bin: () => process.env.GOOSE_BIN ?? `${LOCAL_BIN}/goose`,
-    buildArgs: (prompt, model) => [
-      'run',
-      '--text', prompt,
-      '--model', model ?? OLLAMA_MODEL,
-      '--provider', 'ollama',
-      '--no-session',
-      '-q',
-    ],
-    buildEnv: () => ({
-      GOOSE_PROVIDER: process.env.GOOSE_PROVIDER ?? 'ollama',
-    }),
+    bin: () => process.env.KIRO_BIN ?? `${NODE_BIN}/kiro-cli`,
+    buildArgs: (prompt) => ['chat', '--no-interactive', '--trust-all-tools', prompt],
   },
-  {
-    name: 'aider',
-    tier: 3,
-    bin: () => process.env.AIDER_BIN ?? `${LOCAL_BIN}/aider`,
-    buildArgs: (prompt, model) => [
-      '--model', `ollama/${model ?? OLLAMA_MODEL}`,
-      '--message', prompt,
-      '--yes-always',
-      '--no-git',
-      '--no-show-model-warnings',
-      '--exit',
-    ],
-    buildEnv: () => ({
-      OLLAMA_API_BASE: process.env.OLLAMA_API_BASE ?? 'http://127.0.0.1:11434',
-    }),
-  },
-
   {
     name: 'cursor',
     tier: 3,

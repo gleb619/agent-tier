@@ -121,6 +121,15 @@ function padRight(s: string, len: number): string {
   return s.length >= len ? s : s + ' '.repeat(len - s.length);
 }
 
+const NAME_COL_MAX = 24;
+
+/** Truncate a session name for table display. */
+function formatNameCell(name: string): string {
+  if (!name) return '';
+  if (name.length <= NAME_COL_MAX) return name;
+  return name.slice(0, NAME_COL_MAX - 1) + '…';
+}
+
 export function formatStatusTable(runs: RunRecord[]): string {
   if (runs.length === 0) return '[at] no runs found';
 
@@ -128,10 +137,10 @@ export function formatStatusTable(runs: RunRecord[]): string {
   const rows = runs.map((r) => {
     const endTime = r.finishedAt ? new Date(r.finishedAt).getTime() : now;
     const duration = formatDuration(endTime - new Date(r.startedAt).getTime());
-    const truncate = (str: string): string => str.length > 20 ? str.slice(0, 17) + '...' : str;
 
     return {
-      runId: truncate(r.runId),
+      runId: r.runId,
+      name: formatNameCell(r.name),
       agent: r.agent,
       status: statusIcon(r.status),
       duration,
@@ -140,12 +149,14 @@ export function formatStatusTable(runs: RunRecord[]): string {
   });
 
   const colRun = Math.max(20, ...rows.map((r) => r.runId.length));
+  const colName = Math.max(4, ...rows.map((r) => r.name.length));
   const colAgent = Math.max(10, ...rows.map((r) => r.agent.length));
   const colStatus = 7;
   const colDur = Math.max(8, ...rows.map((r) => r.duration.length));
 
   const header =
     padRight('RUN', colRun) + '  ' +
+    padRight('NAME', colName) + '  ' +
     padRight('AGENT', colAgent) + '  ' +
     padRight('STATUS', colStatus) + '  ' +
     padRight('DURATION', colDur) + '  ' +
@@ -153,6 +164,7 @@ export function formatStatusTable(runs: RunRecord[]): string {
 
   const lines = rows.map((r) =>
     padRight(r.runId, colRun) + '  ' +
+    padRight(r.name, colName) + '  ' +
     padRight(r.agent, colAgent) + '  ' +
     padRight(r.status, colStatus) + '  ' +
     padRight(r.duration, colDur) + '  ' +

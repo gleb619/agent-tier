@@ -1,0 +1,3 @@
+{"ts":"2026-10-09T04:38:30.745Z","type":"agent_event","event":{"type":"content_start","contentType":"text","text":"Hi","accumulated":"Hi"}}
+{"ts":"2026-10-09T04:39:31.575Z","type":"agent_event","event":{"type":"iteration_end","iteration":1,"hadToolCalls":false,"toolCallCount":0}}
+{"ts":"2026-10-09T04:39:31.577Z","type":"run_result","finishReason":"completed","text":"Said hi to the user.","iterations":1,"durationMs":1000}

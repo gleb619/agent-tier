@@ -6,13 +6,13 @@ import { resolveStateDir } from '../src/state-dir';
 describe('parseJsonInput', () => {
   it('parses full JSON payload', () => {
     const opts = parseJsonInput(JSON.stringify({
-      agent: 'blackbox',
+      agent: 'mm-code',
       prompt: 'hello',
       model: 'gpt-4',
       cwd: '/tmp',
       env: { FOO: 'bar' },
     }));
-    expect(opts.agent).toBe('blackbox');
+    expect(opts.agent).toBe('mm-code');
     expect(opts.prompt).toBe('hello');
     expect(opts.model).toBe('gpt-4');
     expect(opts.cwd).toBe('/tmp');
@@ -24,7 +24,7 @@ describe('parseJsonInput', () => {
   });
 
   it('throws when prompt is missing', () => {
-    expect(() => parseJsonInput(JSON.stringify({ agent: 'blackbox' }))).toThrow('prompt');
+    expect(() => parseJsonInput(JSON.stringify({ agent: 'mm-code' }))).toThrow('prompt');
   });
 
   it('throws on invalid JSON', () => {
@@ -104,7 +104,7 @@ describe('parseJsonInput edge cases', () => {
   });
 
   it('throws when prompt field is missing', () => {
-    expect(() => parseJsonInput(JSON.stringify({ agent: 'blackbox' }))).toThrow('prompt');
+    expect(() => parseJsonInput(JSON.stringify({ agent: 'mm-code' }))).toThrow('prompt');
   });
 
   it('returns valid parsed input with all fields', () => {
@@ -124,10 +124,10 @@ describe('parseJsonInput edge cases', () => {
 
   it('handles JSON with only required fields (agent + prompt)', () => {
     const opts = parseJsonInput(JSON.stringify({
-      agent: 'blackbox',
+      agent: 'mm-code',
       prompt: 'minimal test',
     }));
-    expect(opts.agent).toBe('blackbox');
+    expect(opts.agent).toBe('mm-code');
     expect(opts.prompt).toBe('minimal test');
     expect(opts.model).toBeUndefined();
     expect(opts.cwd).toBeUndefined();
@@ -148,7 +148,7 @@ describe('parseJsonInput edge cases', () => {
   it('throws when env contains a non-string value', () => {
     expect(() =>
       parseJsonInput(JSON.stringify({
-        agent: 'blackbox',
+        agent: 'mm-code',
         prompt: 'hello',
         env: { FOO: 'bar', BAD: 123 },
       }))
@@ -156,12 +156,12 @@ describe('parseJsonInput edge cases', () => {
   });
 
   it('includes callback in parsed JSON', () => {
-    const opts = parseJsonInput(JSON.stringify({ agent: 'blackbox', prompt: 'hello', callback: 'echo done' }));
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello', callback: 'echo done' }));
     expect(opts.callback).toBe('echo done');
   });
 
   it('normalizes whitespace-only callback in JSON to undefined', () => {
-    const opts = parseJsonInput(JSON.stringify({ agent: 'blackbox', prompt: 'hello', callback: '   ' }));
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello', callback: '   ' }));
     expect(opts.callback).toBeUndefined();
   });
 });

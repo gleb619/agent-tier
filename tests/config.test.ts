@@ -68,7 +68,7 @@ describe('loadConfig', () => {
 
   it('returns parsed config when HMAC matches', () => {
     process.env.AT_HMAC_SECRET = 'test-secret';
-    const configData = JSON.stringify({ tierOverrides: { pi: 2, goose: 1 } });
+    const configData = JSON.stringify({ tierOverrides: { pi: 2, cursor: 1 } });
     const hmac = computeHmac(configData);
     mockReadFileSync.mockImplementation((p) => {
       if (p === CONFIG_FILE) return configData;
@@ -76,7 +76,7 @@ describe('loadConfig', () => {
       throw new Error('unexpected');
     });
     const result = loadConfig();
-    expect(result).toEqual({ tierOverrides: { pi: 2, goose: 1 } });
+    expect(result).toEqual({ tierOverrides: { pi: 2, cursor: 1 } });
     expect(console.warn).not.toHaveBeenCalled();
     expect(console.error).not.toHaveBeenCalled();
     delete process.env.AT_HMAC_SECRET;
@@ -84,7 +84,7 @@ describe('loadConfig', () => {
 });
 
 describe('applyTierOverrides', () => {
-  const agents = [makeAgent('blackbox', 2), makeAgent('pi', 3), makeAgent('goose', 3)];
+  const agents = [makeAgent('mm-code', 2), makeAgent('pi', 3), makeAgent('cursor', 3)];
 
   it('returns agents unchanged when config is null', () => {
     const result = applyTierOverrides(agents, null);
@@ -99,8 +99,8 @@ describe('applyTierOverrides', () => {
   it('overrides the tier of the named agent and leaves others unchanged', () => {
     const result = applyTierOverrides(agents, { tierOverrides: { pi: 2 } });
     expect(result.find((a) => a.name === 'pi')?.tier).toBe(2);
-    expect(result.find((a) => a.name === 'blackbox')?.tier).toBe(2);
-    expect(result.find((a) => a.name === 'goose')?.tier).toBe(3);
+    expect(result.find((a) => a.name === 'mm-code')?.tier).toBe(2);
+    expect(result.find((a) => a.name === 'cursor')?.tier).toBe(3);
   });
 
   it('does not mutate the original agent objects', () => {

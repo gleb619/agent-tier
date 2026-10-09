@@ -25,6 +25,7 @@ const mockRun: RunRecord = {
   finishedAt: null,
   exitCode: null,
   status: 'running',
+  name: 'unnamed',
 };
 
 describe('run-store', () => {

@@ -15,6 +15,7 @@ const baseRun: RunRecord = {
   finishedAt: null,
   exitCode: null,
   status: 'running',
+  name: 'unnamed',
 };
 
 describe('formatStatusTable', () => {
@@ -27,21 +28,31 @@ describe('formatStatusTable', () => {
     const lines = result.split('\n');
     expect(lines).toHaveLength(2);
     expect(lines[0]).toContain('RUN');
+    expect(lines[0]).toContain('NAME');
     expect(lines[0]).toContain('AGENT');
     expect(lines[0]).toContain('STATUS');
     expect(lines[0]).toContain('DURATION');
     expect(lines[0]).toContain('LOG');
     expect(lines[1]).toContain('r3k2a1');
+    expect(lines[1]).toContain('unnamed');
     expect(lines[1]).toContain('opencode');
     expect(lines[1]).toContain('running');
     expect(lines[1]).toContain('/tmp/at-logs/at-test-opencode.log');
+  });
+
+  it('shows full runId without "..." truncation in table', () => {
+    const longRunId = 'r3k2a1b9-static-long-id-for-test';
+    const run = { ...baseRun, runId: longRunId };
+    const result = formatStatusTable([run]);
+    expect(result).toContain(longRunId);
+    expect(result).not.toContain(longRunId.slice(0, 17) + '...');
   });
 
   it('formats multiple runs', () => {
     const done: RunRecord = {
       ...baseRun,
       runId: 'f7c4d2e1',
-      agent: 'blackbox',
+      agent: 'mm-code',
       status: 'done',
       exitCode: 0,
       finishedAt: new Date().toISOString(),
@@ -51,6 +62,20 @@ describe('formatStatusTable', () => {
     expect(lines).toHaveLength(3);
     expect(lines[1]).toContain('running');
     expect(lines[2]).toContain('done');
+  });
+
+  it('truncates long names with ellipsis', () => {
+    const longName = 'a'.repeat(40);
+    const run: RunRecord = { ...baseRun, name: longName };
+    const result = formatStatusTable([run]);
+    expect(result).toContain('…');
+    expect(result).not.toContain(longName);
+  });
+
+  it('keeps short names untruncated', () => {
+    const run: RunRecord = { ...baseRun, name: 'refactor-auth' };
+    const result = formatStatusTable([run]);
+    expect(result).toContain('refactor-auth');
   });
 });
 
@@ -107,7 +132,7 @@ describe('buildStateReport', () => {
     writeTestStateFile({
       opencode: { failureTimes: [], disabledTo: null, deactivated: true },
       agy: { failureTimes: ['2026-05-23T09:25:00.000Z'], disabledTo: null },
-      blackbox: { failureTimes: [], disabledTo: null },
+      'mm-code': { failureTimes: [], disabledTo: null },
     });
 
     const report = buildStateReport(tmpDir);
@@ -167,12 +192,12 @@ describe('buildStateReport', () => {
 describe('formatStateReport', () => {
   it('shows DEACTIVATED label', () => {
     writeTestStateFile({
-      goose: { failureTimes: [], disabledTo: null, deactivated: true },
+      cursor: { failureTimes: [], disabledTo: null, deactivated: true },
     });
 
     const out = formatStateReport(tmpDir);
     expect(out).toContain('DEACTIVATED');
-    expect(out).toContain('goose');
+    expect(out).toContain('cursor');
   });
 
   it('shows failure count and relative time', () => {
@@ -191,11 +216,11 @@ describe('formatStateReport', () => {
 
   it('shows "ok" for healthy agents', () => {
     writeTestStateFile({
-      blackbox: { failureTimes: [], disabledTo: null },
+      'mm-code': { failureTimes: [], disabledTo: null },
     });
 
     const out = formatStateReport(tmpDir);
-    expect(out).toContain('blackbox: ok');
+    expect(out).toContain('mm-code: ok');
   });
 
   it('shows disabled-until with relative time', () => {

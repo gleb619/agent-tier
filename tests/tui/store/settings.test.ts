@@ -71,15 +71,8 @@ describe('settings store', () => {
   });
 
   describe('cycleAgent (tier 2)', () => {
-    it('cycles auto → blackbox', () => {
+    it('cycles auto → mm-code', () => {
       resetToKnown();
-      cycleAgent();
-      expect(agent()).toBe('blackbox');
-    });
-
-    it('cycles blackbox → mm-code', () => {
-      resetToKnown();
-      cycleAgent();
       cycleAgent();
       expect(agent()).toBe('mm-code');
     });
@@ -88,13 +81,11 @@ describe('settings store', () => {
       resetToKnown();
       cycleAgent();
       cycleAgent();
-      cycleAgent();
       expect(agent()).toBe('opencode');
     });
 
     it('cycles opencode → qwen', () => {
       resetToKnown();
-      cycleAgent();
       cycleAgent();
       cycleAgent();
       cycleAgent();
@@ -107,11 +98,20 @@ describe('settings store', () => {
       cycleAgent();
       cycleAgent();
       cycleAgent();
-      cycleAgent();
       expect(agent()).toBe('pi');
     });
 
-    it('cycles pi → auto (wraps around)', () => {
+    it('cycles pi → cline', () => {
+      resetToKnown();
+      cycleAgent();
+      cycleAgent();
+      cycleAgent();
+      cycleAgent();
+      cycleAgent();
+      expect(agent()).toBe('cline');
+    });
+
+    it('cycles cline → auto (wraps around)', () => {
       resetToKnown();
       cycleAgent();
       cycleAgent();

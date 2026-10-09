@@ -193,7 +193,7 @@ describe('runInit - create single agent', () => {
   });
 
   it('throws for agent with no template', () => {
-    expect(() => runInit({ agent: 'blackbox' })).toThrow('No template defined');
+    expect(() => runInit({ agent: 'kilo' })).toThrow('No template defined');
   });
 
   it('throws when no agent or flags provided', () => {

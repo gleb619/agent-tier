@@ -15,6 +15,13 @@ export interface RunRecord {
   finishedAt: string | null;
   exitCode: number | null;
   status: 'running' | 'done' | 'failed' | 'stuck';
+  /**
+   * Human-readable session name. Set by the experimental `--namer` flag
+   * (calls a local Ollama model). Defaults to `'unnamed'` when the namer
+   * is disabled or fails — the field is always present so consumers
+   * (`at status`, TUI sidebar) can render a stable column.
+   */
+  name: string;
 }
 
 export interface RunsIndex {

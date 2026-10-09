@@ -31,9 +31,17 @@ export function registerDefaultCommand(program: Command): void {
       '--callback <command>',
       'Shell command to run after the agent job finishes. Exposes AT_RUN_ID, AT_AGENT, AT_TIER, AT_EXIT_CODE, AT_LOG_FILE, AT_PROMPT, AT_STATUS env vars',
     )
+    .option('--sse [port]', 'Enable SSE live-progress hub (default port 7777, 0=random)')
+    .option(
+      '--namer',
+      '[experimental] Ask a local Ollama model (default: gemma3:1b) to name the session from the prompt. Persisted on the run record and shown in `at status`. Off by default.',
+      false,
+    )
+    .option('--namer-model <name>', 'Override Ollama model used by --namer (default: AT_NAMER_MODEL env or gemma3:1b)')
+    .option('--namer-url <url>', 'Override Ollama base URL used by --namer (default: AT_NAMER_URL env or http://localhost:11434)')
     .option(
       '--json',
-      'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{}}',
+      'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0}',
       false,
     )
     .action(async (opts) => {
@@ -58,6 +66,11 @@ export function registerDefaultCommand(program: Command): void {
             noChop: !(opts.chop as boolean),
             timeout: opts.timeout,
             callback: parsed.callback ?? opts.callback,
+            sse: parsed.sse,
+            ssePort: parsed.ssePort,
+            namer: parsed.namer ?? (opts.namer as boolean),
+            namerModel: parsed.namerModel ?? (opts.namerModel as string | undefined),
+            namerUrl: parsed.namerUrl ?? (opts.namerUrl as string | undefined),
           });
         } else {
           const stdinData = !opts.prompt && !process.stdin.isTTY ? await readStdin() : '';
@@ -74,6 +87,10 @@ export function registerDefaultCommand(program: Command): void {
             noChop: !(opts.chop as boolean),
             timeout: opts.timeout,
             callback: opts.callback,
+            sse: opts.sse,
+            namer: opts.namer as boolean,
+            namerModel: opts.namerModel as string | undefined,
+            namerUrl: opts.namerUrl as string | undefined,
           });
         }
 
@@ -106,14 +123,18 @@ Examples:
   # Auto-retry with 2 extra attempts (3 total) before giving up
   at -s -r 2 -p "add input validation across all API endpoints"
 
-  # JSON mode — pass model, cwd, and env programmatically
-  echo '{"prompt":"add pagination","agent":"blackbox","cwd":"/home/me/proj"}' | at --json
+  # JSON mode — pass model, cwd, env, sse programmatically
+  echo '{"prompt":"add pagination","agent":"mm-code","cwd":"/home/me/proj","sse":true}' | at --json
 
   # Pipe prompt from stdin (no shell escaping needed)
   echo "fix the login bug" | at -s
 
   # Check logs after detached run
   tail -f /tmp/at-logs/at-<timestamp>-<agent>.log
+
+  # SSE live-progress
+  at -p "big refactor" --sse
+  at -p "big refactor" --sse 0
 `
     );
 }

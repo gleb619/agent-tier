@@ -8,6 +8,8 @@ import { pickAgent, getStateFile } from './scheduler';
 import { filterHealthy, recordResult, isDeactivated, loadHealth } from './health';
 import { addRun, updateRun } from './run-store';
 import { getStateFilePath } from './state-dir';
+import { setupNotify, startHub, tailLogFile, type Hub, type NotifyEvent } from './notify';
+import { generateSessionName } from './ollama-namer';
 
 interface TrackedChild {
   pid: number;
@@ -15,6 +17,8 @@ interface TrackedChild {
 }
 
 const activeChildren: TrackedChild[] = [];
+let processHub: Hub | undefined;
+let processHubPromise: Promise<Hub> | undefined;
 
 function trackChild(pid: number, detached: boolean): void {
   activeChildren.push({ pid, detached });
@@ -65,6 +69,7 @@ export interface CallbackContext {
   logFile: string;
   prompt: string;
   status: 'done' | 'failed';
+  name: string;
 }
 
 export function executeCallback(command: string | undefined, context: CallbackContext): void {
@@ -79,6 +84,7 @@ export function executeCallback(command: string | undefined, context: CallbackCo
     AT_LOG_FILE: context.logFile,
     AT_PROMPT: context.prompt,
     AT_STATUS: context.status,
+    AT_RUN_NAME: context.name,
   };
 
   const cmd = command.trim();
@@ -88,22 +94,48 @@ export function executeCallback(command: string | undefined, context: CallbackCo
   }
 }
 
-export async function launchAgent(agent: AgentDef, options: RunOptions): Promise<LaunchResult> {
-  const bin = agent.bin();
-  const args = agent.buildArgs(options.prompt, options.model);
+interface LaunchExtras {
+  runId?: string;
+  extraArgs?: string[];
+  /** When set, replaces baseArgs entirely (caller already computed full argv). */
+  overrideArgs?: string[];
+  extraPrompt?: string;
+  extraEnv?: Record<string, string>;
+  /**
+   * Session name forwarded to the child as `AT_RUN_NAME` and persisted on
+   * the run record. Defaults to `'unnamed'` when the namer is disabled or
+   * failed; the field is always populated so downstream columns stay stable.
+   */
+  name?: string;
+}
+
+export const UNNAMED_PLACEHOLDER = 'unnamed';
+
+export async function launchAgent(agent: AgentDef, options: RunOptions, extras?: LaunchExtras): Promise<LaunchResult> {
+  const runId = extras?.runId ?? generateRunId();
+  const promptText = options.prompt + (extras?.extraPrompt ?? '');
+  const baseArgs = agent.buildArgs(promptText, options.model);
+  let args: string[];
+  if (extras?.overrideArgs) {
+    args = extras.overrideArgs;
+  } else if (extras?.extraArgs) {
+    args = [...baseArgs, ...extras.extraArgs];
+  } else {
+    args = baseArgs;
+  }
   const extraEnv = agent.buildEnv?.(options.model) ?? {};
-  const env = { ...process.env, ...extraEnv, ...(options.env ?? {}) } as Record<string, string>;
+  const env = { ...process.env, ...extraEnv, ...(options.env ?? {}), ...(extras?.extraEnv ?? {}) } as Record<string, string>;
+  env.AT_RUN_NAME = extras?.name ?? UNNAMED_PLACEHOLDER;
 
   mkdirSync(options.logDir, { recursive: true });
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const logFile = path.join(options.logDir, `at-${timestamp}-${agent.name}.log`);
-  const runId = generateRunId();
-  const stdinData = agent.promptMode === 'stdin' ? options.prompt : undefined;
+  const stdinData = agent.promptMode === 'stdin' ? promptText : undefined;
 
   const logFd = openSync(logFile, 'w');
   writeSync(logFd, `[at] runId: ${runId}\n`);
 
-  const child = spawn(bin, args, {
+  const child = spawn(agent.bin(), args, {
     env,
     cwd: options.cwd,
     detached: true,
@@ -136,19 +168,47 @@ export async function launchAgent(agent: AgentDef, options: RunOptions): Promise
     finishedAt: null,
     exitCode: null,
     status: 'running',
+    name: extras?.name ?? UNNAMED_PLACEHOLDER,
   });
 
   return { child, runId, logFile, agent };
 }
 
-function printReport(result: LaunchResult): void {
+function printReport(result: LaunchResult, sseUrl?: string, name?: string): void {
   console.log(`[at] ┌──────────────────────────────────`);
   console.log(`[at] │ Run ID:  ${result.runId}`);
+  console.log(`[at] │ Name:    ${name ?? UNNAMED_PLACEHOLDER}`);
   console.log(`[at] │ Agent:   ${result.agent.name} (tier ${result.agent.tier})`);
   console.log(`[at] │ PID:     ${result.child.pid}`);
   console.log(`[at] │ Log:     ${result.logFile}`);
   console.log(`[at] │ Status:  running`);
+  if (sseUrl) console.log(`[at] │ SSE:     ${sseUrl}`);
   console.log(`[at] └──────────────────────────────────`);
+}
+
+export function closeProcessHub(): Promise<void> {
+  const hub = processHub;
+  processHub = undefined;
+  processHubPromise = undefined;
+  if (!hub) return Promise.resolve();
+  // Brief grace so SSE clients reading over `/events/<runId>` still get the
+  // final `done` event we published seconds ago, then tear down sockets+server.
+  // When no client ever connected, close immediately so subsequent `at notify`
+  // POSTs (which still need a live hub) do not stall.
+  const grace = hub.hadActiveClients ? 300 : 0;
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      hub.close().then(() => resolve(), () => resolve());
+    }, grace).unref();
+  });
+}
+
+export async function getProcessHub(options: RunOptions): Promise<Hub> {
+  if (processHub) return processHub;
+  if (processHubPromise) return processHubPromise;
+  processHubPromise = startHub({ stateDir: options.stateDir, port: options.ssePort });
+  processHub = await processHubPromise;
+  return processHub;
 }
 
 async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Promise<number> {
@@ -240,6 +300,7 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
     logFile,
     prompt: options.prompt,
     status,
+    name: options.runName ?? UNNAMED_PLACEHOLDER,
   });
 
   return exitCode;
@@ -259,6 +320,21 @@ export async function run(
   process.once('SIGINT', cleanup);
 
   try {
+    // Experimental: ask a local Ollama model for a session name. Best-effort
+    // and silent on failure — the namer is enrichment, never a blocker.
+    if (options.namer && !options.runName) {
+      const name = await generateSessionName(options.prompt, {
+        model: options.namerModel,
+        url: options.namerUrl,
+      });
+      if (name) {
+        options.runName = name;
+        console.warn(`[at] session name: ${name}`);
+      } else {
+        console.warn('[at] session namer unavailable (ollama not running or model not found); continuing without a name');
+      }
+    }
+
     const stateFilePath = getStateFilePath(options.stateDir);
     const healthState = loadHealth(stateFilePath);
     let candidates: AgentDef[];
@@ -330,49 +406,174 @@ export async function run(
   }
 }
 
-export const defaultSpawner: Spawner = async (agent, options) => {
-  const result = await launchAgent(agent, options);
-  const { child, runId, logFile } = result;
+function buildDoneEvent(status: 'done' | 'failed', exitCode: number): Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'> {
+  return { type: 'done', data: { status, exitCode } };
+}
 
+export const defaultSpawner: Spawner = async (agent, options) => {
+  if (!options.sse) {
+    const result = await launchAgent(agent, options, options.runName ? { name: options.runName } : undefined);
+    const { child, runId, logFile } = result;
+
+    child.removeAllListeners('error');
+    printReport(result, undefined, options.runName ?? UNNAMED_PLACEHOLDER);
+
+    if (options.stream) {
+      return streamLogsAndWatch(result, options);
+    } else {
+      child.on('error', (err) => {
+        try { appendFileSync(logFile, `[at] error: ${err.message}\n`); } catch {}
+        updateRun(options.stateDir, runId, {
+          status: 'failed',
+          finishedAt: new Date().toISOString(),
+          exitCode: 1,
+        }).catch(() => {});
+        const sfp = getStateFilePath(options.stateDir);
+        recordResult(sfp, agent.name, false).catch(() => {});
+      });
+      child.on('close', (code) => {
+        const exitCode = code ?? 1;
+        const status = exitCode === 0 ? 'done' : 'failed';
+        updateRun(options.stateDir, runId, {
+          status,
+          finishedAt: new Date().toISOString(),
+          exitCode,
+        }).catch(() => {});
+        const sfp = getStateFilePath(options.stateDir);
+        recordResult(sfp, agent.name, exitCode === 0).catch(() => {});
+        executeCallback(options.callback, {
+          runId,
+          agent: agent.name,
+          tier: agent.tier,
+          exitCode,
+          logFile,
+          prompt: options.prompt,
+          status,
+          name: options.runName ?? UNNAMED_PLACEHOLDER,
+        });
+      });
+      return 0;
+    }
+  }
+
+  // SSE path
+  const hub = await getProcessHub(options);
+  const runId = generateRunId();
+  const eventFile = getEventFilePath(options.stateDir, runId);
+  const sseUrl = `http://127.0.0.1:${hub.port}/events/${runId}`;
+  const ctx = { runId, port: hub.port, eventFile };
+  const { env: adapterEnv, promptSuffix, adapter } = setupNotify(agent.name, ctx);
+  const extraEnv = {
+    ...adapterEnv,
+    AT_RUN_ID: runId,
+    AT_SSE_URL: `http://127.0.0.1:${hub.port}`,
+    AT_EVENT_FILE: eventFile,
+    AT_RUN_NAME: options.runName ?? UNNAMED_PLACEHOLDER,
+  };
+
+  // Compute argv: if adapter provides transformArgs, give it the full base
+  // args (with prompt already appended) so structured flags can be inserted
+  // before the prompt. Otherwise, append adapter.args() after the prompt.
+  const promptText = options.prompt + promptSuffix;
+  const baseArgs = agent.buildArgs(promptText, options.model);
+  const finalArgs = adapter.transformArgs
+    ? adapter.transformArgs(ctx, baseArgs)
+    : (() => {
+        const a = adapter.args?.(ctx) ?? [];
+        return a.length ? [...baseArgs, ...a] : baseArgs;
+      })();
+
+  const result = await launchAgent(agent, options, {
+    runId,
+    overrideArgs: finalArgs,
+    // For stdin-mode agents, the suffix travels through extraPrompt so
+    // launchAgent writes `prompt + promptSuffix` to the child's stdin.
+    extraPrompt: promptSuffix,
+    extraEnv,
+    name: options.runName,
+  });
+  const { child, logFile } = result;
   child.removeAllListeners('error');
-  printReport(result);
+
+  hub.publish({
+    runId,
+    agent: agent.name,
+    ts: new Date().toISOString(),
+    seq: 0,
+    type: 'start',
+    text: `started ${agent.name} (pid ${child.pid})`,
+  });
+
+  const tailer = tailLogFile(logFile, runId, agent.name, (e) => hub.publish(e), adapter);
+
+  const agentExit = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
+    child.on('close', (code, signal) => resolve({ code, signal }));
+    child.on('error', () => resolve({ code: 1, signal: null }));
+  });
+
+  printReport(result, sseUrl, options.runName ?? UNNAMED_PLACEHOLDER);
 
   if (options.stream) {
-    return streamLogsAndWatch(result, options);
-  } else {
-    child.on('error', (err) => {
-      try { appendFileSync(logFile, `[at] error: ${err.message}\n`); } catch {}
-      updateRun(options.stateDir, runId, {
-        status: 'failed',
-        finishedAt: new Date().toISOString(),
-        exitCode: 1,
-      }).catch(() => {});
-      const sfp = getStateFilePath(options.stateDir);
-      recordResult(sfp, agent.name, false).catch(() => {});
-    });
-    child.on('close', (code) => {
-      const exitCode = code ?? 1;
-      const status = exitCode === 0 ? 'done' : 'failed';
-      updateRun(options.stateDir, runId, {
-        status,
-        finishedAt: new Date().toISOString(),
-        exitCode,
-      }).catch(() => {});
-      const sfp = getStateFilePath(options.stateDir);
-      recordResult(sfp, agent.name, exitCode === 0).catch(() => {});
-      executeCallback(options.callback, {
-        runId,
-        agent: agent.name,
-        tier: agent.tier,
-        exitCode,
-        logFile,
-        prompt: options.prompt,
-        status,
-      });
-    });
-    return 0;
+    try {
+      const exitCode = await streamLogsAndWatch(result, options);
+      hub.publish({ ...buildDoneEvent('done', exitCode), runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+      tailer.stop();
+      await closeProcessHub();
+      return exitCode;
+    } catch (err) {
+      const exitCode = (err as AgentError).code ?? 1;
+      hub.publish({ ...buildDoneEvent('failed', exitCode), runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+      tailer.stop();
+      await closeProcessHub();
+      throw err;
+    }
   }
+
+  // Detached + SSE: block until child exits so hub stays alive
+  child.on('error', (err) => {
+    try { appendFileSync(logFile, `[at] error: ${err.message}\n`); } catch {}
+    hub.publish({ type: 'error', text: err.message, runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+    updateRun(options.stateDir, runId, {
+      status: 'failed',
+      finishedAt: new Date().toISOString(),
+      exitCode: 1,
+    }).catch(() => {});
+    const sfp = getStateFilePath(options.stateDir);
+    recordResult(sfp, agent.name, false).catch(() => {});
+  });
+
+  const { code } = await agentExit;
+  const exitCode = code ?? 1;
+  const status = exitCode === 0 ? 'done' : 'failed';
+  await updateRun(options.stateDir, runId, {
+    status,
+    finishedAt: new Date().toISOString(),
+    exitCode,
+  });
+  const sfp = getStateFilePath(options.stateDir);
+  await recordResult(sfp, agent.name, exitCode === 0);
+
+  hub.publish({ ...buildDoneEvent(status, exitCode), runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+  tailer.stop();
+
+  executeCallback(options.callback, {
+    runId,
+    agent: agent.name,
+    tier: agent.tier,
+    exitCode,
+    logFile,
+    prompt: options.prompt,
+    status,
+    name: options.runName ?? UNNAMED_PLACEHOLDER,
+  });
+
+  await closeProcessHub();
+  return exitCode;
 };
+
+function getEventFilePath(stateDir: string, runId: string): string {
+  return path.join(stateDir, 'events', `${runId}.jsonl`);
+}
 
 const COLORS = [
   'red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'black', 'white', 'gray',

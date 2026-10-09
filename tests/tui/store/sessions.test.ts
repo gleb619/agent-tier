@@ -35,6 +35,7 @@ const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord =
   finishedAt: null,
   exitCode: null,
   status: 'running',
+  name: 'unnamed',
   ...overrides,
 });
 
@@ -62,7 +63,7 @@ describe('sessions store', () => {
     });
 
     it('returns the matching session when selectedRunId is set', () => {
-      const s1 = mockRun('run1', { agent: 'blackbox' });
+      const s1 = mockRun('run1', { agent: 'mm-code' });
       const s2 = mockRun('run2', { agent: 'opencode' });
       setSessions([s1, s2]);
       setSelectedRunId('run2');
@@ -76,7 +77,7 @@ describe('sessions store', () => {
     });
 
     it('updates when sessions change', () => {
-      const s1 = mockRun('run1', { agent: 'blackbox' });
+      const s1 = mockRun('run1', { agent: 'mm-code' });
       const s2 = mockRun('run2', { agent: 'opencode' });
       setSessions([s1]);
       setSelectedRunId('run2');

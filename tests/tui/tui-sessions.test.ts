@@ -14,6 +14,7 @@ const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord =
   finishedAt: null,
   exitCode: null,
   status: 'running',
+  name: 'unnamed',
   ...overrides,
 });
 

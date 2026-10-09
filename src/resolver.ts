@@ -14,6 +14,14 @@ export interface RunOptions {
   noChop: boolean;
   timeout: number;
   callback?: string;
+  sse: boolean;
+  ssePort: number;
+  /** Experimental: ask a local Ollama model to name the session (default: off). */
+  namer: boolean;
+  namerModel?: string;
+  namerUrl?: string;
+  /** Set by `run()` after namer runs; consumed by `defaultSpawner`. */
+  runName?: string;
 }
 
 interface ArgvOptions {
@@ -30,6 +38,11 @@ interface ArgvOptions {
   noChop?: boolean;
   timeout?: string | number;
   callback?: string;
+  sse?: boolean | string;
+  ssePort?: string | number;
+  namer?: boolean;
+  namerModel?: string;
+  namerUrl?: string;
 }
 
 export interface ParsedJson {
@@ -39,6 +52,11 @@ export interface ParsedJson {
   cwd?: string;
   env?: Record<string, string>;
   callback?: string;
+  sse?: boolean;
+  ssePort?: number;
+  namer?: boolean;
+  namerModel?: string;
+  namerUrl?: string;
 }
 
 export function resolveFromArgs(argv: ArgvOptions): RunOptions {
@@ -54,6 +72,16 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
   const retriesNum = Number(argv.retries ?? 0);
   if (!Number.isFinite(retriesNum) || retriesNum < 0 || !Number.isInteger(retriesNum)) throw new Error('retries must be a non-negative integer');
 
+  const sse = argv.sse === true || (typeof argv.sse === 'string' && argv.sse.trim().toLowerCase() === 'true');
+  let ssePort = 7777;
+  if (argv.ssePort !== undefined) {
+    ssePort = Number(argv.ssePort);
+    if (!Number.isFinite(ssePort) || ssePort < 0 || !Number.isInteger(ssePort)) throw new Error('ssePort must be a non-negative integer');
+  } else if (typeof argv.sse === 'string' && argv.sse.trim() && argv.sse.trim().toLowerCase() !== 'true') {
+    ssePort = Number(argv.sse.trim());
+    if (!Number.isFinite(ssePort) || ssePort < 0 || !Number.isInteger(ssePort)) throw new Error('--sse port must be a non-negative integer');
+  }
+
   return {
     agent: argv.agent?.trim() || 'auto',
     tier: tierNum as 1 | 2 | 3 | 4,
@@ -68,6 +96,11 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     noChop: argv.noChop ?? false,
     timeout: timeoutMs,
     callback: argv.callback?.trim() || undefined,
+    sse,
+    ssePort,
+    namer: argv.namer === true,
+    namerModel: argv.namerModel?.trim() || undefined,
+    namerUrl: argv.namerUrl?.trim() || undefined,
   };
 }
 
@@ -96,6 +129,15 @@ export function parseJsonInput(raw: string): ParsedJson {
     env = rawEnv as Record<string, string>;
   }
 
+  const ssePortRaw = parsed.ssePort;
+  let ssePort: number | undefined;
+  if (ssePortRaw !== undefined) {
+    ssePort = Number(ssePortRaw);
+    if (!Number.isFinite(ssePort) || ssePort < 0 || !Number.isInteger(ssePort)) {
+      throw new Error('JSON input: ssePort must be a non-negative integer');
+    }
+  }
+
   return {
     agent: (parsed.agent as string | undefined) ?? 'auto',
     prompt,
@@ -103,5 +145,10 @@ export function parseJsonInput(raw: string): ParsedJson {
     cwd: parsed.cwd as string | undefined,
     env,
     callback: (parsed.callback as string | undefined)?.trim() || undefined,
+    sse: parsed.sse === true,
+    ssePort,
+    namer: parsed.namer === true,
+    namerModel: (parsed.namerModel as string | undefined)?.trim() || undefined,
+    namerUrl: (parsed.namerUrl as string | undefined)?.trim() || undefined,
   };
 }

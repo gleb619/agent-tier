@@ -1,20 +1,20 @@
 import { AGENTS, getAgentsByTier, getAgentByName } from '../src/agents/registry';
 
 describe('AgentRegistry', () => {
-  it('has 15 agents defined', () => {
-    expect(AGENTS).toHaveLength(16);
+  it('has 13 agents defined', () => {
+    expect(AGENTS).toHaveLength(13);
   });
 
   it('has 3 tier-1 agents', () => {
     expect(getAgentsByTier(1)).toHaveLength(3);
   });
 
-  it('has 6 tier-2 agents', () => {
-    expect(getAgentsByTier(2)).toHaveLength(6);
+  it('has 5 tier-2 agents', () => {
+    expect(getAgentsByTier(2)).toHaveLength(5);
   });
 
-  it('has 5 tier-3 agents', () => {
-    expect(getAgentsByTier(3)).toHaveLength(5);
+  it('has 3 tier-3 agents', () => {
+    expect(getAgentsByTier(3)).toHaveLength(3);
   });
 
   it('has 2 tier-4 agents', () => {
@@ -24,7 +24,7 @@ describe('AgentRegistry', () => {
   });
 
   it('finds agent by name', () => {
-    expect(getAgentByName('blackbox')?.name).toBe('blackbox');
+    expect(getAgentByName('mm-code')?.name).toBe('mm-code');
   });
 
   it('returns undefined for unknown agent', () => {
@@ -50,12 +50,12 @@ describe('AgentRegistry', () => {
     expect(getAgentByName('mock')!.buildArgs('test prompt')).toContain('test prompt');
   });
 
-  it('blackbox bin resolves to a string', () => {
-    expect(typeof getAgentByName('blackbox')!.bin()).toBe('string');
+  it('mm-code bin resolves to a string', () => {
+    expect(typeof getAgentByName('mm-code')!.bin()).toBe('string');
   });
 
-  it('blackbox buildArgs includes prompt', () => {
-    expect(getAgentByName('blackbox')!.buildArgs('hello world')).toContain('hello world');
+  it('mm-code buildArgs includes prompt', () => {
+    expect(getAgentByName('mm-code')!.buildArgs('hello world')).toContain('hello world');
   });
 
   it('opencode buildArgs includes -m when model provided', () => {
@@ -80,10 +80,10 @@ describe('getAgentsByTier', () => {
     expect(tier1.map(a => a.name)).toEqual(expect.arrayContaining(['glm-code', 'codex', 'kimi']));
   });
 
-  it('returns tier 2 agents: blackbox, mm-code, opencode, qwen, pi, cline', () => {
+  it('returns tier 2 agents: mm-code, opencode, qwen, pi, cline', () => {
     const tier2 = getAgentsByTier(2);
-    expect(tier2).toHaveLength(6);
-    expect(tier2.map(a => a.name)).toEqual(expect.arrayContaining(['blackbox', 'mm-code', 'opencode', 'qwen', 'pi', 'cline']));
+    expect(tier2).toHaveLength(5);
+    expect(tier2.map(a => a.name)).toEqual(expect.arrayContaining(['mm-code', 'opencode', 'qwen', 'pi', 'cline']));
   });
 
   it('returns tier 3 agents', () => {
@@ -91,7 +91,7 @@ describe('getAgentsByTier', () => {
     expect(tier3.length).toBeGreaterThan(0);
     const names = tier3.map(a => a.name);
     expect(names).toContain('agy');
-    expect(names).toContain('aider');
+    expect(names).toContain('cursor');
   });
 
   it('returns tier 4 agents: mock, mock-long', () => {

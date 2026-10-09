@@ -1,0 +1,10 @@
+{"type":"session","version":3,"id":"01a11ef0-fcd5-77e5-8dcb-71fa3a4d8c50","timestamp":"2026-10-09T04:34:32.278Z","cwd":"/tmp"}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"user","content":[{"type":"text","text":"reply with the word ok"}],"timestamp":1791520472401}}
+{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"reply with the word ok"}],"timestamp":1791520472401}}
+{"type":"message_start","message":{"role":"assistant","content":[],"api":"openai-completions","provider":"ollama","model":"qwen2.5-coder:7b","stopReason":"error","timestamp":1791520472414,"errorMessage":"404: {\"message\":\"model 'qwen2.5-coder:7b' not found\",\"type\":\"not_found_error\",\"param\":null,\"code\":null}"}}
+{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"error","errorMessage":"404: {\"message\":\"model 'qwen2.5-coder:7b' not found\",\"type\":\"not_found_error\",\"param\":null,\"code\":null}"}}
+{"type":"turn_end","stopReason":"error","errorMessage":"404: {\"message\":\"model 'qwen2.5-coder:7b' not found\",\"type\":\"not_found_error\",\"param\":null,\"code\":null}","toolResults":[]}
+{"type":"agent_end","willRetry":false}
+{"type":"agent_settled"}

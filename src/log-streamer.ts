@@ -1,5 +1,5 @@
 import { existsSync, openSync, closeSync, readSync } from 'fs';
-import { loadFilterConfig, buildDropPatterns, shouldDrop, FilterConfig } from './chop';
+import { loadFilterConfig, buildDropPatterns, shouldDrop, renderStreamJsonLine, FilterConfig } from './chop';
 
 interface ParseArgsResult {
   log: string;
@@ -48,6 +48,27 @@ function main() {
 
   function flushLine(line: string) {
     if (shouldDrop(line, dropPatterns)) return;
+    const rendered = renderStreamJsonLine(line);
+    if (rendered !== null) {
+      const subLines = rendered.split('\n');
+      for (const sub of subLines) {
+        if (!sub) continue;
+        if (shouldDrop(sub, dropPatterns)) continue;
+        if (groupRepeated) {
+          if (sub === lastLine) {
+            repeatCount++;
+            continue;
+          }
+          if (lastLine !== null && repeatCount > 1) {
+            process.stdout.write(`  … (${repeatCount} times)\n`);
+          }
+          lastLine = sub;
+          repeatCount = 1;
+        }
+        process.stdout.write(sub + '\n');
+      }
+      return;
+    }
     if (groupRepeated) {
       if (line === lastLine) {
         repeatCount++;

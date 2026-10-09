@@ -9,6 +9,8 @@ import { launchAgent, Spawner, run, executeCallback } from '../runner';
 import { loadHealth, isDeactivated, setDeactivated, isHealthy } from '../health';
 import { loadRuns, detectStuck, updateRun } from '../run-store';
 import { getStateFilePath } from '../state-dir';
+import { setupNotify, tailLogFile, type NotifyEvent } from '../notify';
+import { getProcessHub as getNotifyHub } from '../runner';
 
 export const AT_TOOLS: Tool[] = [
   {
@@ -24,6 +26,8 @@ export const AT_TOOLS: Tool[] = [
         retries: { type: 'number', description: 'Max extra retry attempts (default: 0)' },
         timeout: { type: 'number', description: 'Timeout ms (default: 3600000)' },
         callback: { type: 'string', description: 'Shell command to run after the agent job finishes' },
+        sse: { type: 'boolean', description: 'Enable SSE live-progress hub' },
+        ssePort: { type: 'number', description: 'SSE hub port (0=random)' },
       },
       required: ['prompt'],
     },
@@ -127,16 +131,70 @@ async function handleRunPrompt(args: Record<string, unknown>, stateDir: string):
     stateDir,
     logDir: '/tmp/at-mcp-logs',
     noChop: true,
+    sse: args.sse === true,
+    ssePort: args.ssePort as number | undefined,
   });
 
   let usedAgent: AgentDef | undefined;
   let capturedLogFile = '';
+  let capturedRunId = '';
 
   const customSpawner: Spawner = async (agentDef, options) => {
     usedAgent = agentDef;
-    const result = await launchAgent(agentDef, options);
+
+    let hub: Awaited<ReturnType<typeof getNotifyHub>> | undefined;
+    let tailer: { stop(): void } | undefined;
+    const publish = (e: NotifyEvent): void => {
+      if (hub) hub.publish(e);
+    };
+
+    if (options.sse) {
+      hub = await getNotifyHub(options);
+      capturedRunId = capturedRunId || generateRunId();
+    }
+
+    let result: Awaited<ReturnType<typeof launchAgent>>;
+    if (hub) {
+      const runId = capturedRunId;
+      const eventFile = getEventFilePath(options.stateDir, runId);
+      const ctx = { runId, port: hub.port, eventFile };
+      const { env: adapterEnv, promptSuffix, adapter } = setupNotify(agentDef.name, ctx);
+      const promptText = options.prompt + promptSuffix;
+      const baseArgs = agentDef.buildArgs(promptText, options.model);
+      const finalArgs = adapter.transformArgs
+        ? adapter.transformArgs(ctx, baseArgs)
+        : (() => {
+            const a = adapter.args?.(ctx) ?? [];
+            return a.length ? [...baseArgs, ...a] : baseArgs;
+          })();
+      result = await launchAgent(agentDef, options, {
+        runId,
+        overrideArgs: finalArgs,
+        extraPrompt: '',
+        extraEnv: {
+          ...adapterEnv,
+          AT_RUN_ID: runId,
+          AT_SSE_URL: `http://127.0.0.1:${hub.port}`,
+          AT_EVENT_FILE: eventFile,
+        },
+      });
+      capturedLogFile = result.logFile;
+      hub.publish({
+        runId,
+        agent: agentDef.name,
+        ts: new Date().toISOString(),
+        seq: 0,
+        type: 'start',
+        text: `started ${agentDef.name} (pid ${result.child.pid})`,
+      });
+      tailer = tailLogFile(result.logFile, runId, agentDef.name, publish, adapter);
+    } else {
+      result = await launchAgent(agentDef, options);
+      capturedLogFile = result.logFile;
+      capturedRunId = result.runId;
+    }
+
     const { child, runId, logFile } = result;
-    capturedLogFile = logFile;
     const timeoutMs = options.timeout;
 
     const agentExit = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
@@ -160,6 +218,8 @@ async function handleRunPrompt(args: Record<string, unknown>, stateDir: string):
         finishedAt: new Date().toISOString(),
         exitCode: 1,
       });
+      hub?.publish({ runId, agent: agentDef.name, ts: new Date().toISOString(), seq: 0, type: 'error', text: `killed after ${timeoutMs}ms timeout` } as NotifyEvent);
+      tailer?.stop();
       throw new Error(`${agentDef.name} killed after ${timeoutMs}ms timeout`);
     }
 
@@ -171,6 +231,9 @@ async function handleRunPrompt(args: Record<string, unknown>, stateDir: string):
       exitCode,
     });
 
+    hub?.publish({ runId, agent: agentDef.name, ts: new Date().toISOString(), seq: 0, type: 'done', data: { status, exitCode } } as NotifyEvent);
+    tailer?.stop();
+
     executeCallback(options.callback, {
       runId,
       agent: agentDef.name,
@@ -179,6 +242,7 @@ async function handleRunPrompt(args: Record<string, unknown>, stateDir: string):
       logFile,
       prompt: options.prompt,
       status,
+      name: options.runName ?? 'unnamed',
     });
 
     return exitCode;
@@ -193,13 +257,13 @@ async function handleRunPrompt(args: Record<string, unknown>, stateDir: string):
     const exitCode = await run(runOptions, effectiveAgents, customSpawner);
     const output = readOutput();
     if (exitCode !== 0) {
-      return makeJsonResult({ success: false, agent: usedAgent?.name, exitCode, output, logFile: capturedLogFile }, true);
+      return makeJsonResult({ success: false, agent: usedAgent?.name, exitCode, output, logFile: capturedLogFile, runId: capturedRunId }, true);
     }
-    return makeJsonResult({ success: true, agent: usedAgent?.name, exitCode, output, logFile: capturedLogFile });
+    return makeJsonResult({ success: true, agent: usedAgent?.name, exitCode, output, logFile: capturedLogFile, runId: capturedRunId });
   } catch (err) {
     const output = readOutput();
     const message = err instanceof Error ? err.message : String(err);
-    return makeJsonResult({ success: false, agent: usedAgent?.name, error: message, output, logFile: capturedLogFile }, true);
+    return makeJsonResult({ success: false, agent: usedAgent?.name, error: message, output, logFile: capturedLogFile, runId: capturedRunId }, true);
   }
 }
 
@@ -248,4 +312,14 @@ async function handleEnableAgent(args: Record<string, unknown>, stateDir: string
   const stateFilePath = getStateFilePath(stateDir);
   await setDeactivated(stateFilePath, agentName, false);
   return makeJsonResult({ message: `Agent "${agentName}" enabled` });
+}
+
+function generateRunId(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const id = () => Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return `run-${id()}`;
+}
+
+function getEventFilePath(stateDir: string, runId: string): string {
+  return `${stateDir}/events/${runId}.jsonl`;
 }

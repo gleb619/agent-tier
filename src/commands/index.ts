@@ -8,6 +8,10 @@ import { registerHealthCommands } from './health';
 import { registerCodegraphCommand } from './codegraph';
 import { registerComposeCommand } from '../compose/delivery/cli';
 import { registerMcpCommand } from './mcp';
+import { registerFeedbackCommand } from './feedback';
+import { registerNotifyCommand } from './notify';
+import { registerEventsCommand } from './events';
+import { registerServeCommand } from './serve';
 
 export function registerCommands(program: Command): void {
   registerDefaultCommand(program);
@@ -19,4 +23,8 @@ export function registerCommands(program: Command): void {
   registerCodegraphCommand(program);
   registerComposeCommand(program);
   registerMcpCommand(program);
+  registerFeedbackCommand(program);
+  registerNotifyCommand(program);
+  registerEventsCommand(program);
+  registerServeCommand(program);
 }

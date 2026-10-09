@@ -51,8 +51,8 @@ Include:
 
 ```bash
 at -t 1   # architect: glm-code → codex → kimi
-at        # dev (default): blackbox → opencode → qwen
-at -t 3   # experimental: kilo → agy → goose → aider → pi
+at        # dev (default): mm-code → opencode → qwen → pi → cline
+at -t 3   # experimental: kilo → agy → cursor
 ```
 
 ### 3. Run the command
@@ -88,6 +88,8 @@ tail -f /tmp/at-logs/at-2026-05-08T10-00-00-000Z-opencode.log
 ```
 
 After the agent finishes, review the diff with `git diff` and run your test suite.
+
+For live progress while the agent runs, use `--sse [port]` (see [Live progress (SSE)](README.md#live-progress-sse)) and connect to `http://127.0.0.1:<port>/events/<runId>`. Structured agents emit stream-json events; others fall back to a log adapter that instructs the agent to call `at notify <runId> "<msg>"` at milestones.
 
 ---
 
