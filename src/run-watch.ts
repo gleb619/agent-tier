@@ -29,6 +29,14 @@ import { isPidAlive } from './process-utils';
 import { updateRun } from './run-store';
 
 export const POLL_INTERVAL_MS = 2000;
+/**
+ * While the agent is alive, append a heartbeat line to the run log at this
+ * interval: near-silent agents (mm-code, pi) otherwise leave the log empty
+ * between the model banner and completion, and progress can only be judged
+ * via the worktree git status. Also keeps live runs from being flagged
+ * `stuck` (30 min without log activity) while their pid is still healthy.
+ */
+export const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000;
 
 export interface RunWatchOptions {
   /** PID of the detached agent process to watch. */
@@ -134,7 +142,21 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   };
 
   try {
+    const startedAt = Date.now();
+    let lastHeartbeat = startedAt;
     while (isPidAlive(pid)) {
+      if (Date.now() - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
+        lastHeartbeat = Date.now();
+        const elapsedMin = Math.round((lastHeartbeat - startedAt) / 60000);
+        try {
+          appendFileSync(
+            logFile,
+            `[at] heartbeat: ${agent} pid ${pid} alive, ${elapsedMin}m elapsed\n`,
+          );
+        } catch {
+          // log file may be gone — heartbeat is best-effort
+        }
+      }
       await sleep(POLL_INTERVAL_MS);
     }
 

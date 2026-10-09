@@ -1,9 +1,10 @@
-import { main, buildRunWatchArgs, POLL_INTERVAL_MS } from '../src/run-watch';
+import { main, buildRunWatchArgs, POLL_INTERVAL_MS, HEARTBEAT_INTERVAL_MS } from '../src/run-watch';
 
-const { isPidAliveMock, updateRunMock, spawnSyncMock } = vi.hoisted(() => ({
+const { isPidAliveMock, updateRunMock, spawnSyncMock, appendFileMock } = vi.hoisted(() => ({
   isPidAliveMock: vi.fn<boolean, [number]>(),
   updateRunMock: vi.fn(async () => {}),
   spawnSyncMock: vi.fn(),
+  appendFileMock: vi.fn(),
 }));
 
 vi.mock('../src/process-utils', () => ({ isPidAlive: isPidAliveMock }));
@@ -11,6 +12,10 @@ vi.mock('../src/run-store', () => ({ updateRun: updateRunMock }));
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   return { ...actual, spawnSync: spawnSyncMock };
+});
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return { ...actual, appendFileSync: appendFileMock };
 });
 
 const ARGS = ['12345', 'run-1', '/tmp/at-state', 'test-agent', '2', '/tmp/at-logs/run.log'];
@@ -37,6 +42,21 @@ describe('run-watch main()', () => {
       exitCode: null,
     });
     expect(spawnSyncMock).not.toHaveBeenCalled();
+  });
+
+  it('appends a heartbeat line to the log every HEARTBEAT_INTERVAL_MS while alive', async () => {
+    // alive for 500 polls (1000s), then dead — heartbeats expected at 5m/10m/15m
+    let polls = 0;
+    isPidAliveMock.mockImplementation(() => ++polls <= 500);
+    const promise = main(ARGS);
+    await vi.advanceTimersByTimeAsync(HEARTBEAT_INTERVAL_MS * 4 + POLL_INTERVAL_MS);
+    expect(await promise).toBe(0);
+    const heartbeats = appendFileMock.mock.calls.filter(
+      (c) => typeof c[1] === 'string' && c[1].includes('heartbeat'),
+    );
+    expect(heartbeats.length).toBeGreaterThanOrEqual(3);
+    expect(heartbeats[0][0]).toBe('/tmp/at-logs/run.log');
+    expect(heartbeats[0][1]).toMatch(/heartbeat: test-agent pid 12345 alive/);
   });
 
   it('runs the callback with the AT_* env contract once the pid dies', async () => {
