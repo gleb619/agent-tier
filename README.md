@@ -41,7 +41,7 @@ Options:
   -t, --tier <number>     Tier: 1=architect, 2=dev (default), 3=experimental
   -s, --stream            Stream output to terminal (default: detached + log file)
   --wait                  Block until the agent exits (timeout, retry, real exit code)
-  -r, --retries <number>  Max retry attempts on non-zero exit, --wait/-s only (default: 2)
+  --retries <number>      Max retry attempts on non-zero exit, --wait/-s only (default: 2)
   --callback <command>    Shell command to run after the agent job finishes
   --verify <command>     Post-run verification hook. Runs after the agent exits, before --callback.
                          Non-zero exit fails the run (status=failed, log line, AgentError raised in
@@ -174,10 +174,10 @@ at discuss note "lint fixed in src/api.ts"
 at discuss inbox [--wait 30] [--since m4]
 
 # Host side
-at discuss list [runId] [--pending] [--json]
-at discuss answer [qid] "yes" [-r runId]      # qid defaults to latest unanswered
-at discuss say "now bump the version" [-r runId]
-at discuss watch [-r runId]                     # follow thread live; prompts in TTY
+at discuss list [runId] [--pending] [--json] [-R/--run <runId>]
+at discuss answer [-q mN] <text...> [-R/--run <runId>]   # defaults to latest unanswered; first arg mN treated as qid
+at discuss say "now bump the version" [-R/--run <runId>]
+at discuss watch [-R/--run <runId>]                       # follow thread live; prompts in TTY
 ```
 
 `at notify <runId> <msg...>` is kept as an alias for `at discuss note`.
@@ -223,7 +223,7 @@ In addition to the variables listed under [Live progress](#environment-variables
 | Var             | Meaning                                                       |
 |-----------------|---------------------------------------------------------------|
 | `AT_BIN`        | Shell-quoted `node /abs/dist/cli.js`. Agent uses it as `$AT_BIN discuss ...`. |
-| `AT_STATE_DIR`  | The state dir passed to `resolveStateDir()`. Used by `discuss list/inbox`. |
+| `AT_STATE_DIR`  | The state dir passed to `resolveStateDir()`. The `--state-dir` flag also works on every `discuss` subcommand. |
 | `AT_RUN_ID`     | (existing) The run id; `discuss` subcommands default to it.   |
 | `AT_SSE_URL`    | (existing) When set, entries POST to the hub instead of writing the file. |
 

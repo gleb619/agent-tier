@@ -2,6 +2,7 @@ import type { NotifyAdapter, NotifyEvent } from '../types';
 import { buildPromptSuffix } from '../prompt';
 
 const TEXT_LIMIT = 500;
+const MESSAGE_THROTTLE_MS = 1000;
 
 function truncate(s: string, n: number): string {
   if (s.length <= n) return s;
@@ -24,6 +25,7 @@ interface ClineEvent {
  *   {ts, type:"run_result", finishReason, text, iterations, durationMs}
  */
 export function makeClineAdapter(): NotifyAdapter {
+  let lastMessageAt = 0;
   return {
     name: 'cline',
     promptSuffix(ctx) {
@@ -50,6 +52,9 @@ export function makeClineAdapter(): NotifyAdapter {
             const text = typeof ev.text === 'string' ? ev.text : '';
             const display = acc || text;
             if (!display) return [];
+            const now = Date.now();
+            if (now - lastMessageAt < MESSAGE_THROTTLE_MS) return [];
+            lastMessageAt = now;
             return [{ type: 'message', text: truncate(display, TEXT_LIMIT) }];
           }
           if (ev.type === 'tool_start' || ev.type === 'tool_call') {

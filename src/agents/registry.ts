@@ -3,11 +3,20 @@ const LOCAL_BIN = process.env.LOCAL_BIN ?? `${process.env.HOME}/.local/bin`;
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'minimax-m3:cloud';
 const DEVIN_DESKTOP_BIN = '/usr/share/devin-desktop/resources/app/extensions/windsurf/devin/bin/devin';
 
+function findBin(name: string): string {
+  const fs = require('fs');
+  for (const dir of [NODE_BIN, LOCAL_BIN]) {
+    const p = `${dir}/${name}`;
+    if (fs.existsSync(p)) return p;
+  }
+  return `${NODE_BIN}/${name}`;
+}
+
 export interface AgentDef {
   name: string;
   tier: 1 | 2 | 3 | 4;
   bin: () => string;
-  buildArgs: (prompt: string, model?: string) => string[];
+  buildArgs: (prompt: string, model?: string, cwd?: string) => string[];
   buildEnv?: (model?: string) => Record<string, string>;
   promptMode?: 'arg' | 'stdin';
 }
@@ -79,14 +88,13 @@ export const AGENTS: AgentDef[] = [
   {
     name: 'agy',
     tier: 3,
-    bin: () => process.env.AGY_BIN ?? `${NODE_BIN}/agy`,
-    buildArgs: () => ['--yolo', '--skip-trust'],
-    promptMode: 'stdin',
+    bin: () => process.env.AGY_BIN ?? findBin('agy'),
+    buildArgs: (prompt) => ['--dangerously-skip-permissions', '-p', prompt],
   },
   {
     name: 'kiro',
     tier: 3,
-    bin: () => process.env.KIRO_BIN ?? `${NODE_BIN}/kiro-cli`,
+    bin: () => process.env.KIRO_BIN ?? findBin('kiro-cli'),
     buildArgs: (prompt) => ['chat', '--no-interactive', '--trust-all-tools', prompt],
   },
   {
@@ -109,9 +117,10 @@ export const AGENTS: AgentDef[] = [
     name: 'cline',
     tier: 2,
     bin: () => process.env.CLINE_BIN ?? `${NODE_BIN}/cline`,
-    buildArgs: (prompt) => [
+    buildArgs: (prompt, _model, cwd) => [
       '--auto-approve', 'true',
       '--json',
+      '--cwd', cwd ?? process.cwd(),
       '--timeout', '600',
       prompt,
     ],

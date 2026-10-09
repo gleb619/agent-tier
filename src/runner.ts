@@ -170,7 +170,7 @@ function shellQuote(s: string): string {
 export async function launchAgent(agent: AgentDef, options: RunOptions, extras?: LaunchExtras): Promise<LaunchResult> {
   const runId = extras?.runId ?? generateRunId();
   const promptText = options.prompt + (extras?.extraPrompt ?? '');
-  const baseArgs = agent.buildArgs(promptText, options.model);
+  const baseArgs = agent.buildArgs(promptText, options.model, options.cwd);
   let args: string[];
   if (extras?.overrideArgs) {
     args = extras.overrideArgs;
@@ -667,7 +667,7 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
   // args (with prompt already appended) so structured flags can be inserted
   // before the prompt. Otherwise, append adapter.args() after the prompt.
   const promptText = options.prompt + promptSuffix;
-  const baseArgs = agent.buildArgs(promptText, options.model);
+  const baseArgs = agent.buildArgs(promptText, options.model, options.cwd);
   const finalArgs = adapter.transformArgs
     ? adapter.transformArgs(ctx, baseArgs)
     : (() => {

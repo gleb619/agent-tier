@@ -68,8 +68,15 @@ describe('AgentRegistry', () => {
     expect(getAgentByName('opencode')!.buildArgs('hello')).not.toContain('-m');
   });
 
-  it('agy uses stdin promptMode', () => {
-    expect(getAgentByName('agy')!.promptMode).toBe('stdin');
+  it('agy passes prompt via -p', () => {
+    const agy = getAgentByName('agy')!;
+    expect(agy.promptMode).toBeUndefined();
+    expect(agy.buildArgs('hi')).toEqual(['--dangerously-skip-permissions', '-p', 'hi']);
+  });
+
+  it('cline passes run cwd via --cwd', () => {
+    const args = getAgentByName('cline')!.buildArgs('hi', undefined, '/tmp/sbx');
+    expect(args).toEqual(expect.arrayContaining(['--cwd', '/tmp/sbx']));
   });
 
   it('finds devin agent by name', () => {
