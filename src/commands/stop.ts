@@ -29,10 +29,17 @@ export async function stopRun(stateDir: string, runId: string | undefined, force
   }
 
   const signal = force ? 'SIGKILL' : 'SIGTERM';
+  // The runner spawns agents detached, so the stored pid is a process-group
+  // leader and -pid takes down the agent's whole tree (wrapper + children).
+  // Fall back to the bare pid if the group kill fails (not a group leader).
   try {
-    process.kill(pid, signal);
-  } catch (err) {
-    throw new Error(`failed to signal pid ${pid}: ${(err as Error).message}`);
+    process.kill(-pid, signal);
+  } catch {
+    try {
+      process.kill(pid, signal);
+    } catch (err) {
+      throw new Error(`failed to signal pid ${pid}: ${(err as Error).message}`);
+    }
   }
 
   const verb = force ? 'killed' : 'stopped';

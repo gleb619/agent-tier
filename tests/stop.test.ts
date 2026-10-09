@@ -56,7 +56,7 @@ describe('stopRun', () => {
 
     await stopRun('/tmp/state', undefined, false);
 
-    expect(killSpy).toHaveBeenCalledWith(run.pid, 'SIGTERM');
+    expect(killSpy).toHaveBeenCalledWith(-run.pid, 'SIGTERM');
     expect(updateRun).toHaveBeenCalledWith('/tmp/state', run.runId, {
       status: 'failed',
       finishedAt: expect.any(String),
@@ -76,7 +76,7 @@ describe('stopRun', () => {
 
     await stopRun('/tmp/state', 'abc', false);
 
-    expect(killSpy).toHaveBeenCalledWith(12345, 'SIGTERM');
+    expect(killSpy).toHaveBeenCalledWith(-12345, 'SIGTERM');
     expect(updateRun).toHaveBeenCalledWith('/tmp/state', 'abcdef123456', expect.any(Object));
   });
 
@@ -93,7 +93,7 @@ describe('stopRun', () => {
 
     await stopRun('/tmp/state', run.runId, true);
 
-    expect(killSpy).toHaveBeenCalledWith(55555, 'SIGKILL');
+    expect(killSpy).toHaveBeenCalledWith(-55555, 'SIGKILL');
   });
 
   it('does not signal when pid is not alive and returns successfully', async () => {
@@ -108,6 +108,22 @@ describe('stopRun', () => {
     expect(killSpy).not.toHaveBeenCalled();
     expect(updateRun).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(`[at] run ${run.runId} not running (pid ${run.pid} not alive)`);
+  });
+
+  it('falls back to bare pid when the group kill fails', async () => {
+    const run = makeRun({ pid: 22222 });
+    vi.mocked(loadRuns).mockReturnValue([run]);
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((target: number) => {
+      if (typeof target === 'number' && target < 0) {
+        throw new Error('kill ESRCH');
+      }
+      return true;
+    });
+
+    await stopRun('/tmp/state', run.runId, false);
+
+    expect(killSpy).toHaveBeenCalledWith(22222, 'SIGTERM');
+    expect(updateRun).toHaveBeenCalledWith('/tmp/state', run.runId, expect.any(Object));
   });
 
   it('propagates error when process.kill throws', async () => {
