@@ -155,4 +155,5 @@ at --global-state -p "<prompt>"     # shared round-robin across tiers
 at --log-dir /var/log/at -p "..."   # custom log directory
 echo '<json>' | at --json           # JSON mode
 at config sign                      # sign ~/.at/config.json after editing
+at -p "..." --namer                 # async session namer (config in ~/.at/namer.json)
 ```

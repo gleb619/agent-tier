@@ -10,6 +10,10 @@ Invoke before any work:
 - `codegraph` — codebase exploration; never grep when `codegraph_*` tools are available
 - `delegate-with-at` — delegate code writing to subagents via the `at` CLI
 
+## Session namer
+
+Namer sources live in `~/.at/namer.json` (provider config) and `~/.at/secrets.json` (API keys, mode 0o600). See `docs/namer.md` for the full schema, secret resolution order, and provider types (`ollama`, `openrouter`, `ollama-ssh-tunnel`).
+
 ## Commands
 
 ```bash
