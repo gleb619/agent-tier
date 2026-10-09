@@ -29,3 +29,42 @@ export const KNOWN_NAMER_PROVIDER_KINDS = [
 ] as const;
 
 export type NamerProviderKind = (typeof KNOWN_NAMER_PROVIDER_KINDS)[number];
+
+/** Discriminated provider config — `type` selects which fields apply. */
+export type NamerProviderConfig =
+  | NamerOllamaConfig
+  | NamerOpenRouterConfig
+  | NamerOllamaSshTunnelConfig;
+
+export interface NamerOllamaConfig {
+  name: string;
+  type: 'ollama';
+  url: string;
+  model: string;
+  timeoutMs?: number;
+}
+
+export interface NamerOpenRouterConfig {
+  name: string;
+  type: 'openrouter';
+  url: string;
+  model: string;
+  apiKeyRef?: string;
+  timeoutMs?: number;
+}
+
+export interface NamerOllamaSshTunnelConfig {
+  name: string;
+  type: 'ollama-ssh-tunnel';
+  ssh: { host: string; user: string; port?: number; identityFile?: string };
+  remoteUrl: string;
+  model: string;
+  timeoutMs?: number;
+}
+
+export interface NamerConfig {
+  providers: NamerProviderConfig[];
+  fallbackName?: string;
+  minLen?: number;
+  maxLen?: number;
+}

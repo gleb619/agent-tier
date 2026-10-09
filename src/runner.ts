@@ -9,7 +9,7 @@ import { filterHealthy, recordResult, isDeactivated, loadHealth } from './health
 import { addRun, updateRun } from './run-store';
 import { getStateFilePath } from './state-dir';
 import { setupNotify, startHub, tailLogFile, type Hub, type NotifyEvent } from './notify';
-import { generateSessionName } from './namer';
+import { generateSessionName } from './namer/providers/ollama';
 
 interface TrackedChild {
   pid: number;

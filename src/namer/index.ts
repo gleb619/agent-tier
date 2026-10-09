@@ -8,7 +8,6 @@ export { KNOWN_NAMER_PROVIDER_KINDS, type NamerProviderKind } from './types';
 export {
   OllamaProvider,
   sanitizeName,
-  generateSessionName,
   NAMER_MIN_LEN,
   NAMER_MAX_LEN,
   DEFAULT_NAMER_MODEL,
@@ -24,3 +23,15 @@ export {
   OllamaSshTunnelProvider,
   type OllamaSshTunnelOptions,
 } from './providers/ollama-ssh-tunnel';
+export {
+  generateSessionName,
+  type GenerateSessionNameOpts,
+  type GenerateSessionNameResult,
+} from './orchestrator';
+export {
+  loadNamerConfig,
+  loadSecrets,
+  resolveSecret,
+} from './config';
+export { buildProviders, type BuildProvidersDeps } from './registry';
+export { DEFAULT_NAMER_CONFIG } from './default-config';
