@@ -192,12 +192,12 @@ describe('buildStateReport', () => {
 describe('formatStateReport', () => {
   it('shows DEACTIVATED label', () => {
     writeTestStateFile({
-      cursor: { failureTimes: [], disabledTo: null, deactivated: true },
+      agy: { failureTimes: [], disabledTo: null, deactivated: true },
     });
 
     const out = formatStateReport(tmpDir);
     expect(out).toContain('DEACTIVATED');
-    expect(out).toContain('cursor');
+    expect(out).toContain('agy');
   });
 
   it('shows failure count and relative time', () => {

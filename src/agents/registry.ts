@@ -88,15 +88,6 @@ export const AGENTS: AgentDef[] = [
     bin: () => process.env.KIRO_BIN ?? `${NODE_BIN}/kiro-cli`,
     buildArgs: (prompt) => ['chat', '--no-interactive', '--trust-all-tools', prompt],
   },
-  {
-    name: 'cursor',
-    tier: 3,
-    bin: () => process.env.CURSOR_BIN ?? `${LOCAL_BIN}/cursor-agent`,
-    buildArgs: (prompt, model) =>
-      model
-        ? ['-p', prompt, '--yolo', '--trust', '--model', model]
-        : ['-p', prompt, '--yolo', '--trust'],
-  },
 
   {
     name: 'cline',

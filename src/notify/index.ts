@@ -22,7 +22,7 @@ registerAdapter('pi', makePiAdapter());
 registerAdapter('kilo', makeKiloAdapter());
 registerAdapter('cline', makeClineAdapter());
 registerAdapter('kiro', makeKiroAdapter());
-// cursor + agy fall through to log adapter (no structured output mode in registry)
+// agy falls through to log adapter (no structured output mode in registry)
 
 export function registerAdapter(name: string, adapter: NotifyAdapter): void {
   registry.set(name, adapter);

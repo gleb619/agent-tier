@@ -1,8 +1,8 @@
 import { AGENTS, getAgentsByTier, getAgentByName } from '../src/agents/registry';
 
 describe('AgentRegistry', () => {
-  it('has 14 agents defined', () => {
-    expect(AGENTS).toHaveLength(14);
+  it('has 13 agents defined', () => {
+    expect(AGENTS).toHaveLength(13);
   });
 
   it('has 3 tier-1 agents', () => {
@@ -13,8 +13,8 @@ describe('AgentRegistry', () => {
     expect(getAgentsByTier(2)).toHaveLength(5);
   });
 
-  it('has 4 tier-3 agents', () => {
-    expect(getAgentsByTier(3)).toHaveLength(4);
+  it('has 3 tier-3 agents', () => {
+    expect(getAgentsByTier(3)).toHaveLength(3);
   });
 
   it('has 2 tier-4 agents', () => {
@@ -91,7 +91,7 @@ describe('getAgentsByTier', () => {
     expect(tier3.length).toBeGreaterThan(0);
     const names = tier3.map(a => a.name);
     expect(names).toContain('agy');
-    expect(names).toContain('cursor');
+    expect(names).toContain('kiro');
   });
 
   it('returns tier 4 agents: mock, mock-long', () => {
