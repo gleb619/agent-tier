@@ -35,6 +35,7 @@ export function getAdapter(agentName: string): NotifyAdapter {
 export interface NotifySetup {
   args: string[];
   env: Record<string, string>;
+  promptPrefix: string;
   promptSuffix: string;
   adapter: NotifyAdapter;
 }
@@ -46,8 +47,9 @@ export function setupNotify(
   const adapter = getAdapter(agentName);
   const args = adapter.args?.(ctx) ?? [];
   const env = adapter.env?.(ctx) ?? {};
+  const promptPrefix = adapter.promptPrefix?.(ctx) ?? '';
   const promptSuffix = adapter.promptSuffix?.(ctx) ?? '';
-  return { args, env, promptSuffix, adapter };
+  return { args, env, promptPrefix, promptSuffix, adapter };
 }
 
 export * from './types';

@@ -646,44 +646,52 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
     return 0;
   }
 
-  // SSE path
-  const hub = await getProcessHub(options);
-  const runId = providedRunId ?? generateRunId();
-  const eventFile = getEventFilePath(options.stateDir, runId);
-  const sseUrl = `http://127.0.0.1:${hub.port}/events/${runId}`;
-  const ctx = { runId, port: hub.port, eventFile };
-  const { env: adapterEnv, promptSuffix, adapter } = setupNotify(agent.name, ctx);
-  const extraEnv = {
-    ...adapterEnv,
-    AT_RUN_ID: runId,
-    AT_SSE_URL: `http://127.0.0.1:${hub.port}`,
-    AT_EVENT_FILE: eventFile,
-    AT_BIN: getAtBin(),
-    AT_STATE_DIR: options.stateDir,
-    AT_RUN_NAME: options.runName ?? UNNAMED_PLACEHOLDER,
-  };
+   // SSE path
+   const hub = await getProcessHub(options);
+   const runId = providedRunId ?? generateRunId();
+   const eventFile = getEventFilePath(options.stateDir, runId);
+   const sseUrl = `http://127.0.0.1:${hub.port}/events/${runId}`;
+   const ctx = { runId, port: hub.port, eventFile, stateDir: options.stateDir, atBin: getAtBin() };
+   const { env: adapterEnv, promptPrefix, promptSuffix, adapter } = setupNotify(agent.name, ctx);
+   const extraEnv = {
+     ...adapterEnv,
+     AT_RUN_ID: runId,
+     AT_SSE_URL: `http://127.0.0.1:${hub.port}`,
+     AT_EVENT_FILE: eventFile,
+     AT_BIN: getAtBin(),
+     AT_STATE_DIR: options.stateDir,
+     AT_RUN_NAME: options.runName ?? UNNAMED_PLACEHOLDER,
+   };
 
-  // Compute argv: if adapter provides transformArgs, give it the full base
-  // args (with prompt already appended) so structured flags can be inserted
-  // before the prompt. Otherwise, append adapter.args() after the prompt.
-  const promptText = options.prompt + promptSuffix;
-  const baseArgs = agent.buildArgs(promptText, options.model, options.cwd);
-  const finalArgs = adapter.transformArgs
-    ? adapter.transformArgs(ctx, baseArgs)
-    : (() => {
-        const a = adapter.args?.(ctx) ?? [];
-        return a.length ? [...baseArgs, ...a] : baseArgs;
-      })();
+// Build the prompt text with prefix and suffix
+   let promptText = options.prompt;
+   if (promptPrefix) {
+     promptText = promptPrefix + '\n\n' + promptText;
+   }
+   if (promptSuffix) {
+     promptText = promptText + '\n\n' + promptSuffix;
+   }
 
-  const result = await launchAgent(agent, options, {
-    runId,
-    overrideArgs: finalArgs,
-    // For stdin-mode agents, the suffix travels through extraPrompt so
-    // launchAgent writes `prompt + promptSuffix` to the child's stdin.
-    extraPrompt: promptSuffix,
-    extraEnv,
-    name: options.runName,
-  });
+   // Compute argv: if adapter provides transformArgs, give it the full base
+   // args (with prompt already appended) so structured flags can be inserted
+   // before the prompt. Otherwise, append adapter.args() after the prompt.
+   const baseArgs = agent.buildArgs(promptText, options.model, options.cwd);
+   const finalArgs = adapter.transformArgs
+? adapter.transformArgs(ctx, baseArgs)
+      : (() => {
+          const a = adapter.args?.(ctx) ?? [];
+          return a.length ? [...baseArgs, ...a] : baseArgs;
+        })();
+
+   const result = await launchAgent(agent, options, {
+     runId,
+     overrideArgs: finalArgs,
+     // For stdin-mode agents, the suffix travels through extraPrompt so
+     // launchAgent writes `prompt + promptSuffix` to the child's stdin.
+     extraPrompt: promptSuffix,
+     extraEnv,
+     name: options.runName,
+   });
   const { child, logFile } = result;
   child.removeAllListeners('error');
 

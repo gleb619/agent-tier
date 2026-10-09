@@ -70,12 +70,15 @@ export interface NotifyAdapterContext {
   runId: string;
   port?: number;
   eventFile: string;
+  stateDir?: string;
+  atBin?: string;
 }
 
 export interface NotifyAdapter {
   name: string;
   args?(ctx: NotifyAdapterContext): string[];
   env?(ctx: NotifyAdapterContext): Record<string, string>;
+  promptPrefix?(ctx: NotifyAdapterContext): string;
   promptSuffix?(ctx: NotifyAdapterContext): string;
   /**
    * Optional: take the agent's full base args (with prompt already appended)

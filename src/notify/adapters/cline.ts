@@ -1,5 +1,5 @@
-import type { NotifyAdapter, NotifyEvent } from '../types';
-import { buildPromptSuffix } from '../prompt';
+import type { NotifyAdapter, NotifyEvent, NotifyAdapterContext } from '../types';
+import { DISCUSS_INSTRUCTION } from '../prompt';
 
 const TEXT_LIMIT = 500;
 const MESSAGE_THROTTLE_MS = 1000;
@@ -17,6 +17,23 @@ interface ClineEvent {
   reason?: string;
 }
 
+function buildClineInstructions(atBin: string, runId: string, stateDir: string): string {
+  return `Host channel: this run ID is ${runId}; state dir is ${stateDir}. Run the following command to ask the host a question and get an answer:
+
+  ${atBin} discuss ask "<question>" -o <option1> -o <option2>
+
+Replace "<question>" with your question, and "<option1>" / "<option2>" with the answer options. The command blocks until the host answers and prints the answer to stdout.
+
+To post a milestone note, run:
+
+  ${atBin} discuss note "<message>"
+
+Check for new host instructions at milestones by running:
+
+  ${atBin} discuss inbox
+`;
+}
+
 /**
  * cline: `--json` flag already added in buildArgs. Emits:
  *   {ts, type:"agent_event", event:{type:"content_start"|"tool_start"|..., contentType, text, accumulated}}
@@ -28,8 +45,19 @@ export function makeClineAdapter(): NotifyAdapter {
   let lastMessageAt = 0;
   return {
     name: 'cline',
+    promptPrefix(ctx) {
+      const atBin = ctx.atBin ?? 'at';
+      const runId = ctx.runId;
+      const stateDir = ctx.stateDir ?? '';
+      const prefix = buildClineInstructions(atBin, runId, stateDir);
+      return prefix;
+    },
     promptSuffix(ctx) {
-      return buildPromptSuffix(ctx);
+      const atBin = ctx.atBin ?? 'at';
+      const runId = ctx.runId;
+      const stateDir = ctx.stateDir ?? '';
+      const suffix = buildClineInstructions(atBin, runId, stateDir);
+      return suffix;
     },
     parseLine(line: string): Array<Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>> {
       try {

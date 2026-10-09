@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import { makeClineAdapter } from '../../src/notify/adapters/cline';
 import { getAdapter } from '../../src/notify';
+import { getAtBin } from '../../src/runner';
 
 const FIXTURES = path.join(__dirname, 'fixtures');
 
@@ -111,5 +112,35 @@ describe('cline adapter', () => {
   it('getAdapter returns the cline adapter for cline agent', () => {
     const a = getAdapter('cline');
     expect(a.name).toBe('cline');
+  });
+
+  it('promptPrefix inlines AT_BIN command and includes runId and stateDir', () => {
+    const adapter = makeClineAdapter();
+    const atBin = '/usr/local/bin/at';
+    const ctx = { runId: 'test-run-123', eventFile: '/tmp/events/test-run-123.jsonl', stateDir: '/tmp/.at', atBin };
+    const prefix = adapter.promptPrefix?.(ctx) ?? '';
+    expect(prefix).toContain(atBin);
+    expect(prefix).toContain('test-run-123');
+    expect(prefix).toContain('/tmp/.at');
+  });
+
+  it('promptSuffix inlines AT_BIN command and contains no $VARS', () => {
+    const adapter = makeClineAdapter();
+    const atBin = '/usr/local/bin/at';
+    const ctx = { runId: 'test-run-456', eventFile: '/tmp/events/test-run-456.jsonl', stateDir: '/tmp/.at', atBin };
+    const suffix = adapter.promptSuffix?.(ctx) ?? '';
+    expect(suffix).not.toMatch(/\$/);
+    expect(suffix).toContain(atBin);
+    expect(suffix).toContain('test-run-456');
+    expect(suffix).toContain('/tmp/.at');
+  });
+
+  it('promptPrefix and promptSuffix both contain AT_BIN with same value', () => {
+    const adapter = makeClineAdapter();
+    const ctx = { runId: 'run-789', eventFile: '/tmp/events/run-789.jsonl', stateDir: '/tmp/.at', atBin: '/usr/bin/at' };
+    const prefix = adapter.promptPrefix?.(ctx) ?? '';
+    const suffix = adapter.promptSuffix?.(ctx) ?? '';
+    expect(prefix).toContain('/usr/bin/at');
+    expect(suffix).toContain('/usr/bin/at');
   });
 });
