@@ -5,6 +5,16 @@ import { resolveFromArgs, parseJsonInput } from '../resolver';
 import { run } from '../runner';
 import { loadConfig, applyTierOverrides } from '../config';
 
+/** T11: warn (once per run) when deprecated --namer-model / --namer-url are set. */
+export function warnDeprecatedNamerFlags(opts: { namerModel?: unknown; namerUrl?: unknown }): void {
+  if (typeof opts.namerModel === 'string' && opts.namerModel.length > 0) {
+    console.warn('[at] --namer-model is deprecated; configure ~/.at/namer.json instead');
+  }
+  if (typeof opts.namerUrl === 'string' && opts.namerUrl.length > 0) {
+    console.warn('[at] --namer-url is deprecated; configure ~/.at/namer.json instead');
+  }
+}
+
 async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) return '';
   return new Promise((resolve) => {
@@ -37,14 +47,16 @@ export function registerDefaultCommand(program: Command): void {
       '[experimental] Ask a local Ollama model (default: gemma3:1b) to name the session from the prompt. Persisted on the run record and shown in `at status`. Off by default.',
       false,
     )
-    .option('--namer-model <name>', 'Override Ollama model used by --namer (default: AT_NAMER_MODEL env or gemma3:1b)')
-    .option('--namer-url <url>', 'Override Ollama base URL used by --namer (default: AT_NAMER_URL env or http://localhost:11434)')
+    .option('--namer-model <name>', '[DEPRECATED] Use namer.json config; this flag is ignored')
+    .option('--namer-url <url>', '[DEPRECATED] Use namer.json config; this flag is ignored')
     .option(
       '--json',
       'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0}',
       false,
     )
     .action(async (opts) => {
+      // T11: --namer-model / --namer-url are deprecated no-op shims.
+      warnDeprecatedNamerFlags(opts);
       try {
         let runOptions;
         const effectiveAgents = applyTierOverrides([...AGENTS, ...loadGenericAgents()], loadConfig());

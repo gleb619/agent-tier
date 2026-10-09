@@ -9,7 +9,7 @@ import { filterHealthy, recordResult, isDeactivated, loadHealth } from './health
 import { addRun, updateRun } from './run-store';
 import { getStateFilePath } from './state-dir';
 import { setupNotify, startHub, tailLogFile, type Hub, type NotifyEvent } from './notify';
-import { generateSessionName } from './namer/providers/ollama';
+import { generateSessionName } from './namer';
 
 interface TrackedChild {
   pid: number;
@@ -52,7 +52,7 @@ export class AgentError extends Error {
   }
 }
 
-export type Spawner = (agent: AgentDef, options: RunOptions) => Promise<number>;
+export type Spawner = (agent: AgentDef, options: RunOptions, runId: string) => Promise<number>;
 
 export interface LaunchResult {
   child: ReturnType<typeof spawn>;
@@ -336,20 +336,15 @@ export async function run(
   process.once('SIGINT', cleanup);
 
   try {
-    // Experimental: ask a local Ollama model for a session name. Best-effort
-    // and silent on failure — the namer is enrichment, never a blocker.
-    if (options.namer && !options.runName) {
-      const name = await generateSessionName(options.prompt, {
-        model: options.namerModel,
-        url: options.namerUrl,
-      });
-      if (name) {
-        options.runName = name;
-        console.warn(`[at] session name: ${name}`);
-      } else {
-        console.warn('[at] session namer unavailable (ollama not running or model not found); continuing without a name');
-      }
-    }
+    // Fire-and-forget namer (T09): start the orchestrator now so it can run
+    // in parallel with agent selection + spawn. The child gets `'unnamed'`
+    // as AT_RUN_NAME during launch; the real name lands later via updateRun
+    // when the orchestrator resolves.
+    const runId = generateRunId();
+    const namePromise: Promise<{ name: string; provider: string | null } | null> =
+      options.namer && !options.runName
+        ? generateSessionName(options.prompt, options.stateDir).catch(() => null)
+        : Promise.resolve(null);
 
     const stateFilePath = getStateFilePath(options.stateDir);
     const healthState = loadHealth(stateFilePath);
@@ -393,7 +388,28 @@ export async function run(
 
       let healthRecorded = false;
       try {
-        const exitCode = await spawner(agent, options);
+        const exitCode = await spawner(agent, options, runId);
+        // Wire namer result to run-store now that runId is known (fire-and-forget)
+        if (options.namer && !options.runName) {
+          namePromise.then(async (result) => {
+            if (!result || result.provider === null) return; // fallback, no point updating
+            void updateRun(options.stateDir, runId, { name: result.name }).catch(() => {});
+            // T10: SSE rename event — published only when sse is on
+            if (options.sse) {
+              try {
+                const hub = await getProcessHub(options);
+                hub.publish({
+                  runId,
+                  agent: agent.name,
+                  ts: new Date().toISOString(),
+                  seq: 0,
+                  type: 'rename',
+                  data: { name: result.name },
+                } as NotifyEvent);
+              } catch { /* hub not available — skip */ }
+            }
+          }).catch(() => {});
+        }
         if (options.stream) {
           await recordResult(stateFilePath, agent.name, exitCode === 0);
           healthRecorded = true;
@@ -426,9 +442,15 @@ function buildDoneEvent(status: 'done' | 'failed', exitCode: number): Omit<Notif
   return { type: 'done', data: { status, exitCode } };
 }
 
-export const defaultSpawner: Spawner = async (agent, options) => {
+export const defaultSpawner: Spawner = async (agent, options, providedRunId) => {
   if (!options.sse) {
-    const result = await launchAgent(agent, options, options.runName ? { name: options.runName } : undefined);
+    const result = await launchAgent(
+      agent,
+      options,
+      options.runName
+        ? { name: options.runName, ...(providedRunId ? { runId: providedRunId } : {}) }
+        : providedRunId ? { runId: providedRunId } : undefined,
+    );
     const { child, runId, logFile } = result;
 
     child.removeAllListeners('error');
@@ -474,7 +496,7 @@ export const defaultSpawner: Spawner = async (agent, options) => {
 
   // SSE path
   const hub = await getProcessHub(options);
-  const runId = generateRunId();
+  const runId = providedRunId ?? generateRunId();
   const eventFile = getEventFilePath(options.stateDir, runId);
   const sseUrl = `http://127.0.0.1:${hub.port}/events/${runId}`;
   const ctx = { runId, port: hub.port, eventFile };

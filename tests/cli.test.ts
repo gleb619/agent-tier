@@ -120,3 +120,46 @@ describe('runInit', () => {
     expect(() => runInit({ agent: 'nonexistent-agent-xyz' })).toThrow();
   });
 });
+
+describe('warnDeprecatedNamerFlags (T11)', () => {
+  it('warns when --namer-model is set', async () => {
+    const { warnDeprecatedNamerFlags } = await import('../src/commands/default');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnDeprecatedNamerFlags({ namerModel: 'gemma:7b', namerUrl: undefined });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('--namer-model'));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('namer.json'));
+    warnSpy.mockRestore();
+  });
+
+  it('warns when --namer-url is set', async () => {
+    const { warnDeprecatedNamerFlags } = await import('../src/commands/default');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnDeprecatedNamerFlags({ namerModel: undefined, namerUrl: 'http://x:11434' });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('--namer-url'));
+    warnSpy.mockRestore();
+  });
+
+  it('warns for both when both are set', async () => {
+    const { warnDeprecatedNamerFlags } = await import('../src/commands/default');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnDeprecatedNamerFlags({ namerModel: 'a', namerUrl: 'b' });
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    warnSpy.mockRestore();
+  });
+
+  it('silent when neither flag is set', async () => {
+    const { warnDeprecatedNamerFlags } = await import('../src/commands/default');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnDeprecatedNamerFlags({});
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('silent when flags are empty strings', async () => {
+    const { warnDeprecatedNamerFlags } = await import('../src/commands/default');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnDeprecatedNamerFlags({ namerModel: '', namerUrl: '' });
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+});

@@ -6,7 +6,8 @@ export type NotifyEventType =
   | 'error'
   | 'done'
   | 'question'
-  | 'answer';
+  | 'answer'
+  | 'rename';
 
 export type DiscussFrom = 'agent' | 'host';
 export type DiscussKind = 'question' | 'answer' | 'say' | 'note';

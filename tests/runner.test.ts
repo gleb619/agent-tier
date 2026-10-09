@@ -348,9 +348,9 @@ describe('defaultSpawner', () => {
 });
 
 describe('run — namer integration (experimental)', () => {
-  // Mock the ollama provider so we can deterministically test the wiring.
-  vi.mock('../src/namer/providers/ollama', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('../src/namer/providers/ollama')>();
+  // Mock the orchestrator's generateSessionName (T09 wiring target).
+  vi.mock('../src/namer', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../src/namer')>();
     return {
       ...actual,
       generateSessionName: vi.fn(),
@@ -358,26 +358,23 @@ describe('run — namer integration (experimental)', () => {
   });
 
   it('does not call namer when namer flag is false', async () => {
-    const { generateSessionName } = await import('../src/namer/providers/ollama');
+    const { generateSessionName } = await import('../src/namer');
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
     await run({ ...baseOptions, namer: false }, agents, spawner);
     expect(generateSessionName).not.toHaveBeenCalled();
   });
 
-  it('calls namer when namer flag is true and forwards result to spawner', async () => {
-    const { generateSessionName } = await import('../src/namer/providers/ollama');
-    (generateSessionName as Mock).mockResolvedValue('refactor-auth-middleware-please');
-    const spawner: Spawner = vi.fn(async (_agent, opts) => {
-      expect((opts as RunOptions).runName).toBe('refactor-auth-middleware-please');
-      return 0;
-    });
+  it('calls namer when namer flag is true (fire-and-forget)', async () => {
+    const { generateSessionName } = await import('../src/namer');
+    (generateSessionName as Mock).mockResolvedValue({ name: 'refactor-auth-middleware-please', provider: 'local-ollama' });
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
     await run({ ...baseOptions, namer: true, prompt: 'refactor auth' }, agents, spawner);
     expect(generateSessionName).toHaveBeenCalledTimes(1);
   });
 
-  it('continues without name when namer returns null', async () => {
-    const { generateSessionName } = await import('../src/namer/providers/ollama');
-    (generateSessionName as Mock).mockResolvedValue(null);
+  it('spawner receives undefined runName (namer is fire-and-forget, lands via updateRun)', async () => {
+    const { generateSessionName } = await import('../src/namer');
+    (generateSessionName as Mock).mockResolvedValue({ name: 'refactor-auth-middleware-please', provider: 'local-ollama' });
     const spawner: Spawner = vi.fn(async (_agent, opts) => {
       expect((opts as RunOptions).runName).toBeUndefined();
       return 0;
