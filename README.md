@@ -154,6 +154,85 @@ The runner exports these to the child process:
 5. Add `tests/notify/adapter-<name>.test.ts` + a real fixture at `tests/notify/fixtures/<name>.jsonl` (3-5 lines captured from a tiny `timeout 30 <bin> ...` invocation).
 6. Agents without a structured mode need no work — `getAdapter()` falls through to `logAdapter`.
 
+## Discuss channel
+
+`at discuss` is a two-way conversation channel layered on top of the SSE hub. Agents use it to ask the host a decision-blocking question (and block until answered); the host uses it to push instructions, answer questions, or watch the thread live. Everything is persisted to `<stateDir>/events/<runId>.discuss.jsonl` and mirrored as SSE events so dashboards see the conversation in real time.
+
+### Commands
+
+```
+# Agent side (runId defaults to $AT_RUN_ID)
+at discuss ask "Deploy to prod?" -o yes -o no [--timeout 300] [--default yes]
+at discuss note "lint fixed in src/api.ts"
+at discuss inbox [--wait 30] [--since m4]
+
+# Host side
+at discuss list [runId] [--pending] [--json]
+at discuss answer [qid] "yes" [-r runId]      # qid defaults to latest unanswered
+at discuss say "now bump the version" [-r runId]
+at discuss watch [-r runId]                     # follow thread live; prompts in TTY
+```
+
+`at notify <runId> <msg...>` is kept as an alias for `at discuss note`.
+
+### Storage
+
+A single JSONL thread per run: `<stateDir>/events/<runId>.discuss.jsonl`.
+
+```jsonl
+{"id":"m1","from":"agent","kind":"question","text":"deploy to prod?","options":["yes","no"],"ts":"..."}
+{"id":"m2","from":"host","kind":"answer","text":"yes","replyTo":"m1","ts":"..."}
+{"id":"m3","from":"host","kind":"say","text":"now bump the version","ts":"..."}
+{"id":"m4","from":"agent","kind":"note","text":"bumped to 0.1.2","ts":"..."}
+```
+
+When `AT_SSE_URL` is set, `ask` / `note` / `say` / `answer` POST to the hub (which persists + broadcasts); otherwise they append directly to the file.
+
+### Hub endpoints
+
+| Method | Path                       | Purpose                                                   |
+|--------|----------------------------|-----------------------------------------------------------|
+| POST   | `/discuss/<runId>`         | Append `{from, kind, text, options?, replyTo?}`. Mirrors to SSE. |
+| GET    | `/discuss/<runId>`         | Return the full thread as JSON.                           |
+| GET    | `/discuss/<runId>?pending=1` | Return only unanswered questions.                       |
+
+The legacy `POST /emit/<runId>` still works.
+
+### Flow
+
+```
+agent process                                 host
+─────────────                                 ────
+$AT_BIN discuss ask "deploy?" ──► SSE ──► hub writes m1, broadcasts 'question' SSE
+                                  └──► list/watch on host side show m1
+host: at discuss answer m1 "yes" ──► SSE ──► hub writes m2 (replyTo=m1), broadcasts 'answer'
+                                  └──► agent unblocks, prints "yes" to stdout
+```
+
+### Environment variables
+
+In addition to the variables listed under [Live progress](#environment-variables), the runner exports:
+
+| Var             | Meaning                                                       |
+|-----------------|---------------------------------------------------------------|
+| `AT_BIN`        | Shell-quoted `node /abs/dist/cli.js`. Agent uses it as `$AT_BIN discuss ...`. |
+| `AT_STATE_DIR`  | The state dir passed to `resolveStateDir()`. Used by `discuss list/inbox`. |
+| `AT_RUN_ID`     | (existing) The run id; `discuss` subcommands default to it.   |
+| `AT_SSE_URL`    | (existing) When set, entries POST to the hub instead of writing the file. |
+
+### Prompt injection
+
+`src/notify/prompt.ts` exports `DISCUSS_INSTRUCTION`, which is appended to every adapter's `promptSuffix`:
+
+```
+Host channel: if you need a decision, run `$AT_BIN discuss ask "<question>" -o <opt> -o <opt>`
+and use its stdout as the answer (blocks until answered). Post milestones with
+`$AT_BIN discuss note "<msg>"`. Check `$AT_BIN discuss inbox` for new host instructions
+at milestones.
+```
+
+The log adapter keeps its legacy `at notify <runId>` line in addition, so log-fallback agents see both old and new wording.
+
 ## Tiers
 
 | Tier          | Agents                         | Role                       |

@@ -348,9 +348,9 @@ describe('defaultSpawner', () => {
 });
 
 describe('run — namer integration (experimental)', () => {
-  // Mock the ollama-namer module so we can deterministically test the wiring.
-  vi.mock('../src/ollama-namer', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('../src/ollama-namer')>();
+  // Mock the namer module so we can deterministically test the wiring.
+  vi.mock('../src/namer', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../src/namer')>();
     return {
       ...actual,
       generateSessionName: vi.fn(),
@@ -358,14 +358,14 @@ describe('run — namer integration (experimental)', () => {
   });
 
   it('does not call namer when namer flag is false', async () => {
-    const { generateSessionName } = await import('../src/ollama-namer');
+    const { generateSessionName } = await import('../src/namer');
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
     await run({ ...baseOptions, namer: false }, agents, spawner);
     expect(generateSessionName).not.toHaveBeenCalled();
   });
 
   it('calls namer when namer flag is true and forwards result to spawner', async () => {
-    const { generateSessionName } = await import('../src/ollama-namer');
+    const { generateSessionName } = await import('../src/namer');
     (generateSessionName as Mock).mockResolvedValue('refactor-auth-middleware-please');
     const spawner: Spawner = vi.fn(async (_agent, opts) => {
       expect((opts as RunOptions).runName).toBe('refactor-auth-middleware-please');
@@ -376,7 +376,7 @@ describe('run — namer integration (experimental)', () => {
   });
 
   it('continues without name when namer returns null', async () => {
-    const { generateSessionName } = await import('../src/ollama-namer');
+    const { generateSessionName } = await import('../src/namer');
     (generateSessionName as Mock).mockResolvedValue(null);
     const spawner: Spawner = vi.fn(async (_agent, opts) => {
       expect((opts as RunOptions).runName).toBeUndefined();
