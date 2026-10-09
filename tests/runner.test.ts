@@ -1,8 +1,8 @@
-import { run, Spawner, defaultSpawner } from '../src/runner';
+import { run, Spawner, defaultSpawner, AgentError } from '../src/runner';
 import { RunOptions } from '../src/resolver';
 import { AgentDef } from '../src/agents/registry';
 import { spawnRunWatch } from '../src/run-watch';
-import { existsSync, readFileSync, readdirSync, unlinkSync, rmdirSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, unlinkSync, rmdirSync, mkdirSync } from 'fs';
 import path from 'path';
 import * as scheduler from '../src/scheduler';
 import * as health from '../src/health';
@@ -400,6 +400,151 @@ describe('defaultSpawner', () => {
     const content = readFileSync(markerFile, 'utf8').trim();
     expect(content).toContain('agent=test');
     expect(content).toContain('status=done');
+  });
+});
+
+describe('defaultSpawner — --verify hook', () => {
+  const tmpLogDir = '/tmp/at-test-logs-runner-verify';
+
+  beforeEach(() => {
+    if (existsSync(tmpLogDir)) {
+      for (const f of readdirSync(tmpLogDir)) {
+        try { unlinkSync(path.join(tmpLogDir, f)); } catch {}
+      }
+      try { rmdirSync(tmpLogDir); } catch {}
+    }
+  });
+
+  it('passes the run through when --verify exits 0 (stream mode)', async () => {
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/echo',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+      verify: 'true',
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(0);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const logPath = path.join(tmpLogDir, readdirSync(tmpLogDir)[0]);
+    const content = readFileSync(logPath, 'utf8');
+    expect(content).toContain('[at] verify ok: true');
+    expect(content).not.toContain('verify failed');
+  });
+
+  it('fails the run (AgentError) when --verify exits non-zero (stream mode)', async () => {
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/echo',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+      verify: 'sh -c "echo boom; exit 3"',
+    };
+    await expect(defaultSpawner(agent, options)).rejects.toThrow(/verify failed/);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const logPath = path.join(tmpLogDir, readdirSync(tmpLogDir)[0]);
+    const content = readFileSync(logPath, 'utf8');
+    expect(content).toContain('[at] verify failed (exit 3): sh -c "echo boom; exit 3"');
+    expect(content).toContain('boom');
+  });
+
+  it('fails the run (AgentError) when --verify exits non-zero (--wait mode)', async () => {
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/echo',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: false,
+      wait: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+      verify: 'exit 9',
+    };
+    await expect(defaultSpawner(agent, options)).rejects.toThrow(/verify failed/);
+    const logPath = path.join(tmpLogDir, readdirSync(tmpLogDir)[0]);
+    const content = readFileSync(logPath, 'utf8');
+    expect(content).toContain('[at] verify failed (exit 9): exit 9');
+  });
+
+  it('still fires --callback with AT_STATUS=failed when verify fails', async () => {
+    const markerFile = path.join(tmpLogDir, 'callback-marker-verify-fail.txt');
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/echo',
+      buildArgs: (p) => [p],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+      verify: 'exit 2',
+      callback: `sh -c 'echo "status=$AT_STATUS" > ${markerFile}'`,
+    };
+    await expect(defaultSpawner(agent, options)).rejects.toThrow(/verify failed/);
+    const content = readFileSync(markerFile, 'utf8').trim();
+    expect(content).toContain('status=failed');
+  });
+
+  it('triggers retry-with-next-agent when verify fails (auto mode, retries=2)', async () => {
+    // Direct unit-level proof: a mock spawner that throws AgentError must
+    // make run() retry the next candidate. The real subprocess path is
+    // covered above; here we assert the retry contract end-to-end.
+    const spawner: Spawner = vi.fn()
+      .mockImplementationOnce(() => Promise.reject(new AgentError('verify failed (exit 1)', 1)))
+      .mockResolvedValueOnce(0);
+    const exitCode = await run({ ...baseOptions, retries: 2 }, agents, spawner);
+    expect(exitCode).toBe(0);
+    expect(spawner).toHaveBeenCalledTimes(2);
+  });
+
+  it('forwards AT_VERIFY_CMD + AT_CWD env to the detached supervisor (not argv)', async () => {
+    // The supervisor spawn must run inside an existing cwd or spawn ENOENTs.
+    const fakeCwd = path.join(tmpLogDir, 'fake-cwd');
+    mkdirSync(fakeCwd, { recursive: true });
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/bash',
+      buildArgs: () => ['-c', 'sleep 0.2'],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: false,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+      verify: 'echo verify-stamp',
+      cwd: fakeCwd,
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(0);
+    expect(spawnRunWatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        verify: 'echo verify-stamp',
+        cwd: fakeCwd,
+      }),
+    );
+    const pid = (spawnRunWatch as Mock).mock.calls[0][0].pid as number;
+    try { process.kill(-pid, 'SIGKILL'); } catch {}
   });
 });
 

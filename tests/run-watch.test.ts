@@ -20,6 +20,89 @@ vi.mock('fs', async (importOriginal) => {
 
 const ARGS = ['12345', 'run-1', '/tmp/at-state', 'test-agent', '2', '/tmp/at-logs/run.log'];
 
+describe('run-watch — verify hook (AT_VERIFY_CMD env)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.resetAllMocks();
+    isPidAliveMock.mockReturnValue(false);
+    spawnSyncMock.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete process.env.AT_VERIFY_CMD;
+    delete process.env.AT_CWD;
+  });
+
+  it('runs the verify command after pid dies and appends ok line on success', async () => {
+    process.env.AT_VERIFY_CMD = 'true';
+    spawnSyncMock.mockImplementation((cmd: string) => {
+      if (cmd === 'true') return { status: 0, stdout: '', stderr: '' };
+      return { status: 0, stdout: '', stderr: '' };
+    });
+    const promise = main(ARGS);
+    expect(await promise).toBe(0);
+    // updateRun done (first call), callback never
+    expect(updateRunMock).toHaveBeenCalledWith('/tmp/at-state', 'run-1', expect.objectContaining({ status: 'done' }));
+    // verify invoked once, callback never (ARGS has no callback slot)
+    const verifyCalls = spawnSyncMock.mock.calls.filter((c) => c[0] === 'true');
+    expect(verifyCalls.length).toBe(1);
+    expect(spawnSyncMock.mock.calls.some((c) => c[0] === 'true')).toBe(true);
+    const verifyLogs = appendFileMock.mock.calls.filter(
+      (c) => typeof c[1] === 'string' && c[1].includes('verify ok'),
+    );
+    expect(verifyLogs.length).toBe(1);
+  });
+
+  it('marks run failed, appends verify-failed log line, fires callback with AT_STATUS=failed', async () => {
+    process.env.AT_VERIFY_CMD = 'sh -c "exit 7"';
+    spawnSyncMock.mockImplementation((cmd: string) => {
+      if (cmd === 'sh -c "exit 7"') return { status: 7, stdout: '', stderr: 'boom' };
+      return { status: 0, stdout: '', stderr: '' };
+    });
+    const promise = main([...ARGS, 'cb-after-verify']);
+    expect(await promise).toBe(0);
+    const calls = updateRunMock.mock.calls;
+    // First updateRun: done; second: failed (verify override)
+    expect(calls[0][2]).toEqual(expect.objectContaining({ status: 'done' }));
+    expect(calls[1][2]).toEqual(expect.objectContaining({ status: 'failed' }));
+    const failedLogs = appendFileMock.mock.calls.filter(
+      (c) => typeof c[1] === 'string' && c[1].includes('verify failed (exit 7)'),
+    );
+    expect(failedLogs.length).toBe(1);
+    // callback fired with AT_STATUS=failed
+    const cbCall = spawnSyncMock.mock.calls.find((c) => c[0] === 'cb-after-verify');
+    expect(cbCall).toBeDefined();
+    // spawnSync(cmd, args, opts) — opts is at index 2
+    expect(((cbCall as any)[2]).env.AT_STATUS).toBe('failed');
+  });
+
+  it('uses AT_CWD for verify when set, otherwise process.cwd()', async () => {
+    process.env.AT_VERIFY_CMD = 'pwd-and-stamp';
+    process.env.AT_CWD = '/tmp/at-verify-cwd';
+    spawnSyncMock.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+    const promise = main(ARGS);
+    expect(await promise).toBe(0);
+    const verifyCall = spawnSyncMock.mock.calls.find((c) => c[0] === 'pwd-and-stamp');
+    expect(verifyCall).toBeDefined();
+    expect((verifyCall![2] as any).cwd).toBe('/tmp/at-verify-cwd');
+    expect((verifyCall![2] as any).shell).toBe(true);
+  });
+
+  it('is unchanged behaviour when AT_VERIFY_CMD is not set (no verify, no log line)', async () => {
+    delete process.env.AT_VERIFY_CMD;
+    const promise = main(ARGS);
+    expect(await promise).toBe(0);
+    expect(spawnSyncMock).not.toHaveBeenCalled();
+    expect(updateRunMock).toHaveBeenCalledTimes(1);
+    expect(updateRunMock).toHaveBeenCalledWith('/tmp/at-state', 'run-1', expect.objectContaining({ status: 'done' }));
+    const verifyLogs = appendFileMock.mock.calls.filter(
+      (c) => typeof c[1] === 'string' && /verify/.test(c[1]),
+    );
+    expect(verifyLogs.length).toBe(0);
+  });
+});
+
 describe('run-watch main()', () => {
   beforeEach(() => {
     vi.useFakeTimers();

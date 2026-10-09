@@ -46,6 +46,10 @@ export function registerDefaultCommand(program: Command): void {
       '--callback <command>',
       'Shell command to run after the agent job finishes. Exposes AT_RUN_ID, AT_AGENT, AT_TIER, AT_EXIT_CODE, AT_LOG_FILE, AT_PROMPT, AT_STATUS env vars',
     )
+    .option(
+      '--verify <command>',
+      'Shell command run after the agent exits, before --callback. Non-zero exit fails the run (status=failed, log line, AgentError raised in blocking modes to trigger retry-with-next-agent, AT_STATUS=failed in callback). Exposes the same AT_* env vars as --callback plus AT_VERIFY_CMD.',
+    )
     .option('--sse [port]', 'Enable SSE live-progress hub (default port 7777, 0=random)')
     .option(
       '--namer',
@@ -84,6 +88,7 @@ export function registerDefaultCommand(program: Command): void {
             noChop: !(opts.chop as boolean),
             timeout: opts.timeout,
             callback: parsed.callback ?? opts.callback,
+            verify: parsed.verify ?? opts.verify,
             sse: parsed.sse,
             ssePort: parsed.ssePort,
             namer: parsed.namer ?? (opts.namer as boolean),
@@ -106,6 +111,7 @@ export function registerDefaultCommand(program: Command): void {
             noChop: !(opts.chop as boolean),
             timeout: opts.timeout,
             callback: opts.callback,
+            verify: opts.verify as string | undefined,
             sse: opts.sse,
             namer: opts.namer as boolean,
             namerModel: opts.namerModel as string | undefined,

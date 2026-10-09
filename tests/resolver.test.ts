@@ -102,6 +102,22 @@ describe('resolveFromArgs', () => {
   it('normalizes empty callback to undefined', () => {
     expect(resolveFromArgs({ prompt: 'hello', callback: '' }).callback).toBeUndefined();
   });
+
+  it('passes through verify command', () => {
+    expect(resolveFromArgs({ prompt: 'hello', verify: 'npm test' }).verify).toBe('npm test');
+  });
+
+  it('normalizes whitespace-only verify to undefined', () => {
+    expect(resolveFromArgs({ prompt: 'hello', verify: '   ' }).verify).toBeUndefined();
+  });
+
+  it('normalizes empty verify to undefined', () => {
+    expect(resolveFromArgs({ prompt: 'hello', verify: '' }).verify).toBeUndefined();
+  });
+
+  it('defaults verify to undefined when not provided', () => {
+    expect(resolveFromArgs({ prompt: 'hello' }).verify).toBeUndefined();
+  });
 });
 
 describe('resolveFromArgs — namer flag (experimental)', () => {
@@ -225,5 +241,20 @@ describe('parseJsonInput edge cases', () => {
   it('normalizes whitespace-only callback in JSON to undefined', () => {
     const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello', callback: '   ' }));
     expect(opts.callback).toBeUndefined();
+  });
+
+  it('includes verify in parsed JSON', () => {
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello', verify: 'npm test' }));
+    expect(opts.verify).toBe('npm test');
+  });
+
+  it('normalizes whitespace-only verify in JSON to undefined', () => {
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello', verify: '   ' }));
+    expect(opts.verify).toBeUndefined();
+  });
+
+  it('defaults verify to undefined when missing from JSON', () => {
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello' }));
+    expect(opts.verify).toBeUndefined();
   });
 });

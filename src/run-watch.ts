@@ -50,6 +50,10 @@ export interface RunWatchOptions {
   callback?: string;
   /** Original prompt, forwarded to the callback as `AT_PROMPT`. */
   prompt: string;
+  /** Optional post-agent verify command (forwarded via `AT_VERIFY_CMD`). */
+  verify?: string;
+  /** Agent's working directory (forwarded via `AT_CWD`) — verify runs there when set. */
+  cwd?: string;
 }
 
 /** Absolute path of the compiled supervisor entry (next to this module). */
@@ -74,10 +78,16 @@ export function buildRunWatchArgs(o: RunWatchOptions): string[] {
  */
 export function spawnRunWatch(o: RunWatchOptions): void {
   try {
+    // Verify command + agent cwd travel via env so the supervisor argv stays
+    // a fixed shape (we'd otherwise need to add/remove slots that depend on
+    // whether --verify / --cwd were set).
+    const env: NodeJS.ProcessEnv = { ...process.env, AT_PROMPT: o.prompt };
+    if (o.verify && o.verify.trim()) env.AT_VERIFY_CMD = o.verify.trim();
+    if (o.cwd) env.AT_CWD = o.cwd;
     const child = spawn(process.execPath, [getRunWatchScript(), ...buildRunWatchArgs(o)], {
       detached: true,
       stdio: 'ignore',
-      env: { ...process.env, AT_PROMPT: o.prompt },
+      env,
     });
     child.unref();
     child.once('error', () => {});
@@ -92,7 +102,7 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function runCallback(callback: string, o: RunWatchOptions): void {
+function runCallback(callback: string, o: RunWatchOptions, status: 'done' | 'failed' = 'done'): void {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     AT_RUN_ID: o.runId,
@@ -102,7 +112,7 @@ function runCallback(callback: string, o: RunWatchOptions): void {
     AT_EXIT_CODE: '0',
     AT_LOG_FILE: o.logFile,
     AT_PROMPT: o.prompt,
-    AT_STATUS: 'done',
+    AT_STATUS: status,
   };
 
   const result = spawnSync(callback, [], { env, stdio: 'ignore', shell: true });
@@ -176,8 +186,39 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       }
     }
 
+    let finalStatus: 'done' | 'failed' = 'done';
+    const verifyCmd = process.env.AT_VERIFY_CMD?.trim();
+    if (verifyCmd) {
+      // Verify runs in AT_CWD when set (forwarded by the parent CLI's
+      // options.cwd), else falls back to the supervisor's CWD — which IS
+      // the parent's CWD for any realistic detached-run invocation (the
+      // supervisor inherits cwd from the spawning `at` process).
+      const verifyCwd = process.env.AT_CWD ?? process.cwd();
+      const verifyResult = spawnSync(verifyCmd, [], { cwd: verifyCwd, shell: true, stdio: 'ignore' });
+      const verifyExit = verifyResult.status ?? 1;
+      if (verifyExit === 0) {
+        try {
+          appendFileSync(logFile, `[at] verify ok: ${verifyCmd}\n`);
+        } catch {
+          // best effort
+        }
+      } else {
+        finalStatus = 'failed';
+        try {
+          appendFileSync(logFile, `[at] verify failed (exit ${verifyExit}): ${verifyCmd}\n`);
+        } catch {
+          // best effort
+        }
+        try {
+          await updateRun(stateDir, runId, { status: finalStatus });
+        } catch {
+          // best effort
+        }
+      }
+    }
+
     if (callback && callback.trim()) {
-      runCallback(callback.trim(), options);
+      runCallback(callback.trim(), options, finalStatus);
     }
 
     return 0;

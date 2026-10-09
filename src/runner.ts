@@ -95,6 +95,45 @@ export function executeCallback(command: string | undefined, context: CallbackCo
   }
 }
 
+/**
+ * Run a post-agent verification command. Always runs in a shell so users can
+ * string commands together (`make test && make lint`). On non-zero exit the
+ * caller is expected to fail the run.
+ *
+ * Output is captured (stdout+stderr merged) so the run log can include the
+ * first lines on failure — but only a slice is appended to keep logs short.
+ */
+export function runVerify(cmd: string, cwd: string): { exitCode: number; output: string } {
+  const result = spawnSync(cmd, [], {
+    cwd,
+    shell: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    encoding: 'utf8',
+  });
+  const stdout = typeof result.stdout === 'string' ? result.stdout : '';
+  const stderr = typeof result.stderr === 'string' ? result.stderr : '';
+  // Some shells (busybox) print to stdout even on failure; merge so the log
+  // line on failure captures everything the user might want to see.
+  return { exitCode: result.status ?? 1, output: stdout + stderr };
+}
+
+/**
+ * Append the standard `[at] verify ...` log line. Kept tiny so a long
+ * failing test output doesn't drown the run log — only the first ~20 lines.
+ */
+export function appendVerifyLogLine(logFile: string, outcome: 'ok' | 'failed', cmd: string, exitCode: number, output?: string): void {
+  try {
+    if (outcome === 'ok') {
+      appendFileSync(logFile, `[at] verify ok: ${cmd}\n`);
+      return;
+    }
+    const head = (output ?? '').split('\n').slice(0, 20).join('\n');
+    appendFileSync(logFile, `[at] verify failed (exit ${exitCode}): ${cmd}\n${head}${head && !head.endsWith('\n') ? '\n' : ''}`);
+  } catch {
+    // log file may be gone — best effort
+  }
+}
+
 interface LaunchExtras {
   runId?: string;
   extraArgs?: string[];
@@ -302,12 +341,42 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   }
 
   const exitCode = code ?? 1;
-  const status = exitCode === 0 ? 'done' : 'failed';
+  let status: 'done' | 'failed' = exitCode === 0 ? 'done' : 'failed';
   await updateRun(options.stateDir, runId, {
     status,
     finishedAt: new Date().toISOString(),
     exitCode,
   });
+
+  // Post-agent verify hook: fail the run when the command exits non-zero.
+  // On failure: status flipped to 'failed', log line appended, --callback
+  // still fires (with AT_STATUS=failed per spec), and AgentError is thrown so
+  // `run()`'s retry-with-next-agent logic applies (blocking modes only).
+  // Agent exitCode is kept on the record — the failure source is visible
+  // via the log line.
+  if (options.verify && options.verify.trim()) {
+    const verifyCmd = options.verify.trim();
+    const verifyCwd = options.cwd ?? process.cwd();
+    const { exitCode: verifyExit, output } = runVerify(verifyCmd, verifyCwd);
+    if (verifyExit === 0) {
+      appendVerifyLogLine(logFile, 'ok', verifyCmd, 0);
+    } else {
+      status = 'failed';
+      await updateRun(options.stateDir, runId, { status });
+      appendVerifyLogLine(logFile, 'failed', verifyCmd, verifyExit, output);
+      executeCallback(options.callback, {
+        runId,
+        agent: agent.name,
+        tier: agent.tier,
+        exitCode,
+        logFile,
+        prompt: options.prompt,
+        status,
+        name: options.runName ?? UNNAMED_PLACEHOLDER,
+      });
+      throw new AgentError(`verify failed (exit ${verifyExit}): ${verifyCmd}`, verifyExit);
+    }
+  }
 
   executeCallback(options.callback, {
     runId,
@@ -479,7 +548,7 @@ async function awaitDetachedExit(result: LaunchResult, options: RunOptions): Pro
   }
 
   const exitCode = code ?? 1;
-  const status = exitCode === 0 ? 'done' : 'failed';
+  let status: 'done' | 'failed' = exitCode === 0 ? 'done' : 'failed';
   await updateRun(options.stateDir, runId, {
     status,
     finishedAt: new Date().toISOString(),
@@ -487,6 +556,31 @@ async function awaitDetachedExit(result: LaunchResult, options: RunOptions): Pro
   });
   const sfp = getStateFilePath(options.stateDir);
   await recordResult(sfp, agent.name, exitCode === 0);
+
+  // Post-agent verify hook: see streamLogsAndWatch for the full rationale.
+  if (options.verify && options.verify.trim()) {
+    const verifyCmd = options.verify.trim();
+    const verifyCwd = options.cwd ?? process.cwd();
+    const { exitCode: verifyExit, output } = runVerify(verifyCmd, verifyCwd);
+    if (verifyExit === 0) {
+      appendVerifyLogLine(logFile, 'ok', verifyCmd, 0);
+    } else {
+      status = 'failed';
+      await updateRun(options.stateDir, runId, { status });
+      appendVerifyLogLine(logFile, 'failed', verifyCmd, verifyExit, output);
+      executeCallback(options.callback, {
+        runId,
+        agent: agent.name,
+        tier: agent.tier,
+        exitCode,
+        logFile,
+        prompt: options.prompt,
+        status,
+        name: options.runName ?? UNNAMED_PLACEHOLDER,
+      });
+      throw new AgentError(`verify failed (exit ${verifyExit}): ${verifyCmd}`, verifyExit);
+    }
+  }
 
   executeCallback(options.callback, {
     runId,
@@ -546,6 +640,8 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
       logFile,
       callback: options.callback,
       prompt: options.prompt,
+      verify: options.verify,
+      cwd: options.cwd,
     });
     return 0;
   }
@@ -640,7 +736,7 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
 
   const { code } = await agentExit;
   const exitCode = code ?? 1;
-  const status = exitCode === 0 ? 'done' : 'failed';
+  let status: 'done' | 'failed' = exitCode === 0 ? 'done' : 'failed';
   await updateRun(options.stateDir, runId, {
     status,
     finishedAt: new Date().toISOString(),
@@ -648,6 +744,33 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
   });
   const sfp = getStateFilePath(options.stateDir);
   await recordResult(sfp, agent.name, exitCode === 0);
+
+  // Post-agent verify hook (see streamLogsAndWatch for the rationale).
+  if (options.verify && options.verify.trim()) {
+    const verifyCmd = options.verify.trim();
+    const verifyCwd = options.cwd ?? process.cwd();
+    const { exitCode: verifyExit, output } = runVerify(verifyCmd, verifyCwd);
+    if (verifyExit === 0) {
+      appendVerifyLogLine(logFile, 'ok', verifyCmd, 0);
+    } else {
+      status = 'failed';
+      await updateRun(options.stateDir, runId, { status });
+      appendVerifyLogLine(logFile, 'failed', verifyCmd, verifyExit, output);
+      hub.publish({ ...buildDoneEvent(status, exitCode), runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+      tailer.stop();
+      executeCallback(options.callback, {
+        runId,
+        agent: agent.name,
+        tier: agent.tier,
+        exitCode,
+        logFile,
+        prompt: options.prompt,
+        status,
+        name: options.runName ?? UNNAMED_PLACEHOLDER,
+      });
+      throw new AgentError(`verify failed (exit ${verifyExit}): ${verifyCmd}`, verifyExit);
+    }
+  }
 
   hub.publish({ ...buildDoneEvent(status, exitCode), runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
   tailer.stop();

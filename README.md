@@ -43,6 +43,11 @@ Options:
   --wait                  Block until the agent exits (timeout, retry, real exit code)
   -r, --retries <number>  Max retry attempts on non-zero exit, --wait/-s only (default: 2)
   --callback <command>    Shell command to run after the agent job finishes
+  --verify <command>     Post-run verification hook. Runs after the agent exits, before --callback.
+                         Non-zero exit fails the run (status=failed, log line, AgentError raised in
+                         blocking modes so retry-with-next-agent fires, AT_STATUS=failed in callback).
+                         Receives the same AT_* env vars as --callback (runId, agent, tier, exit code,
+                         log path, prompt, status) plus AT_CWD + AT_VERIFY_CMD.
   --global-state          Single round-robin counter shared across all tiers
   --log-dir <path>        Log directory for detached and stream mode (default: /tmp/at-logs)
   --json                  Read JSON from stdin (see JSON mode below)
@@ -249,6 +254,28 @@ Round-robin state is stored in `/tmp/at-<tier>-state.json`. Pass `--global-state
 
 When an agent exits non-zero, `at` automatically picks the next agent in the same tier and retries, up to
 `min(retries, candidates.length - 1)` additional attempts. Named agents (`-a <name>`) never retry.
+
+## Post-run verification hook
+
+`--verify <command>` runs a shell command **after** the agent exits and **before** `--callback`.
+A non-zero exit fails the run: the run record flips to `status: failed`, a line is appended to the run log
+(`[at] verify failed (exit N): <cmd>` plus the first lines of its output), `--callback` still fires with
+`AT_STATUS=failed`, and in blocking modes (`-s` / `--wait`) `at` raises `AgentError('verify failed …')`
+so the existing retry-with-next-agent loop applies (a verify failure is treated like an agent failure for
+retry purposes).
+
+Use it to fail a run when an agent finishes but leaves the worktree broken — e.g. uncommitted formatting,
+uncompiled TypeScript, missing migrations:
+
+```bash
+at -s -p "implement the new feature" --verify 'npx tsc --noEmit && npx eslint src'
+# detached: AT_VERIFY_CMD env travels to the run-watch supervisor so the same hook fires
+at -p "implement the new feature" --verify 'npx tsc --noEmit'
+```
+
+The verify command runs in the agent's working directory (`--cwd` when set, else `process.cwd()` for
+detached supervisor runs). It receives the same `AT_*` env contract as `--callback` (runId, agent, tier,
+exit code, log path, prompt, status) so it can react to agent failures the same way.
 
 ## JSON mode
 

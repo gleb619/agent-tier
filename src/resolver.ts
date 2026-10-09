@@ -30,6 +30,16 @@ export interface RunOptions {
   namerUrl?: string;
   /** Set by `run()` after namer runs; consumed by `defaultSpawner`. */
   runName?: string;
+  /**
+   * Optional shell command executed AFTER the agent exits but BEFORE
+   * --callback. In blocking paths (--stream / --wait) it runs in the agent's
+   * cwd (`options.cwd ?? process.cwd()`); the detached supervisor runs it in
+   * `process.cwd()` (the agent's cwd is also forwarded via AT_CWD when set).
+   * Non-zero exit fails the run: status='failed', run log line appended,
+   * AgentError thrown so --stream / --wait retry-with-next-agent applies,
+   * and the --callback fires with AT_STATUS='failed'.
+   */
+  verify?: string;
 }
 
 interface ArgvOptions {
@@ -52,6 +62,7 @@ interface ArgvOptions {
   namer?: boolean;
   namerModel?: string;
   namerUrl?: string;
+  verify?: string;
 }
 
 export interface ParsedJson {
@@ -66,6 +77,7 @@ export interface ParsedJson {
   namer?: boolean;
   namerModel?: string;
   namerUrl?: string;
+  verify?: string;
 }
 
 export function resolveFromArgs(argv: ArgvOptions): RunOptions {
@@ -128,6 +140,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     namer: argv.namer === true,
     namerModel: argv.namerModel?.trim() || undefined,
     namerUrl: argv.namerUrl?.trim() || undefined,
+    verify: argv.verify?.trim() || undefined,
   };
 }
 
@@ -177,5 +190,6 @@ export function parseJsonInput(raw: string): ParsedJson {
     namer: parsed.namer === true,
     namerModel: (parsed.namerModel as string | undefined)?.trim() || undefined,
     namerUrl: (parsed.namerUrl as string | undefined)?.trim() || undefined,
+    verify: (parsed.verify as string | undefined)?.trim() || undefined,
   };
 }
