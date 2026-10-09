@@ -84,8 +84,17 @@ describe('AgentRegistry', () => {
     const args = getAgentByName('devin')!.buildArgs('fix the bug');
     expect(args).toContain('--permission-mode');
     expect(args).toContain('bypass');
+    expect(args).toContain('--respect-workspace-trust');
+    expect(args).toContain('false');
     expect(args).toContain('-p');
     expect(args).toContain('fix the bug');
+  });
+
+  it('devin bin prefers env override', () => {
+    const orig = process.env.DEVIN_BIN;
+    process.env.DEVIN_BIN = '/custom/devin';
+    expect(getAgentByName('devin')!.bin()).toBe('/custom/devin');
+    if (orig === undefined) delete process.env.DEVIN_BIN; else process.env.DEVIN_BIN = orig;
   });
 
   it('devin bin resolves to a string', () => {

@@ -1,6 +1,7 @@
 const NODE_BIN = process.env.NODE_BIN ?? require('path').dirname(process.execPath);
 const LOCAL_BIN = process.env.LOCAL_BIN ?? `${process.env.HOME}/.local/bin`;
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'minimax-m3:cloud';
+const DEVIN_DESKTOP_BIN = '/usr/share/devin-desktop/resources/app/extensions/windsurf/devin/bin/devin';
 
 export interface AgentDef {
   name: string;
@@ -91,8 +92,17 @@ export const AGENTS: AgentDef[] = [
   {
     name: 'devin',
     tier: 3,
-    bin: () => process.env.DEVIN_BIN ?? `${LOCAL_BIN}/devin`,
-    buildArgs: (prompt) => ['--permission-mode', 'bypass', '-p', prompt],
+    bin: () => {
+      if (process.env.DEVIN_BIN) return process.env.DEVIN_BIN;
+      const local = `${LOCAL_BIN}/devin`;
+      if (require('fs').existsSync(local)) return local;
+      return DEVIN_DESKTOP_BIN;
+    },
+    buildArgs: (prompt) => [
+      '--permission-mode', 'bypass',
+      '--respect-workspace-trust', 'false',
+      '-p', prompt,
+    ],
   },
 
   {
