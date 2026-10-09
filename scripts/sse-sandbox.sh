@@ -79,7 +79,7 @@ run_one() {
     local pending
     pending="$($CLI discuss list "$runId" --pending --json --state-dir "$S" 2>/dev/null || true)"
     if [[ "$pending" == *'"kind":"question"'* ]]; then
-      $CLI discuss answer "$runId" blue --state-dir "$S" >/dev/null 2>&1 && answered_id="y" || true
+      $CLI discuss answer blue -r "$runId" --state-dir "$S" >/dev/null 2>&1 && answered_id="y" || true
     fi
     sleep 1
   done
