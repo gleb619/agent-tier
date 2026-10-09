@@ -1,21 +1,24 @@
 import { main, buildRunWatchArgs, POLL_INTERVAL_MS, HEARTBEAT_INTERVAL_MS } from '../src/run-watch';
 
-const { isPidAliveMock, updateRunMock, spawnSyncMock, appendFileMock } = vi.hoisted(() => ({
+const { isPidAliveMock, updateRunMock, spawnSyncMock, appendFileMock, readFileMock, recordResultMock } = vi.hoisted(() => ({
   isPidAliveMock: vi.fn<boolean, [number]>(),
   updateRunMock: vi.fn(async () => {}),
   spawnSyncMock: vi.fn(),
   appendFileMock: vi.fn(),
+  readFileMock: vi.fn(() => ''),
+  recordResultMock: vi.fn(async () => {}),
 }));
 
 vi.mock('../src/process-utils', () => ({ isPidAlive: isPidAliveMock }));
 vi.mock('../src/run-store', () => ({ updateRun: updateRunMock }));
+vi.mock('../src/health', () => ({ recordResult: recordResultMock }));
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   return { ...actual, spawnSync: spawnSyncMock };
 });
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
-  return { ...actual, appendFileSync: appendFileMock };
+  return { ...actual, appendFileSync: appendFileMock, readFileSync: readFileMock };
 });
 
 const ARGS = ['12345', 'run-1', '/tmp/at-state', 'test-agent', '2', '/tmp/at-logs/run.log'];
@@ -197,5 +200,52 @@ describe('buildRunWatchArgs', () => {
     expect(buildRunWatchArgs({ ...base, callback: '' })).toHaveLength(6);
     expect(buildRunWatchArgs({ ...base, callback: '   ' })).toHaveLength(6);
     expect(buildRunWatchArgs(base)).toHaveLength(6);
+  });
+});
+
+describe('run-watch — quota/rate-limit detection', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.resetAllMocks();
+    isPidAliveMock.mockReturnValue(false);
+    spawnSyncMock.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('marks the run failed and records a health failure when the log tail shows 429/quota', async () => {
+    readFileMock.mockReturnValue('x'.repeat(100) + 'API Error: Request rejected (429) Token Plan usage limit reached');
+    expect(await main(ARGS)).toBe(0);
+    expect(updateRunMock).toHaveBeenCalledWith('/tmp/at-state', 'run-1', {
+      status: 'failed',
+      finishedAt: expect.any(String),
+      exitCode: 1,
+    });
+    expect(recordResultMock).toHaveBeenCalledWith(expect.stringContaining('state.json'), 'test-agent', false);
+    const logged = appendFileMock.mock.calls.map((c) => String(c[1])).join('\n');
+    expect(logged).toMatch(/quota|rate.?limit/i);
+  });
+
+  it('keeps status done when the log tail has no quota markers', async () => {
+    readFileMock.mockReturnValue('[at] runId: run-1\nmodel ready\nall good');
+    expect(await main(ARGS)).toBe(0);
+    expect(updateRunMock).toHaveBeenCalledWith('/tmp/at-state', 'run-1', {
+      status: 'done',
+      finishedAt: expect.any(String),
+      exitCode: null,
+    });
+    expect(recordResultMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to done when the log file cannot be read', async () => {
+    readFileMock.mockImplementation(() => { throw new Error('ENOENT'); });
+    expect(await main(ARGS)).toBe(0);
+    expect(updateRunMock).toHaveBeenCalledWith('/tmp/at-state', 'run-1', {
+      status: 'done',
+      finishedAt: expect.any(String),
+      exitCode: null,
+    });
   });
 });

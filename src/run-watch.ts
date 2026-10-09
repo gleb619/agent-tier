@@ -22,11 +22,13 @@
  * run log file — the supervisor never fails because of it.
  */
 import { spawn, spawnSync } from 'child_process';
-import { appendFileSync } from 'fs';
+import { appendFileSync, readFileSync } from 'fs';
 import path from 'path';
 
 import { isPidAlive } from './process-utils';
 import { updateRun } from './run-store';
+import { recordResult } from './health';
+import { getStateFilePath } from './state-dir';
 
 export const POLL_INTERVAL_MS = 2000;
 /**
@@ -93,6 +95,27 @@ export function spawnRunWatch(o: RunWatchOptions): void {
     child.once('error', () => {});
   } catch {
     // supervisor is a convenience — never fail the caller because of it
+  }
+}
+
+/** Marker patterns providers emit when a quota/rate limit kills the run. */
+const QUOTA_MARKERS = /(?:\b429\b|rate[ -]?limit|usage limit|quota|weekly limit|plan limit)/i;
+/** How much of the log tail to scan — markers appear at the very end. */
+const QUOTA_SCAN_BYTES = 64 * 1024;
+
+/**
+ * Best-effort: true (with the matched marker) when the end of the run log
+ * looks like a provider quota/rate-limit kill, false on no match or any
+ * read error.
+ */
+export function detectQuotaLimit(logFile: string): string | null {
+  try {
+    const content = readFileSync(logFile, 'utf8');
+    const tail = content.length > QUOTA_SCAN_BYTES ? content.slice(-QUOTA_SCAN_BYTES) : content;
+    const m = tail.match(QUOTA_MARKERS);
+    return m ? m[0] : null;
+  } catch {
+    return null;
   }
 }
 
@@ -171,13 +194,30 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     }
 
     try {
+      // Quota/rate-limit detection: agents killed by provider 429s (mm-code,
+      // pi "Token Plan usage limit reached") die in seconds with the marker
+      // as the last thing in their log. Without this check such runs would be
+      // marked done and the agent would stay in the rotation.
+      const quotaHit = detectQuotaLimit(logFile);
+      if (quotaHit) {
+        appendFileSync(
+          logFile,
+          `[at] run-watch: agent appears quota/rate-limited ("${quotaHit}"), marking run failed and recording agent failure\n`,
+        );
+      }
       await updateRun(stateDir, runId, {
-        status: 'done',
+        status: quotaHit ? 'failed' : 'done',
         finishedAt: new Date().toISOString(),
         // The exit code of a process that is not our direct child cannot be
-        // observed; null signals "finished, status unknown".
-        exitCode: null,
+        // observed; null signals "finished, status unknown". A quota kill is
+        // the one case we can classify — use 1 so the failure is visible.
+        exitCode: quotaHit ? 1 : null,
       });
+      if (quotaHit) {
+        // Feed the health system so repeated quota deaths auto-disable the
+        // agent (same signal the blocking paths emit on non-zero exit).
+        await recordResult(getStateFilePath(stateDir), agent, false).catch(() => {});
+      }
     } catch (err) {
       try {
         appendFileSync(logFile, `[at] run-watch: updateRun failed: ${(err as Error).message}\n`);
