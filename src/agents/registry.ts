@@ -88,6 +88,12 @@ export const AGENTS: AgentDef[] = [
     bin: () => process.env.KIRO_BIN ?? `${NODE_BIN}/kiro-cli`,
     buildArgs: (prompt) => ['chat', '--no-interactive', '--trust-all-tools', prompt],
   },
+  {
+    name: 'devin',
+    tier: 3,
+    bin: () => process.env.DEVIN_BIN ?? `${LOCAL_BIN}/devin`,
+    buildArgs: (prompt) => ['--permission-mode', 'bypass', '-p', prompt],
+  },
 
   {
     name: 'cline',

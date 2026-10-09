@@ -1,8 +1,8 @@
 import { AGENTS, getAgentsByTier, getAgentByName } from '../src/agents/registry';
 
 describe('AgentRegistry', () => {
-  it('has 13 agents defined', () => {
-    expect(AGENTS).toHaveLength(13);
+  it('has 14 agents defined', () => {
+    expect(AGENTS).toHaveLength(14);
   });
 
   it('has 3 tier-1 agents', () => {
@@ -13,8 +13,8 @@ describe('AgentRegistry', () => {
     expect(getAgentsByTier(2)).toHaveLength(5);
   });
 
-  it('has 3 tier-3 agents', () => {
-    expect(getAgentsByTier(3)).toHaveLength(3);
+  it('has 4 tier-3 agents', () => {
+    expect(getAgentsByTier(3)).toHaveLength(4);
   });
 
   it('has 2 tier-4 agents', () => {
@@ -71,6 +71,26 @@ describe('AgentRegistry', () => {
   it('agy uses stdin promptMode', () => {
     expect(getAgentByName('agy')!.promptMode).toBe('stdin');
   });
+
+  it('finds devin agent by name', () => {
+    expect(getAgentByName('devin')?.name).toBe('devin');
+  });
+
+  it('devin agent is tier 3', () => {
+    expect(getAgentByName('devin')?.tier).toBe(3);
+  });
+
+  it('devin buildArgs includes permission-mode bypass, -p, and prompt', () => {
+    const args = getAgentByName('devin')!.buildArgs('fix the bug');
+    expect(args).toContain('--permission-mode');
+    expect(args).toContain('bypass');
+    expect(args).toContain('-p');
+    expect(args).toContain('fix the bug');
+  });
+
+  it('devin bin resolves to a string', () => {
+    expect(typeof getAgentByName('devin')!.bin()).toBe('string');
+  });
 });
 
 describe('getAgentsByTier', () => {
@@ -90,8 +110,10 @@ describe('getAgentsByTier', () => {
     const tier3 = getAgentsByTier(3);
     expect(tier3.length).toBeGreaterThan(0);
     const names = tier3.map(a => a.name);
+    expect(names).toContain('kilo');
     expect(names).toContain('agy');
     expect(names).toContain('kiro');
+    expect(names).toContain('devin');
   });
 
   it('returns tier 4 agents: mock, mock-long', () => {
