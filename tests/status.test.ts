@@ -26,18 +26,19 @@ describe('formatStatusTable', () => {
   it('formats a table with header and rows', () => {
     const result = formatStatusTable([baseRun]);
     const lines = result.split('\n');
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(3);
     expect(lines[0]).toContain('RUN');
     expect(lines[0]).toContain('NAME');
     expect(lines[0]).toContain('AGENT');
     expect(lines[0]).toContain('STATUS');
     expect(lines[0]).toContain('DURATION');
     expect(lines[0]).toContain('LOG');
-    expect(lines[1]).toContain('r3k2a1');
-    expect(lines[1]).toContain('unnamed');
-    expect(lines[1]).toContain('opencode');
-    expect(lines[1]).toContain('running');
-    expect(lines[1]).toContain('/tmp/at-logs/at-test-opencode.log');
+    expect(lines[1]).toContain('---');
+    expect(lines[2]).toContain('r3k2a1');
+    expect(lines[2]).toContain('unnamed');
+    expect(lines[2]).toContain('opencode');
+    expect(lines[2]).toContain('running');
+    expect(lines[2]).toContain('/tmp/at-logs/at-test-opencode.log');
   });
 
   it('shows full runId without "..." truncation in table', () => {
@@ -59,9 +60,9 @@ describe('formatStatusTable', () => {
     };
     const result = formatStatusTable([baseRun, done]);
     const lines = result.split('\n');
-    expect(lines).toHaveLength(3);
-    expect(lines[1]).toContain('running');
-    expect(lines[2]).toContain('done');
+    expect(lines).toHaveLength(4);
+    expect(lines[2]).toContain('running');
+    expect(lines[3]).toContain('done');
   });
 
   it('truncates long names with ellipsis', () => {

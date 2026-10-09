@@ -148,30 +148,42 @@ export function formatStatusTable(runs: RunRecord[]): string {
     };
   });
 
-  const colRun = Math.max(20, ...rows.map((r) => r.runId.length));
+  const colRun = Math.max(3, ...rows.map((r) => r.runId.length));
   const colName = Math.max(4, ...rows.map((r) => r.name.length));
-  const colAgent = Math.max(10, ...rows.map((r) => r.agent.length));
-  const colStatus = 7;
+  const colAgent = Math.max(5, ...rows.map((r) => r.agent.length));
+  const colStatus = Math.max(6, ...rows.map((r) => r.status.length));
   const colDur = Math.max(8, ...rows.map((r) => r.duration.length));
+  const colLog = Math.max(3, ...rows.map((r) => r.log.length));
 
   const header =
-    padRight('RUN', colRun) + '  ' +
-    padRight('NAME', colName) + '  ' +
-    padRight('AGENT', colAgent) + '  ' +
-    padRight('STATUS', colStatus) + '  ' +
-    padRight('DURATION', colDur) + '  ' +
-    'LOG';
+    '| ' +
+    padRight('RUN', colRun) + ' | ' +
+    padRight('NAME', colName) + ' | ' +
+    padRight('AGENT', colAgent) + ' | ' +
+    padRight('STATUS', colStatus) + ' | ' +
+    padRight('DURATION', colDur) + ' | ' +
+    padRight('LOG', colLog) + ' |';
+
+  const divider =
+    '| ' +
+    '-'.repeat(colRun) + ' | ' +
+    '-'.repeat(colName) + ' | ' +
+    '-'.repeat(colAgent) + ' | ' +
+    '-'.repeat(colStatus) + ' | ' +
+    '-'.repeat(colDur) + ' | ' +
+    '-'.repeat(colLog) + ' |';
 
   const lines = rows.map((r) =>
-    padRight(r.runId, colRun) + '  ' +
-    padRight(r.name, colName) + '  ' +
-    padRight(r.agent, colAgent) + '  ' +
-    padRight(r.status, colStatus) + '  ' +
-    padRight(r.duration, colDur) + '  ' +
-    r.log,
+    '| ' +
+    padRight(r.runId, colRun) + ' | ' +
+    padRight(r.name, colName) + ' | ' +
+    padRight(r.agent, colAgent) + ' | ' +
+    padRight(r.status, colStatus) + ' | ' +
+    padRight(r.duration, colDur) + ' | ' +
+    padRight(r.log, colLog) + ' |',
   );
 
-  return header + '\n' + lines.join('\n');
+  return [header, divider, ...lines].join('\n');
 }
 
 export function formatStatusJson(runs: RunRecord[]): string {
@@ -182,41 +194,42 @@ export function formatStateReport(stateDir: string): string {
   const report = buildStateReport(stateDir);
   const lines: string[] = [];
 
-  lines.push('┌─ State ──────────────────────┐');
-  lines.push('Scheduler:');
+  lines.push('### State');
+  lines.push('');
+  lines.push('**Scheduler:**');
 
   if (report.scheduler.length > 0) {
     for (const entry of report.scheduler) {
       if (entry.agentName) {
-        lines.push(`  ${entry.key} → index ${entry.index} (${entry.agentName})`);
+        lines.push(`- ${entry.key} → index ${entry.index} (${entry.agentName})`);
       } else {
-        lines.push(`  ${entry.key} → index ${entry.index}`);
+        lines.push(`- ${entry.key} → index ${entry.index}`);
       }
     }
   } else {
-    lines.push('  (none)');
+    lines.push('- (none)');
   }
 
-  lines.push('Config:');
+  lines.push('');
+  lines.push('**Config:**');
   if (report.maxEntries !== undefined) {
-    lines.push(`  max runs: ${report.maxEntries}`);
+    lines.push(`- max runs: ${report.maxEntries}`);
   } else {
-    lines.push('  (none)');
+    lines.push('- (none)');
   }
 
   if (report.agents.length > 0) {
-    lines.push('Agents:');
+    lines.push('');
+    lines.push('**Agents:**');
     for (const a of report.agents) {
       const flags: string[] = [];
       if (a.deactivated) flags.push('DEACTIVATED');
       if (a.failures > 0) flags.push(`${a.failures} failures`);
       if (a.disabledTo) flags.push(`disabled until ${formatIsoRelative(a.disabledTo)}`);
       if (a.lastFailure) flags.push(`last: ${formatIsoRelative(a.lastFailure)}`);
-      lines.push(flags.length > 0 ? `  ${a.name}: ${flags.join(', ')}` : `  ${a.name}: ok`);
+      lines.push(flags.length > 0 ? `- ${a.name}: ${flags.join(', ')}` : `- ${a.name}: ok`);
     }
   }
-
-  lines.push('───────────────────────────────');
 
   return lines.join('\n');
 }
