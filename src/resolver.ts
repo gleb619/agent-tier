@@ -72,7 +72,24 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
   const retriesNum = Number(argv.retries ?? 0);
   if (!Number.isFinite(retriesNum) || retriesNum < 0 || !Number.isInteger(retriesNum)) throw new Error('retries must be a non-negative integer');
 
-  const sse = argv.sse === true || (typeof argv.sse === 'string' && argv.sse.trim().toLowerCase() === 'true');
+  // `--sse` (commander -> true) and `--sse <port>` (commander -> '<port>') both enable SSE.
+  // `--sse true` / `--sse TRUE` also accepted for parity. Reject other strings as invalid ports.
+  let sse = false;
+  if (argv.sse === true) {
+    sse = true;
+  } else if (typeof argv.sse === 'string') {
+    const raw = argv.sse.trim();
+    if (raw === '' || raw.toLowerCase() === 'true') {
+      sse = true;
+    } else {
+      const asPort = Number(raw);
+      if (Number.isFinite(asPort) && asPort >= 0 && Number.isInteger(asPort)) {
+        sse = true; // numeric string enables SSE and sets port below
+      } else {
+        throw new Error(`--sse value must be empty, "true", or a non-negative integer port (got "${argv.sse}")`);
+      }
+    }
+  }
   let ssePort = 7777;
   if (argv.ssePort !== undefined) {
     ssePort = Number(argv.ssePort);
