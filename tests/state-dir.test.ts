@@ -80,14 +80,19 @@ describe('resolveStateDir', () => {
 });
 
 describe('resolveFeedbackDir', () => {
+  let tmpDir: string;
   let savedStateDir: string | undefined;
 
   beforeEach(() => {
     savedStateDir = process.env.AT_STATE_DIR;
     delete process.env.AT_STATE_DIR;
+    tmpDir = path.join(os.tmpdir(), `at-feedback-dir-test-${Date.now()}`);
   });
 
   afterEach(() => {
+    if (fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
     if (savedStateDir !== undefined) {
       process.env.AT_STATE_DIR = savedStateDir;
     } else {
@@ -105,7 +110,7 @@ describe('resolveFeedbackDir', () => {
     expect(resolveFeedbackDir()).toBe('/tmp/at-override');
   });
 
-  it('ignores project-local .at/ and returns ~/.at/', () => {
+  it('falls back to ~/.at/ when project .at/ has no feedback.jsonl', () => {
     const projectRoot = path.join(os.tmpdir(), `at-feedback-root-${Date.now()}`);
     const subDir = path.join(projectRoot, 'packages', 'lib');
     const atDir = path.join(projectRoot, '.at');
@@ -118,10 +123,33 @@ describe('resolveFeedbackDir', () => {
     vi.spyOn(process, 'cwd').mockReturnValue(subDir);
     // sanity: regular resolution IS shadowed by the project .at/
     expect(resolveStateDir()).toBe(atDir);
-    // feedback resolution is not — queue stays global
+    // feedback is not — no feedback.jsonl there, so queue stays global
     expect(resolveFeedbackDir()).toBe(path.join(os.homedir(), '.at'));
 
     fs.rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  it('prefers project .at/ when it contains feedback.jsonl', () => {
+    const projectRoot = path.join(os.tmpdir(), `at-feedback-local-${Date.now()}`);
+    const subDir = path.join(projectRoot, 'packages', 'lib');
+    const atDir = path.join(projectRoot, '.at');
+    fs.mkdirSync(atDir, { recursive: true });
+    fs.writeFileSync(path.join(atDir, 'feedback.jsonl'), '');
+    fs.mkdirSync(path.join(projectRoot, '.git'), { recursive: true });
+    fs.mkdirSync(subDir, { recursive: true });
+
+    vi.spyOn(process, 'cwd').mockReturnValue(subDir);
+    expect(resolveFeedbackDir()).toBe(atDir);
+
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  it('detects .at/feedback.jsonl in cwd (no git root)', () => {
+    const atDir = path.join(tmpDir, '.at');
+    fs.mkdirSync(atDir, { recursive: true });
+    fs.writeFileSync(path.join(atDir, 'feedback.jsonl'), '');
+    vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+    expect(resolveFeedbackDir()).toBe(atDir);
   });
 });
 

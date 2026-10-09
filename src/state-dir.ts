@@ -60,17 +60,33 @@ export function resolveStateDir(explicit?: string): string {
 }
 
 /**
- * Resolve the state directory for the global feedback queue.
+ * Resolve the state directory for the feedback queue.
  *
- * Unlike resolveStateDir, this deliberately skips project-root and CWD
- * auto-detection: feedback entries are filed from many repos (each entry
- * carries its own `cwd`) and consumed by the improvement loop running in
- * this repo, so a project-local `.at/` must never shadow `~/.at/`.
- * Precedence: explicit path → AT_STATE_DIR env → ~/.at/.
+ * Like resolveStateDir, a project-local `.at/` wins over `~/.at/` — but the
+ * detection key is `feedback.jsonl` itself, not state.json/runs.jsonl. A
+ * repo's own scheduler/runs state must not shadow the feedback queue when
+ * no local feedback file exists (each entry carries its own `cwd`, and the
+ * improvement loop consumes the queue from a different repo).
+ * Precedence: explicit path → AT_STATE_DIR env → project-root `.at/` with
+ * feedback.jsonl → CWD `.at/` with feedback.jsonl → ~/.at/.
  */
 export function resolveFeedbackDir(explicit?: string): string {
   if (explicit) return explicit;
   if (process.env.AT_STATE_DIR) return process.env.AT_STATE_DIR;
+
+  const projectRoot = findProjectRoot(process.cwd());
+  if (projectRoot) {
+    const projectAt = path.join(projectRoot, AT_DIR);
+    if (existsSync(path.join(projectAt, 'feedback.jsonl'))) {
+      return projectAt;
+    }
+  }
+
+  const cwdAt = path.join(process.cwd(), AT_DIR);
+  if (existsSync(path.join(cwdAt, 'feedback.jsonl'))) {
+    return cwdAt;
+  }
+
   return HOME_AT_DIR;
 }
 
