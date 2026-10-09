@@ -49,6 +49,20 @@ describe('resolveFromArgs', () => {
     expect(resolveFromArgs({ prompt: 'hello', tier: '1' }).tier).toBe(1);
   });
 
+  it('defaults wait to false', () => {
+    expect(resolveFromArgs({ prompt: 'hello' }).wait).toBe(false);
+  });
+
+  it('parses --wait into options', () => {
+    const opts = resolveFromArgs({ prompt: 'hello', wait: true, stream: false });
+    expect(opts.wait).toBe(true);
+    expect(opts.stream).toBe(false);
+  });
+
+  it('leaves wait false in stream mode', () => {
+    expect(resolveFromArgs({ prompt: 'hello', stream: true }).wait).toBe(false);
+  });
+
   it('throws for invalid tier', () => {
     expect(() => resolveFromArgs({ prompt: 'hello', tier: '5' })).toThrow('tier');
   });

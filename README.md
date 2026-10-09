@@ -40,7 +40,8 @@ Options:
   -a, --agent <name>      Agent name, or "auto" (default: auto)
   -t, --tier <number>     Tier: 1=architect, 2=dev (default), 3=experimental
   -s, --stream            Stream output to terminal (default: detached + log file)
-  -r, --retries <number>  Max retry attempts on non-zero exit (default: 2)
+  --wait                  Block until the agent exits (timeout, retry, real exit code)
+  -r, --retries <number>  Max retry attempts on non-zero exit, --wait/-s only (default: 2)
   --callback <command>    Shell command to run after the agent job finishes
   --global-state          Single round-robin counter shared across all tiers
   --log-dir <path>        Log directory for detached and stream mode (default: /tmp/at-logs)
@@ -67,11 +68,12 @@ echo '{"agent":"opencode","prompt":"fix the login bug"}' | at --json
 
 ### Output modes
 
-| Mode               | Behavior                                                                                                                                         |
-|--------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
-| Detached (default) | Agent spawns in the background; logs go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Blocks until the agent exits (supports timeout and retry). |
-| Stream (`-s`)      | Agent output is streamed to the terminal and simultaneously written to a log file. Blocks until the agent exits.                                 |
-| SSE (`--sse`)      | Live progress streamed over HTTP/SSE. See [Live progress (SSE)](#live-progress-sse).                                                              |
+| Mode               | Behavior                                                                                                                                                  |
+|--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Detached (default) | Agent spawns in the background; `at` prints the run box (runId, pid, log path) and returns immediately. A background supervisor (`src/run-watch.ts`) marks the run done (`exitCode: null`) and runs `--callback`. |
+| Detached `--wait`  | Same as detached, but blocks until the agent exits. Enables `--timeout`, retry, agent-health tracking and a callback with the real exit code.              |
+| Stream (`-s`)      | Agent output is streamed to the terminal and simultaneously written to a log file. Blocks until the agent exits.                                          |
+| SSE (`--sse`)      | Live progress streamed over HTTP/SSE. See [Live progress (SSE)](#live-progress-sse).                                                                       |
 
 ## Live progress (SSE)
 

@@ -106,9 +106,9 @@ src/notify/adapters/*   per-agent stream-json/--json/log adapters
 
 - **Binary resolution:** Each `AgentDef.bin()` checks env override (e.g. `OPENCODE_BIN`) then falls back to `$NODE_BIN/<name>`  `$LOCAL_BIN/<name>`. `NODE_BIN` defaults to dir of running `node` binary (`path.dirname(process.execPath)`); `LOCAL_BIN` to `~/.local/bin`. Override via `env.local.sh` (gitignored).
 - **promptMode:** Defaults to `'arg'` (prompt passed as CLI arg). Set to `'stdin'` (e.g. `agy`) to pipe prompt to child's stdin instead.
-- **Detached mode (default):** Child is spawned detached; stdout/stderr go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Caller gets `[at] started <agent> (pid N) — logs: <path>` and blocks until child exits (enabling timeout, error detection, and retry).
+- **Detached mode (default):** Child is spawned detached; stdout/stderr go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Caller gets the run box (runId, pid, log path) and returns immediately. A background supervisor (`src/run-watch.ts`) polls the pid, marks the run `done` with `exitCode: null` (the real exit code of a non-child process is unknowable) and runs the `--callback` (`AT_EXIT_CODE=0`). `--wait` (or `-s`) blocks until the child exits, enabling `--timeout`, retry, agent-health tracking and a callback with the real exit code.
 - **Stream mode (`-s`):** Child output is streamed to terminal and simultaneously written to `/tmp/at-logs/at-<timestamp>-<agent>.log`.
-- **Retry:** On non-zero exit, `runner` picks next agent in same tier and retries, up to `min(retries, candidates.length - 1)` additional attempts. Named agents (`-a <name>`) never retry.
+- **Retry:** On non-zero exit, `runner` picks next agent in same tier and retries, up to `min(retries, candidates.length - 1)` additional attempts. Named agents (`-a <name>`) never retry. Retry only applies to `--wait` / `-s` runs — non-wait detached runs return immediately with no observable exit code.
 - **Scheduler state:** `/tmp/at-<tier>-state.json` (or `/tmp/at-global-state.json` w/ `--global-state`). Shape: `{ index: number }`.
 - **JSON mode (`--json`):** Reads `{ agent, prompt, model, cwd, env }` from stdin — compatible w/ existing `coding-agent` protocol.
 - **`defaultSpawner` is injectable** in `runner.run()` for testing w/o real agent binaries.

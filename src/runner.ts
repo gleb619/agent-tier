@@ -10,6 +10,7 @@ import { addRun, updateRun } from './run-store';
 import { getStateFilePath } from './state-dir';
 import { setupNotify, startHub, tailLogFile, type Hub, type NotifyEvent } from './notify';
 import { generateSessionName } from './namer';
+import { spawnRunWatch } from './run-watch';
 
 interface TrackedChild {
   pid: number;
@@ -442,6 +443,65 @@ function buildDoneEvent(status: 'done' | 'failed', exitCode: number): Omit<Notif
   return { type: 'done', data: { status, exitCode } };
 }
 
+/**
+ * Detached run with `--wait`: block until the agent exits, honouring the
+ * `--timeout` force-kill, then finalise the run record, agent health and the
+ * `--callback` (with the real exit code). Returns the resolved exit code.
+ */
+async function awaitDetachedExit(result: LaunchResult, options: RunOptions): Promise<number> {
+  const { child, runId, logFile, agent } = result;
+
+  const agentExit = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
+    child.on('close', (code, signal) => resolve({ code, signal }));
+    child.on('error', () => resolve({ code: 1, signal: null }));
+  });
+
+  let timeoutHandle: ReturnType<typeof setTimeout>;
+  const timeoutP = new Promise<{ code: null; signal: 'SIGKILL' }>((resolve) => {
+    timeoutHandle = setTimeout(() => resolve({ code: null, signal: 'SIGKILL' }), options.timeout);
+  });
+
+  const { code, signal } = await Promise.race([agentExit, timeoutP]);
+  clearTimeout(timeoutHandle!);
+  untrackChild(child.pid!);
+
+  if (signal === 'SIGKILL') {
+    try { process.kill(-child.pid!, 'SIGKILL'); } catch {}
+    try { appendFileSync(logFile, `[at] timeout: killed after ${options.timeout}ms\n`); } catch {}
+    await updateRun(options.stateDir, runId, {
+      status: 'failed',
+      finishedAt: new Date().toISOString(),
+      exitCode: 1,
+    });
+    const sfp = getStateFilePath(options.stateDir);
+    await recordResult(sfp, agent.name, false);
+    throw new Error(`${agent.name} killed after ${options.timeout}ms timeout`);
+  }
+
+  const exitCode = code ?? 1;
+  const status = exitCode === 0 ? 'done' : 'failed';
+  await updateRun(options.stateDir, runId, {
+    status,
+    finishedAt: new Date().toISOString(),
+    exitCode,
+  });
+  const sfp = getStateFilePath(options.stateDir);
+  await recordResult(sfp, agent.name, exitCode === 0);
+
+  executeCallback(options.callback, {
+    runId,
+    agent: agent.name,
+    tier: agent.tier,
+    exitCode,
+    logFile,
+    prompt: options.prompt,
+    status,
+    name: options.runName ?? UNNAMED_PLACEHOLDER,
+  });
+
+  return exitCode;
+}
+
 export const defaultSpawner: Spawner = async (agent, options, providedRunId) => {
   if (!options.sse) {
     const result = await launchAgent(
@@ -458,40 +518,36 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
 
     if (options.stream) {
       return streamLogsAndWatch(result, options);
-    } else {
-      child.on('error', (err) => {
-        try { appendFileSync(logFile, `[at] error: ${err.message}\n`); } catch {}
-        updateRun(options.stateDir, runId, {
-          status: 'failed',
-          finishedAt: new Date().toISOString(),
-          exitCode: 1,
-        }).catch(() => {});
-        const sfp = getStateFilePath(options.stateDir);
-        recordResult(sfp, agent.name, false).catch(() => {});
-      });
-      child.on('close', (code) => {
-        const exitCode = code ?? 1;
-        const status = exitCode === 0 ? 'done' : 'failed';
-        updateRun(options.stateDir, runId, {
-          status,
-          finishedAt: new Date().toISOString(),
-          exitCode,
-        }).catch(() => {});
-        const sfp = getStateFilePath(options.stateDir);
-        recordResult(sfp, agent.name, exitCode === 0).catch(() => {});
-        executeCallback(options.callback, {
-          runId,
-          agent: agent.name,
-          tier: agent.tier,
-          exitCode,
-          logFile,
-          prompt: options.prompt,
-          status,
-          name: options.runName ?? UNNAMED_PLACEHOLDER,
-        });
-      });
-      return 0;
     }
+
+    if (options.wait) {
+      // Detached + --wait: preserve the historical blocking semantics — await
+      // the real exit so timeout, retry, agent-health tracking and a callback
+      // with a truthful AT_EXIT_CODE all work.
+      return awaitDetachedExit(result, options);
+    }
+
+    // Detached without --wait (default): print the run box (already done above),
+    // hand finalisation over to a detached supervisor and return immediately so
+    // the caller is never killed by an outer timeout (CI, 120s Bash tool, ...).
+    child.on('error', (err) => {
+      try { appendFileSync(logFile, `[at] error: ${err.message}\n`); } catch {}
+    });
+    // Detach the child from our event loop so the CLI can exit while the agent
+    // keeps running, and stop tracking it (killActiveChildren must not reap it).
+    untrackChild(child.pid!);
+    child.unref();
+    spawnRunWatch({
+      pid: child.pid!,
+      runId,
+      stateDir: options.stateDir,
+      agent: agent.name,
+      tier: agent.tier,
+      logFile,
+      callback: options.callback,
+      prompt: options.prompt,
+    });
+    return 0;
   }
 
   // SSE path

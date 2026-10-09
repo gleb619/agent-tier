@@ -31,6 +31,11 @@ export function registerDefaultCommand(program: Command): void {
     .option('-t, --tier <number>', 'Tier: 1=architect, 2=dev (default), 3=experimental', '2')
     .option('-p, --prompt <text>', 'Prompt text')
     .option('-s, --stream', 'Stream agent output to terminal via chop/tail (default: detached, fire-and-forget with report)', false)
+    .option(
+      '--wait',
+      'In detached mode, block until the agent exits (enables timeout, retry, agent-health tracking and callback with the real exit code). Default: return immediately after the run box',
+      false,
+    )
     .option('--no-chop', 'Disable chop output-log compression in stream mode (default: enabled when chop is available)')
     .option('-r, --retries <number>', 'Max extra retry attempts with next agent in tier (default: 0). Total attempts = min(retries+1, agents-in-tier). Named agents never retry', '0')
     .option('--state-dir <path>', 'State directory (default: .at/ in CWD if exists, else ~/.at/)')
@@ -72,6 +77,7 @@ export function registerDefaultCommand(program: Command): void {
             cwd: parsed.cwd,
             env: parsed.env,
             stream: opts.stream as boolean,
+            wait: opts.wait as boolean,
             stateDir: opts.stateDir as string | undefined,
             retries: opts.retries,
             logDir: opts.logDir,
@@ -93,6 +99,7 @@ export function registerDefaultCommand(program: Command): void {
             prompt,
             model: opts.model as string | undefined,
             stream: opts.stream as boolean,
+            wait: opts.wait as boolean,
             stateDir: opts.stateDir as string | undefined,
             retries: opts.retries,
             logDir: opts.logDir,
@@ -120,8 +127,11 @@ export function registerDefaultCommand(program: Command): void {
       'after',
       `
 Examples:
-  # Detached mode (logs in /tmp/at-logs/, blocks until agent exits) — DEFAULT
+  # Detached mode (logs in /tmp/at-logs/) — returns as soon as the run box prints — DEFAULT
   at -p "add error handling to src/api.ts"
+
+  # Detached mode, but block until the agent exits (timeout, retry, health, real callback exit code)
+  at --wait -p "fix the flaky test in tests/api.test.ts"
 
   # Stream output to terminal — see progress in real time (most common)
   at -s -p "refactor the auth module"

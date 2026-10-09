@@ -1,6 +1,7 @@
 import { run, Spawner, defaultSpawner } from '../src/runner';
 import { RunOptions } from '../src/resolver';
 import { AgentDef } from '../src/agents/registry';
+import { spawnRunWatch } from '../src/run-watch';
 import { existsSync, readFileSync, readdirSync, unlinkSync, rmdirSync } from 'fs';
 import path from 'path';
 import * as scheduler from '../src/scheduler';
@@ -10,6 +11,7 @@ import os from 'os';
 
 vi.mock('../src/scheduler');
 vi.mock('../src/health');
+vi.mock('../src/run-watch');
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   const { EventEmitter } = await import('events');
@@ -300,6 +302,59 @@ describe('defaultSpawner', () => {
     expect(content).toContain('exit=7');
   });
 
+  it('detached without --wait returns immediately and spawns the supervisor', async () => {
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/sleep',
+      buildArgs: () => ['30'],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: false,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+    };
+    const start = Date.now();
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(0);
+    expect(Date.now() - start).toBeLessThan(5000);
+    expect(spawnRunWatch).toHaveBeenCalledTimes(1);
+    expect(spawnRunWatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pid: expect.any(Number),
+        runId: expect.any(String),
+        stateDir: options.stateDir,
+        agent: 'test',
+        tier: 2,
+        logFile: expect.any(String),
+        prompt: 'hello',
+      }),
+    );
+    // Clean up the detached sleep child (mocked supervisor would have done this)
+    const pid = (spawnRunWatch as Mock).mock.calls[0][0].pid as number;
+    try { process.kill(-pid, 'SIGKILL'); } catch {}
+  });
+
+  it('detached with --wait blocks until exit and returns the real exit code', async () => {
+    const agent: AgentDef = {
+      name: 'test',
+      tier: 2,
+      bin: () => '/bin/bash',
+      buildArgs: () => ['-c', 'exit 7'],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: false,
+      wait: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(7);
+    expect(spawnRunWatch).not.toHaveBeenCalled();
+  });
+
   it('does not fail main run when callback exits non-zero', async () => {
     const agent: AgentDef = {
       name: 'test',
@@ -322,7 +377,7 @@ describe('defaultSpawner', () => {
     warnSpy.mockRestore();
   });
 
-  it('executes callback in detached mode after child exits', async () => {
+  it('executes callback in detached --wait mode after child exits', async () => {
     const markerFile = path.join(tmpLogDir, 'callback-marker-detached.txt');
     const agent: AgentDef = {
       name: 'test',
@@ -333,6 +388,7 @@ describe('defaultSpawner', () => {
     const options: RunOptions = {
       ...baseOptions,
       stream: false,
+      wait: true,
       logDir: tmpLogDir,
       prompt: 'hello',
       callback: `sh -c 'echo "agent=$AT_AGENT status=$AT_STATUS" > ${markerFile}'`,

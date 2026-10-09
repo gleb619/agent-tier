@@ -8,6 +8,14 @@ export interface RunOptions {
   cwd?: string;
   env?: Record<string, string>;
   stream: boolean;
+  /**
+   * Detached mode only: block until the agent exits instead of returning
+   * right after the run box is printed. When false (default) a background
+   * supervisor (`src/run-watch.ts`) finalises the run record and callback.
+   * Timeout, retry, agent-health tracking and callbacks with a real exit code
+   * only exist when this is true (or when `stream` is on).
+   */
+  wait: boolean;
   stateDir: string;
   retries: number;
   logDir: string;
@@ -32,6 +40,7 @@ interface ArgvOptions {
   cwd?: string;
   env?: Record<string, string>;
   stream?: boolean;
+  wait?: boolean;
   stateDir?: string;
   retries?: string | number;
   logDir?: string;
@@ -107,6 +116,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     cwd: argv.cwd,
     env: argv.env,
     stream: argv.stream ?? false,
+    wait: argv.wait ?? false,
     stateDir: resolveStateDir(argv.stateDir),
     retries: retriesNum,
     logDir: argv.logDir ?? '/tmp/at-logs',
