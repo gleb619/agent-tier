@@ -1,4 +1,5 @@
 import type { NotifyAdapter, NotifyEvent } from '../types';
+import { buildPromptSuffix } from '../prompt';
 
 const TEXT_LIMIT = 500;
 
@@ -15,8 +16,8 @@ function truncate(s: string, n: number): string {
 export function makeKiloAdapter(): NotifyAdapter {
   return {
     name: 'kilo',
-    promptSuffix() {
-      return '';
+    promptSuffix(ctx) {
+      return buildPromptSuffix(ctx);
     },
     transformArgs(_ctx, baseArgs) {
       const out = baseArgs.slice(0, -1);

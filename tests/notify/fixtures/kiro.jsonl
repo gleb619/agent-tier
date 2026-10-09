@@ -1,0 +1,6 @@
+{"type":"runStarted","data":{"payloadSchema":"acp","acpProtocolVersion":1,"engine":"v2"}}
+{"type":"metadata","data":{"sessionId":"a02fb7e4-5cdd-464d-bd56-5d4b047df45f","contextUsagePercentage":3.5799999237060547,"reasoning":{"support":"unavailable","effortLevels":[]}}}
+{"type":"sessionUpdate","data":{"sessionId":"a02fb7e4-5cdd-464d-bd56-5d4b047df45f","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"ok"}}}}
+{"type":"metadata","data":{"sessionId":"a02fb7e4-5cdd-464d-bd56-5d4b047df45f","contextUsagePercentage":1.2311999797821045,"reasoning":{"support":"unavailable","effortLevels":[]}}}
+{"type":"metadata","data":{"sessionId":"a02fb7e4-5cdd-464d-bd56-5d4b047df45f","contextUsagePercentage":1.2311999797821045,"meteringUsage":[{"value":0.02833081061359868,"unit":"credit","unitPlural":"credits"}],"turnDurationMs":1961,"reasoning":{"support":"unavailable","effortLevels":[]}}}
+{"type":"runFinished","data":{"sessionId":"a02fb7e4-5cdd-464d-bd56-5d4b047df45f","status":"success","stopReason":"end_turn","finalText":"ok","finalTextTruncated":false}}

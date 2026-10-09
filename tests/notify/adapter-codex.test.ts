@@ -19,8 +19,10 @@ describe('codex adapter', () => {
     expect(out).toEqual(['exec', '--yolo', '--skip-git-repo-check', '--json', 'hello']);
   });
 
-  it('promptSuffix returns empty string', () => {
-    expect(adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' })).toBe('');
+  it('promptSuffix returns discuss instruction', () => {
+    const suffix = adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' }) ?? '';
+    expect(suffix).toContain('discuss ask');
+    expect(suffix).toContain('discuss note');
   });
 
   it('thread.started maps to progress with thread_id', () => {

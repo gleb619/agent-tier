@@ -6,6 +6,7 @@ import {
   DEFAULT_NAMER_MODEL,
   DEFAULT_NAMER_URL,
 } from '../src/ollama-namer';
+import { describe, it, expect, vi } from 'vitest';
 
 describe('sanitizeName', () => {
   it('keeps well-formed kebab-case names unchanged', () => {
@@ -14,19 +15,19 @@ describe('sanitizeName', () => {
   });
 
   it('lowercases uppercase letters', () => {
-    expect(sanitizeName('Add-Error-Handling')).toBe('add-error-handling');
+    expect(sanitizeName('Add-Error-Handling-To-Middleware')).toBe('add-error-handling-to-middleware');
   });
 
   it('collapses non-kebab characters to hyphens', () => {
-    expect(sanitizeName('fix the bug! now')).toBe('fix-the-bug-now');
+    expect(sanitizeName('fix the bug right now please do')).toBe('fix-the-bug-right-now-please-do');
   });
 
   it('collapses consecutive hyphens', () => {
-    expect(sanitizeName('foo---bar')).toBe('foo-bar');
+    expect(sanitizeName('foo---bar---baz---qux---end---tail')).toBe('foo-bar-baz-qux-end-tail');
   });
 
   it('trims leading and trailing hyphens', () => {
-    expect(sanitizeName('--hello--')).toBe('hello');
+    expect(sanitizeName('--hello-world-okay-now--')).toBe('hello-world-okay-now');
   });
 
   it('strips code-fence wrappers', () => {
@@ -34,17 +35,15 @@ describe('sanitizeName', () => {
   });
 
   it('strips quote wrappers', () => {
-    expect(sanitizeName('"hello-world"')).toBe('hello-world');
+    expect(sanitizeName('"add-error-handling-now"')).toBe('add-error-handling-now');
   });
 
   it('strips backtick wrappers', () => {
-    expect(sanitizeName('`hello-world`')).toBe('hello-world');
+    expect(sanitizeName('`add-error-handling-now`')).toBe('add-error-handling-now');
   });
 
-  it('pads too-short output to NAMER_MIN_LEN', () => {
-    const out = sanitizeName('short');
-    expect(out).not.toBeNull();
-    expect(out!.length).toBeGreaterThanOrEqual(NAMER_MIN_LEN);
+  it('returns null when sanitized output is too short', () => {
+    expect(sanitizeName('short')).toBeNull();
   });
 
   it('returns null for empty input', () => {
@@ -66,28 +65,45 @@ describe('sanitizeName', () => {
     const input = 'aaaa-bbbb-cccc-dddd-eeee-ffff-gggg-hhhh-iiii-jjjj-kkkk-llll-mmmm-nnnn-oooo-pppp';
     const out = sanitizeName(input)!;
     expect(out.length).toBeLessThanOrEqual(NAMER_MAX_LEN);
+    expect(out.length).toBeGreaterThanOrEqual(NAMER_MIN_LEN);
     expect(out).not.toMatch(/-+$/);
   });
 });
 
-describe('generateSessionName', () => {
-  function makeFetch(responder: (body: unknown) => { status: number; body: unknown } | null) {
-    return jest.fn(async (_url: string, _init?: RequestInit) => {
-      const r = responder(undefined);
-      if (!r) {
-        return { ok: false, status: 500, json: async () => ({ error: 'mock' }) } as Response;
-      }
-      return {
-        ok: r.status >= 200 && r.status < 300,
-        status: r.status,
-        json: async () => r.body,
-      } as Response;
-    });
-  }
+interface CapturedCall {
+  url: string;
+  init: RequestInit;
+}
 
+function makeCapturingFetch(responder: () => Response): { fetchImpl: typeof fetch; captured: CapturedCall[] } {
+  const captured: CapturedCall[] = [];
+  const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+    captured.push({ url: String(url), init: init ?? {} });
+    return responder();
+  });
+  return { fetchImpl: fetchImpl as unknown as typeof fetch, captured };
+}
+
+function okResponse(body: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => body,
+  } as unknown as Response;
+}
+
+function errorResponse(status = 500): Response {
+  return {
+    ok: false,
+    status,
+    json: async () => ({ error: 'mock' }),
+  } as unknown as Response;
+}
+
+describe('generateSessionName', () => {
   it('returns null for empty prompt', async () => {
-    const fetchImpl = jest.fn();
-    const out = await generateSessionName('', { fetchImpl });
+    const fetchImpl = vi.fn();
+    const out = await generateSessionName('', { fetchImpl: fetchImpl as unknown as typeof fetch });
     expect(out).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -98,68 +114,67 @@ describe('generateSessionName', () => {
   });
 
   it('returns sanitized name on success', async () => {
-    const fetchImpl = makeFetch(() => ({ status: 200, body: { response: 'add-error-handling-to-api' } }));
+    const { fetchImpl, captured } = makeCapturingFetch(() =>
+      okResponse({ response: 'add-error-handling-to-api' }),
+    );
     const out = await generateSessionName('please add error handling', { fetchImpl });
     expect(out).toBe('add-error-handling-to-api');
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(captured).toHaveLength(1);
   });
 
   it('sends correct request body to ollama /api/generate', async () => {
-    const fetchImpl = jest.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ response: 'kebab-case-session-name-please-okay' }),
-    })) as unknown as typeof fetch;
-
+    const { fetchImpl, captured } = makeCapturingFetch(() =>
+      okResponse({ response: 'kebab-case-session-name-please-okay' }),
+    );
     await generateSessionName('do a thing', { fetchImpl, model: 'gemma:2b', url: 'http://example.com' });
 
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-    const [url, init] = (fetchImpl as jest.Mock).mock.calls[0];
-    expect(url).toBe('http://example.com/api/generate');
-    const body = JSON.parse(init.body);
+    expect(captured).toHaveLength(1);
+    const call = captured[0]!;
+    expect(call.url).toBe('http://example.com/api/generate');
+    const body = JSON.parse(call.init.body as string);
     expect(body.model).toBe('gemma:2b');
     expect(body.stream).toBe(false);
     expect(body.prompt).toContain('Prompt:');
     expect(body.prompt).toContain('do a thing');
-    expect(init.signal).toBeDefined();
-    expect(init.headers['content-type']).toBe('application/json');
+    expect(call.init.signal).toBeDefined();
+    expect((call.init.headers as Record<string, string>)['content-type']).toBe('application/json');
   });
 
   it('returns null on non-2xx response', async () => {
-    const fetchImpl = makeFetch(() => null); // forces 500 fallback
+    const { fetchImpl } = makeCapturingFetch(() => errorResponse(500));
     const out = await generateSessionName('hello', { fetchImpl });
     expect(out).toBeNull();
   });
 
   it('returns null when ollama returns error field', async () => {
-    const fetchImpl = makeFetch(() => ({ status: 200, body: { error: 'model not found' } }));
+    const { fetchImpl } = makeCapturingFetch(() => okResponse({ error: 'model not found' }));
     const out = await generateSessionName('hello', { fetchImpl });
     expect(out).toBeNull();
   });
 
   it('returns null when response field is missing', async () => {
-    const fetchImpl = makeFetch(() => ({ status: 200, body: { model: 'gemma:2b' } }));
+    const { fetchImpl } = makeCapturingFetch(() => okResponse({ model: 'gemma:2b' }));
     const out = await generateSessionName('hello', { fetchImpl });
     expect(out).toBeNull();
   });
 
   it('returns null when fetch throws', async () => {
-    const fetchImpl = jest.fn(async () => {
+    const fetchImpl = vi.fn(async () => {
       throw new Error('ECONNREFUSED');
     });
-    const out = await generateSessionName('hello', { fetchImpl });
+    const out = await generateSessionName('hello', { fetchImpl: fetchImpl as unknown as typeof fetch });
     expect(out).toBeNull();
   });
 
   it('returns null when JSON body is malformed', async () => {
-    const fetchImpl = jest.fn(async () => ({
+    const fetchImpl = vi.fn(async () => ({
       ok: true,
       status: 200,
       json: async () => {
         throw new SyntaxError('not json');
       },
-    })) as unknown as typeof fetch;
-    const out = await generateSessionName('hello', { fetchImpl });
+    }));
+    const out = await generateSessionName('hello', { fetchImpl: fetchImpl as unknown as typeof fetch });
     expect(out).toBeNull();
   });
 
@@ -170,17 +185,12 @@ describe('generateSessionName', () => {
     process.env.AT_NAMER_MODEL = 'gemma:from-env';
 
     try {
-      const fetchImpl = jest.fn(async () => ({
-        ok: true,
-        status: 200,
-        json: async () => ({ response: 'kebab-case-session-name-please-okay' }),
-      })) as unknown as typeof fetch;
-
+      const { fetchImpl, captured } = makeCapturingFetch(() =>
+        okResponse({ response: 'kebab-case-session-name-please-okay' }),
+      );
       await generateSessionName('hi', { fetchImpl });
-
-      const [url, init] = (fetchImpl as jest.Mock).mock.calls[0];
-      expect(url).toBe('http://from-env:11434/api/generate');
-      expect(JSON.parse(init.body).model).toBe('gemma:from-env');
+      expect(captured[0]!.url).toBe('http://from-env:11434/api/generate');
+      expect(JSON.parse(captured[0]!.init.body as string).model).toBe('gemma:from-env');
     } finally {
       if (previousUrl === undefined) delete process.env.AT_NAMER_URL;
       else process.env.AT_NAMER_URL = previousUrl;
@@ -196,17 +206,12 @@ describe('generateSessionName', () => {
     delete process.env.AT_NAMER_MODEL;
 
     try {
-      const fetchImpl = jest.fn(async () => ({
-        ok: true,
-        status: 200,
-        json: async () => ({ response: 'kebab-case-session-name-please-okay' }),
-      })) as unknown as typeof fetch;
-
+      const { fetchImpl, captured } = makeCapturingFetch(() =>
+        okResponse({ response: 'kebab-case-session-name-please-okay' }),
+      );
       await generateSessionName('hi', { fetchImpl });
-
-      const [url, init] = (fetchImpl as jest.Mock).mock.calls[0];
-      expect(url).toBe(`${DEFAULT_NAMER_URL}/api/generate`);
-      expect(JSON.parse(init.body).model).toBe(DEFAULT_NAMER_MODEL);
+      expect(captured[0]!.url).toBe(`${DEFAULT_NAMER_URL}/api/generate`);
+      expect(JSON.parse(captured[0]!.init.body as string).model).toBe(DEFAULT_NAMER_MODEL);
     } finally {
       if (previousUrl === undefined) delete process.env.AT_NAMER_URL;
       else process.env.AT_NAMER_URL = previousUrl;

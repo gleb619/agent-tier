@@ -1,4 +1,5 @@
 import type { NotifyAdapter, NotifyEvent } from '../types';
+import { appendDiscussInstruction } from '../prompt';
 
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
 
@@ -8,7 +9,10 @@ export function makeLogAdapter(): NotifyAdapter {
   return {
     name: 'log',
     promptSuffix(ctx) {
-      return `\n\nReport progress by running: at notify ${ctx.runId} "<short message>" at major milestones.`;
+      // Preserve the legacy `at notify` instruction so log-output agents still
+      // discover the milestone channel, then append the shared discuss hint.
+      const existing = `\n\nReport progress by running: at notify ${ctx.runId} "<short message>" at major milestones.`;
+      return appendDiscussInstruction(existing);
     },
     parseLine(line) {
       const clean = line.replace(ANSI_RE, '').trim();

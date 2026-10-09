@@ -26,8 +26,10 @@ describe('opencode adapter', () => {
     expect(out).toEqual(['run', '--dangerously-skip-permissions', '-m', 'qwen3-coder', '--format', 'json', 'hello']);
   });
 
-  it('promptSuffix returns empty string', () => {
-    expect(adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' })).toBe('');
+  it('promptSuffix returns discuss instruction', () => {
+    const suffix = adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' }) ?? '';
+    expect(suffix).toContain('discuss ask');
+    expect(suffix).toContain('discuss note');
   });
 
   it('payload type=text maps to message', () => {

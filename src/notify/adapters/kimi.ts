@@ -1,4 +1,5 @@
 import type { NotifyAdapter, NotifyEvent } from '../types';
+import { buildPromptSuffix } from '../prompt';
 
 const TEXT_LIMIT = 500;
 
@@ -54,8 +55,8 @@ function isErrorContent(text: string): boolean {
 export function makeKimiAdapter(): NotifyAdapter {
   return {
     name: 'kimi',
-    promptSuffix() {
-      return '';
+    promptSuffix(ctx) {
+      return buildPromptSuffix(ctx);
     },
     // kimi requires --print --output-format stream-json BEFORE -p <prompt>.
     // Drop the trailing -p <prompt> from baseArgs, then prepend the flags.

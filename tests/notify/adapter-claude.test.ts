@@ -14,8 +14,11 @@ describe('claude adapter', () => {
     ]);
   });
 
-  it('promptSuffix returns empty string', () => {
-    expect(adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' })).toBe('');
+  it('promptSuffix returns discuss instruction', () => {
+    const suffix = adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' }) ?? '';
+    expect(suffix).toContain('discuss ask');
+    expect(suffix).toContain('discuss note');
+    expect(suffix).toContain('$AT_BIN');
   });
 
   it('system init maps to progress with model', () => {

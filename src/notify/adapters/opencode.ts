@@ -1,4 +1,5 @@
 import type { NotifyAdapter, NotifyEvent } from '../types';
+import { buildPromptSuffix } from '../prompt';
 
 const TEXT_LIMIT = 500;
 
@@ -40,8 +41,8 @@ function pluckString(obj: Record<string, unknown>, keys: string[]): string | und
 export function makeOpenCodeAdapter(): NotifyAdapter {
   return {
     name: 'opencode',
-    promptSuffix() {
-      return '';
+    promptSuffix(ctx) {
+      return buildPromptSuffix(ctx);
     },
     // opencode flag order: run [...] --format json <prompt>
     // baseArgs ends with the prompt; insert --format json just before it.

@@ -12,6 +12,7 @@ import { registerFeedbackCommand } from './feedback';
 import { registerNotifyCommand } from './notify';
 import { registerEventsCommand } from './events';
 import { registerServeCommand } from './serve';
+import { registerDiscussCommand } from './discuss';
 
 export function registerCommands(program: Command): void {
   registerDefaultCommand(program);
@@ -27,4 +28,5 @@ export function registerCommands(program: Command): void {
   registerNotifyCommand(program);
   registerEventsCommand(program);
   registerServeCommand(program);
+  registerDiscussCommand(program);
 }

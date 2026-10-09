@@ -130,6 +130,7 @@ Every SSE message is `data: <json>` with this shape:
 | pi          | `--mode json`                                          |
 | cline       | `--json` (already in buildArgs)                        |
 | kilo        | `--format json`                                        |
+| kiro        | `--agent-engine v2 --output-format stream-json` (after `chat`) |
 | cursor      | log fallback (no structured mode exposed)              |
 | agy         | log fallback (stdin-piped prompt)                      |
 | mock / mock-long | log fallback                                       |

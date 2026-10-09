@@ -111,6 +111,22 @@ interface LaunchExtras {
 
 export const UNNAMED_PLACEHOLDER = 'unnamed';
 
+/**
+ * Shell-quoted `node /abs/path/to/cli.js` (or just `at` if the binary is
+ * directly executable). Exposed to child agents as AT_BIN so they can shell
+ * out to `at discuss ...` without re-deriving the path.
+ */
+export function getAtBin(): string {
+  const exe = process.execPath;
+  const script = process.argv[1] || exe;
+  return `${shellQuote(exe)} ${shellQuote(script)}`;
+}
+
+function shellQuote(s: string): string {
+  if (/^[a-zA-Z0-9_\/\.\-]+$/.test(s)) return s;
+  return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
 export async function launchAgent(agent: AgentDef, options: RunOptions, extras?: LaunchExtras): Promise<LaunchResult> {
   const runId = extras?.runId ?? generateRunId();
   const promptText = options.prompt + (extras?.extraPrompt ?? '');
@@ -468,6 +484,8 @@ export const defaultSpawner: Spawner = async (agent, options) => {
     AT_RUN_ID: runId,
     AT_SSE_URL: `http://127.0.0.1:${hub.port}`,
     AT_EVENT_FILE: eventFile,
+    AT_BIN: getAtBin(),
+    AT_STATE_DIR: options.stateDir,
     AT_RUN_NAME: options.runName ?? UNNAMED_PLACEHOLDER,
   };
 

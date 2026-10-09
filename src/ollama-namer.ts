@@ -37,7 +37,7 @@ export function sanitizeName(raw: string): string | null {
   let s = raw.trim();
 
   // Strip common code-fence / quote wrappers the model sometimes returns.
-  s = s.replace(/^```[a-zA-Z]*\s*/i, '').replace(/```$/, '');
+  s = s.replace(/^\s*```\s*/i, '').replace(/\s*```\s*$/, '');
   s = s.replace(/^["'`]+|["'`]+$/g, '');
 
   // Collapse to allowed characters: [a-z0-9-]
@@ -46,14 +46,9 @@ export function sanitizeName(raw: string): string | null {
   s = s.replace(/-+/g, '-');
   s = s.replace(/^-+|-+$/g, '');
 
-  if (s.length < NAMER_MIN_LEN) {
-    // Pad deterministically if model returned a too-short label, so we keep
-    // the 20-40 char contract. The padding keeps the name stable for the
-    // same prompt + model output.
-    if (s.length === 0) return null;
-    while (s.length < NAMER_MIN_LEN) s = s + '0';
-    if (s.length > NAMER_MAX_LEN) s = s.slice(0, NAMER_MAX_LEN);
-  } else if (s.length > NAMER_MAX_LEN) {
+  if (s.length === 0) return null;
+  if (s.length < NAMER_MIN_LEN) return null; // too short to be a useful name
+  if (s.length > NAMER_MAX_LEN) {
     // Prefer cutting on a hyphen boundary so the result still looks like a name.
     const cut = s.slice(0, NAMER_MAX_LEN);
     const lastDash = cut.lastIndexOf('-');

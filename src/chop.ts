@@ -248,6 +248,25 @@ export function renderStreamJsonLine(line: string): string | null {
     return `[result] ${typeof errMsg === 'string' && errMsg ? 'FAILED' : 'done'}`;
   }
   if (piType === 'agent_end' || piType === 'agent_settled') return null;
+  // kiro --output-format stream-json events
+  if (t === 'runStarted') {
+    const data = (payload as { data?: unknown }).data;
+    const engine = data && typeof data === 'object' && typeof (data as { engine?: unknown }).engine === 'string'
+      ? (data as { engine: string }).engine
+      : '';
+    return engine ? `[system] session started (engine=${engine})` : '[system] session started';
+  }
+  if (t === 'runFinished') {
+    const data = (payload as { data?: unknown }).data;
+    if (!data || typeof data !== 'object') return '[result] done';
+    const d = data as { status?: unknown; finalText?: unknown };
+    const status = typeof d.status === 'string' ? d.status : 'done';
+    const finalText = typeof d.finalText === 'string' ? d.finalText : '';
+    const line = `[result] ${status}`;
+    return finalText ? `${line}\n${finalText}` : line;
+  }
+  if (t === 'sessionUpdate') return null; // message chunks shown elsewhere
+  if (t === 'metadata') return null;
   return null;
 }
 

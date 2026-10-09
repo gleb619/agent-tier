@@ -1,4 +1,39 @@
-export type NotifyEventType = 'start' | 'message' | 'tool' | 'progress' | 'error' | 'done';
+export type NotifyEventType =
+  | 'start'
+  | 'message'
+  | 'tool'
+  | 'progress'
+  | 'error'
+  | 'done'
+  | 'question'
+  | 'answer';
+
+export type DiscussFrom = 'agent' | 'host';
+export type DiscussKind = 'question' | 'answer' | 'say' | 'note';
+
+/** A single entry in the per-run discussion thread (`<stateDir>/events/<runId>.discuss.jsonl`). */
+export interface DiscussEntry {
+  id: string;
+  from: DiscussFrom;
+  kind: DiscussKind;
+  text: string;
+  options?: string[];
+  replyTo?: string;
+  ts: string;
+}
+
+/** Payload of a 'question' NotifyEvent emitted by `at discuss ask`. */
+export interface DiscussQuestionPayload {
+  id: string;
+  text: string;
+  options?: string[];
+}
+
+/** Payload of an 'answer' NotifyEvent. */
+export interface DiscussAnswerPayload {
+  qid: string;
+  answer: string;
+}
 
 export interface NotifyEvent {
   runId: string;
@@ -8,6 +43,26 @@ export interface NotifyEvent {
   type: NotifyEventType;
   text?: string;
   data?: Record<string, unknown>;
+}
+
+/** Payload of a 'question' event emitted by `at ask`. */
+export interface QuestionPayload {
+  id: string;
+  text: string;
+  options?: string[];
+}
+
+/** Payload of an 'answer' event emitted by `at answer` / hub /answer. */
+export interface AnswerPayload {
+  qid: string;
+  answer: string;
+}
+
+/** A single entry appended to `<stateDir>/events/<runId>.answers.jsonl`. */
+export interface AnswerRecord {
+  qid: string;
+  answer: string;
+  ts: string;
 }
 
 export interface NotifyAdapterContext {

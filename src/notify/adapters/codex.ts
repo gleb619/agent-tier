@@ -1,4 +1,5 @@
 import type { NotifyAdapter, NotifyEvent } from '../types';
+import { buildPromptSuffix } from '../prompt';
 
 const TEXT_LIMIT = 500;
 
@@ -35,8 +36,8 @@ function getItem(payload: Record<string, unknown>): CodexItem | undefined {
 export function makeCodexAdapter(): NotifyAdapter {
   return {
     name: 'codex',
-    promptSuffix() {
-      return '';
+    promptSuffix(ctx) {
+      return buildPromptSuffix(ctx);
     },
     // codex flags must go BEFORE the prompt; buildArgs returns
     // ['exec', '--yolo', '--skip-git-repo-check', <prompt>] so insert

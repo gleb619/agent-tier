@@ -1,4 +1,5 @@
 import type { NotifyAdapter, NotifyEvent } from '../types';
+import { buildPromptSuffix } from '../prompt';
 
 const TEXT_LIMIT = 500;
 
@@ -66,8 +67,8 @@ function pluckString(obj: Record<string, unknown>, keys: string[]): string | und
 export function makePiAdapter(): NotifyAdapter {
   return {
     name: 'pi',
-    promptSuffix() {
-      return '';
+    promptSuffix(ctx) {
+      return buildPromptSuffix(ctx);
     },
     // pi flag order: -p --provider X --model Y --no-session --mode json <prompt>
     // baseArgs ends with the prompt; insert --mode json just before it.

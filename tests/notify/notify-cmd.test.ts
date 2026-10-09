@@ -6,7 +6,7 @@ import path from 'path';
 import { registerNotifyCommand } from '../../src/commands/notify';
 import { startHub } from '../../src/notify/hub';
 
-describe('at notify command', () => {
+describe('at notify command (alias for discuss note)', () => {
   let tmp: string;
   let stateDir: string;
   let hub: Awaited<ReturnType<typeof startHub>> | undefined;
@@ -16,12 +16,14 @@ describe('at notify command', () => {
     tmp = mkdtempSync(path.join(tmpdir(), 'at-notify-cmd-'));
     stateDir = tmp;
     exitSpy.mockClear();
+    process.env.AT_STATE_DIR = stateDir;
   });
 
   afterEach(async () => {
     await hub?.close();
     delete process.env.AT_SSE_URL;
     delete process.env.AT_EVENT_FILE;
+    delete process.env.AT_STATE_DIR;
     rmSync(tmp, { recursive: true, force: true });
   });
 
@@ -31,28 +33,29 @@ describe('at notify command', () => {
     await program.parseAsync(['node', 'at', 'notify', ...args]);
   }
 
-  it('falls back to append event file when AT_SSE_URL missing', async () => {
-    const eventFile = path.join(stateDir, 'events', 'run-x.jsonl');
-    process.env.AT_EVENT_FILE = eventFile;
+  it('writes a note entry to <runId>.discuss.jsonl when no hub', async () => {
+    delete process.env.AT_SSE_URL;
     await runNotify(['run-x', 'hello', 'world']);
-    const lines = readFileSync(eventFile, 'utf8').trim().split('\n');
+    const file = path.join(stateDir, 'events', 'run-x.discuss.jsonl');
+    const lines = readFileSync(file, 'utf8').trim().split('\n');
     expect(lines).toHaveLength(1);
     const ev = JSON.parse(lines[0]);
-    expect(ev.type).toBe('message');
+    expect(ev.from).toBe('agent');
+    expect(ev.kind).toBe('note');
     expect(ev.text).toBe('hello world');
-    expect(ev.runId).toBe('run-x');
   });
 
-  it('POSTs to hub when AT_SSE_URL set', async () => {
+  it('POSTs note to hub when AT_SSE_URL set; hub mirrors to SSE + .discuss.jsonl', async () => {
     hub = await startHub({ stateDir, port: 0 });
     process.env.AT_SSE_URL = `http://127.0.0.1:${hub.port}`;
     await runNotify(['run-y', 'via hub']);
 
-    // Give server time to write
     await new Promise((r) => setTimeout(r, 200));
-    const lines = readFileSync(path.join(stateDir, 'events', 'run-y.jsonl'), 'utf8').trim().split('\n');
-    expect(lines).toHaveLength(1);
+    const file = path.join(stateDir, 'events', 'run-y.discuss.jsonl');
+    const lines = readFileSync(file, 'utf8').trim().split('\n');
+    expect(lines.length).toBeGreaterThanOrEqual(1);
     const ev = JSON.parse(lines[0]);
+    expect(ev.kind).toBe('note');
     expect(ev.text).toBe('via hub');
   });
 });

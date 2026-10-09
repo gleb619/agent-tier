@@ -46,6 +46,9 @@ const baseOptions: RunOptions = {
   logDir: '/tmp/at-logs',
   noChop: false,
   timeout: 3600000,
+  sse: false,
+  ssePort: 0,
+  namer: false,
 };
 
 const agents = [makeAgent('a'), makeAgent('b'), makeAgent('c')];
@@ -341,5 +344,101 @@ describe('defaultSpawner', () => {
     const content = readFileSync(markerFile, 'utf8').trim();
     expect(content).toContain('agent=test');
     expect(content).toContain('status=done');
+  });
+});
+
+describe('run — namer integration (experimental)', () => {
+  // Mock the ollama-namer module so we can deterministically test the wiring.
+  vi.mock('../src/ollama-namer', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../src/ollama-namer')>();
+    return {
+      ...actual,
+      generateSessionName: vi.fn(),
+    };
+  });
+
+  it('does not call namer when namer flag is false', async () => {
+    const { generateSessionName } = await import('../src/ollama-namer');
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
+    await run({ ...baseOptions, namer: false }, agents, spawner);
+    expect(generateSessionName).not.toHaveBeenCalled();
+  });
+
+  it('calls namer when namer flag is true and forwards result to spawner', async () => {
+    const { generateSessionName } = await import('../src/ollama-namer');
+    (generateSessionName as Mock).mockResolvedValue('refactor-auth-middleware-please');
+    const spawner: Spawner = vi.fn(async (_agent, opts) => {
+      expect((opts as RunOptions).runName).toBe('refactor-auth-middleware-please');
+      return 0;
+    });
+    await run({ ...baseOptions, namer: true, prompt: 'refactor auth' }, agents, spawner);
+    expect(generateSessionName).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues without name when namer returns null', async () => {
+    const { generateSessionName } = await import('../src/ollama-namer');
+    (generateSessionName as Mock).mockResolvedValue(null);
+    const spawner: Spawner = vi.fn(async (_agent, opts) => {
+      expect((opts as RunOptions).runName).toBeUndefined();
+      return 0;
+    });
+    await run({ ...baseOptions, namer: true }, agents, spawner);
+    expect(spawner).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('defaultSpawner — namer name propagation', () => {
+  const tmpLogDir = '/tmp/at-test-logs-runner-namer';
+
+  beforeEach(() => {
+    if (existsSync(tmpLogDir)) {
+      for (const f of readdirSync(tmpLogDir)) {
+        unlinkSync(path.join(tmpLogDir, f));
+      }
+      rmdirSync(tmpLogDir);
+    }
+  });
+
+  it('writes AT_RUN_NAME env from options.runName into child process', async () => {
+    const envCapture = path.join(tmpLogDir, 'env.txt');
+    const agent: AgentDef = {
+      name: 'env-capture',
+      tier: 2,
+      bin: () => '/bin/sh',
+      buildArgs: () => ['-c', `echo "$AT_RUN_NAME" > ${envCapture}`],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+      runName: 'add-error-handling-to-api',
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(0);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(readFileSync(envCapture, 'utf8').trim()).toBe('add-error-handling-to-api');
+  });
+
+  it('uses "unnamed" when options.runName is missing', async () => {
+    const envCapture = path.join(tmpLogDir, 'env.txt');
+    const agent: AgentDef = {
+      name: 'env-capture-unnamed',
+      tier: 2,
+      bin: () => '/bin/sh',
+      buildArgs: () => ['-c', `echo "$AT_RUN_NAME" > ${envCapture}`],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: 'hello',
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(0);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(readFileSync(envCapture, 'utf8').trim()).toBe('unnamed');
   });
 });

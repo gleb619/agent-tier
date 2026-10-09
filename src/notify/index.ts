@@ -8,6 +8,7 @@ import { makeOpenCodeAdapter } from './adapters/opencode';
 import { makePiAdapter } from './adapters/pi';
 import { makeKiloAdapter } from './adapters/kilo';
 import { makeClineAdapter } from './adapters/cline';
+import { makeKiroAdapter } from './adapters/kiro';
 
 const registry: Map<string, NotifyAdapter> = new Map();
 
@@ -20,6 +21,7 @@ registerAdapter('opencode', makeOpenCodeAdapter());
 registerAdapter('pi', makePiAdapter());
 registerAdapter('kilo', makeKiloAdapter());
 registerAdapter('cline', makeClineAdapter());
+registerAdapter('kiro', makeKiroAdapter());
 // cursor + agy fall through to log adapter (no structured output mode in registry)
 
 export function registerAdapter(name: string, adapter: NotifyAdapter): void {

@@ -1,4 +1,5 @@
 import type { NotifyAdapter, NotifyEvent } from '../types';
+import { buildPromptSuffix } from '../prompt';
 
 const TEXT_LIMIT = 500;
 
@@ -83,8 +84,8 @@ function pluckString(obj: Record<string, unknown>, keys: string[]): string | und
 export function makeQwenAdapter(): NotifyAdapter {
   return {
     name: 'qwen',
-    promptSuffix() {
-      return '';
+    promptSuffix(ctx) {
+      return buildPromptSuffix(ctx);
     },
     // qwen flag order: <flags...> --output-format stream-json <prompt>
     // baseArgs is something like ['-y', prompt] — keep the head, insert the flag

@@ -19,8 +19,10 @@ describe('qwen adapter', () => {
     expect(out).toEqual(['-y', '--output-format', 'stream-json', 'hello']);
   });
 
-  it('promptSuffix returns empty string', () => {
-    expect(adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' })).toBe('');
+  it('promptSuffix returns discuss instruction', () => {
+    const suffix = adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' }) ?? '';
+    expect(suffix).toContain('discuss ask');
+    expect(suffix).toContain('discuss note');
   });
 
   it('system init maps to progress with model and session_id', () => {

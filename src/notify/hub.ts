@@ -1,7 +1,14 @@
 import http from 'http';
 import type { Socket } from 'net';
 import type { NotifyEvent } from './types';
+import type { DiscussEntry, DiscussFrom, DiscussKind } from './types';
 import { appendEvent, readEvents, readEventsSince, getEventsDir } from './store';
+import {
+  appendDiscuss,
+  readThread,
+  nextDiscussId,
+  unansweredQuestions,
+} from './discuss-store';
 import { readdirSync, existsSync } from 'fs';
 
 export interface Hub {
@@ -139,6 +146,7 @@ export function startHub({
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
       });
+      res.flushHeaders();
       const client: Client = { res, runId, sinceSeq, socket: res.socket };
       clients.add(client);
       hadActiveClients = true;
@@ -155,6 +163,7 @@ export function startHub({
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
       });
+      res.flushHeaders();
       const client: Client = { res, sinceSeq, socket: res.socket };
       clients.add(client);
       hadActiveClients = true;
@@ -182,6 +191,75 @@ export function startHub({
         }
       });
       return;
+    }
+
+    const discussMatch = url.match(/^\/discuss\/([^/?]+)(\?.*)?$/);
+    if (discussMatch) {
+      const runId = decodeURIComponent(discussMatch[1]);
+      if (req.method === 'GET') {
+        const pending = /[?&]pending=1\b/.test(url);
+        const list = pending ? unansweredQuestions(stateDir, runId) : readThread(stateDir, runId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(list));
+        return;
+      }
+      if (req.method === 'POST') {
+        let body = '';
+        req.setEncoding('utf8');
+        req.on('data', (chunk) => (body += chunk));
+        req.on('end', () => {
+          try {
+            const parsed = JSON.parse(body) as {
+              from?: DiscussFrom;
+              kind?: DiscussKind;
+              text?: unknown;
+              options?: unknown;
+              replyTo?: unknown;
+            };
+            const from: DiscussFrom = parsed.from === 'host' ? 'host' : 'agent';
+            const kind = parsed.kind;
+            const text = typeof parsed.text === 'string' ? parsed.text : '';
+            const options = Array.isArray(parsed.options)
+              ? parsed.options.filter((o): o is string => typeof o === 'string')
+              : undefined;
+            const replyTo = typeof parsed.replyTo === 'string' ? parsed.replyTo : undefined;
+            if (!text || (kind !== 'question' && kind !== 'answer' && kind !== 'say' && kind !== 'note')) {
+              res.writeHead(400);
+              res.end('bad request');
+              return;
+            }
+            const entry: DiscussEntry = {
+              id: nextDiscussId(stateDir, runId),
+              from,
+              kind,
+              text,
+              ts: new Date().toISOString(),
+            };
+            if (options && options.length) entry.options = options;
+            if (replyTo) entry.replyTo = replyTo;
+            appendDiscuss(stateDir, runId, entry);
+
+            // Mirror as SSE event: question/answer -> matching type; say/note -> 'message'
+            const sseType: NotifyEvent['type'] =
+              kind === 'question' || kind === 'answer' ? kind : 'message';
+            broadcast({
+              runId,
+              agent: from,
+              ts: entry.ts,
+              seq: 0,
+              type: sseType,
+              text: entry.text,
+              data: { id: entry.id, kind: entry.kind, options: entry.options, replyTo: entry.replyTo, from: entry.from },
+            });
+            res.writeHead(202);
+            res.end(JSON.stringify({ id: entry.id }));
+          } catch {
+            res.writeHead(400);
+            res.end('bad request');
+          }
+        });
+        return;
+      }
     }
 
     res.writeHead(404);
