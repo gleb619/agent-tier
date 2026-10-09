@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { resolveStateDir } from '../state-dir';
+import { resolveFeedbackDir } from '../state-dir';
 import { loadRuns } from '../run-store';
 import {
   addFeedback,
@@ -94,7 +94,7 @@ export function registerFeedbackCommand(program: Command): void {
     .option('--context <context>', 'extra context (exit code, error snippet)')
     .action(async (text: string, opts: Record<string, unknown>) => {
       try {
-        const stateDir = resolveStateDir();
+        const stateDir = resolveFeedbackDir();
         let agent = opts.agent as string | undefined;
         let tier: number | undefined;
         const runId = opts.run as string | undefined;
@@ -154,7 +154,7 @@ export function registerFeedbackCommand(program: Command): void {
       // root program also defines --json and swallows it; fall back to parent value
       opts.json = opts.json ?? cmd.parent?.parent?.opts().json;
       try {
-        const stateDir = resolveStateDir();
+        const stateDir = resolveFeedbackDir();
         const entries = listFeedback(stateDir, {
           status: opts.status
             ? validateStatus(opts.status as string)
@@ -191,7 +191,7 @@ export function registerFeedbackCommand(program: Command): void {
     .action(async (id: string, opts: Record<string, unknown>, cmd: Command) => {
       opts.json = opts.json ?? cmd.parent?.parent?.opts().json;
       try {
-        const stateDir = resolveStateDir();
+        const stateDir = resolveFeedbackDir();
         const entry = getFeedback(stateDir, id);
         if (!entry) {
           throw new Error(`feedback not found: ${id}`);
@@ -219,7 +219,7 @@ export function registerFeedbackCommand(program: Command): void {
     .option('--tag <tag...>', 'replace tags (repeatable or comma-separated)', parseTags)
     .action(async (id: string, opts: Record<string, unknown>) => {
       try {
-        const stateDir = resolveStateDir();
+        const stateDir = resolveFeedbackDir();
         const tags = opts.tag as string[] | undefined;
 
         const entry = await updateFeedback(stateDir, id, {
@@ -245,7 +245,7 @@ export function registerFeedbackCommand(program: Command): void {
     .option('--wontfix', 'mark as wontfix instead of resolved')
     .action(async (id: string, opts: Record<string, unknown>) => {
       try {
-        const stateDir = resolveStateDir();
+        const stateDir = resolveFeedbackDir();
         const status: FeedbackStatus = opts.wontfix ? 'wontfix' : 'resolved';
         const entry = await updateFeedback(stateDir, id, { status });
         console.log(`[at] feedback ${entry.id} ${entry.status}`);
@@ -265,7 +265,7 @@ export function registerFeedbackCommand(program: Command): void {
     .option('-f, --file <file...>', 'changed files (repeatable or comma-separated)', parseTags)
     .action(async (id: string, note: string, opts: Record<string, unknown>) => {
       try {
-        const stateDir = resolveStateDir();
+        const stateDir = resolveFeedbackDir();
         const entry = await appendFeedbackLog(stateDir, id, {
           note,
           state: opts.state as string | undefined,
@@ -286,7 +286,7 @@ export function registerFeedbackCommand(program: Command): void {
     .description('Remove feedback entries by id or unique prefix')
     .action(async (ids: string[], opts: Record<string, unknown>) => {
       try {
-        const stateDir = resolveStateDir();
+        const stateDir = resolveFeedbackDir();
         const removed = await removeFeedback(stateDir, ids);
         console.log(`[at] feedback: removed ${removed} entries`);
       } catch (err) {
@@ -303,7 +303,7 @@ export function registerFeedbackCommand(program: Command): void {
     .option('--yes', 'confirm --all')
     .action(async (opts: Record<string, unknown>) => {
       try {
-        const stateDir = resolveStateDir();
+        const stateDir = resolveFeedbackDir();
         const removed = await clearFeedback(stateDir, {
           resolved: opts.resolved as boolean | undefined,
           all: opts.all as boolean | undefined,
@@ -321,7 +321,7 @@ export function registerFeedbackCommand(program: Command): void {
     .description('Run feedback autoclean now')
     .action(async () => {
       try {
-        const stateDir = resolveStateDir();
+        const stateDir = resolveFeedbackDir();
         const evicted = await pruneFeedback(stateDir);
         console.log(`[at] feedback: pruned ${evicted} entries`);
       } catch (err) {

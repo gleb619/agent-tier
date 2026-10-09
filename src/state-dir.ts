@@ -59,6 +59,21 @@ export function resolveStateDir(explicit?: string): string {
   return HOME_AT_DIR;
 }
 
+/**
+ * Resolve the state directory for the global feedback queue.
+ *
+ * Unlike resolveStateDir, this deliberately skips project-root and CWD
+ * auto-detection: feedback entries are filed from many repos (each entry
+ * carries its own `cwd`) and consumed by the improvement loop running in
+ * this repo, so a project-local `.at/` must never shadow `~/.at/`.
+ * Precedence: explicit path → AT_STATE_DIR env → ~/.at/.
+ */
+export function resolveFeedbackDir(explicit?: string): string {
+  if (explicit) return explicit;
+  if (process.env.AT_STATE_DIR) return process.env.AT_STATE_DIR;
+  return HOME_AT_DIR;
+}
+
 export function getStateFilePath(stateDir: string): string {
   return path.join(stateDir, 'state.json');
 }

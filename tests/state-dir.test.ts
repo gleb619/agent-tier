@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import os from 'os';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { resolveStateDir, getStateFilePath, getRunsFilePath, findProjectRoot } from '../src/state-dir';
+import { resolveStateDir, getStateFilePath, getRunsFilePath, findProjectRoot, resolveFeedbackDir } from '../src/state-dir';
 
 describe('getStateFilePath', () => {
   it('joins stateDir with state.json', () => {
@@ -74,6 +74,52 @@ describe('resolveStateDir', () => {
 
     vi.spyOn(process, 'cwd').mockReturnValue(subDir);
     expect(resolveStateDir()).toBe(atDir);
+
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  });
+});
+
+describe('resolveFeedbackDir', () => {
+  let savedStateDir: string | undefined;
+
+  beforeEach(() => {
+    savedStateDir = process.env.AT_STATE_DIR;
+    delete process.env.AT_STATE_DIR;
+  });
+
+  afterEach(() => {
+    if (savedStateDir !== undefined) {
+      process.env.AT_STATE_DIR = savedStateDir;
+    } else {
+      delete process.env.AT_STATE_DIR;
+    }
+    vi.restoreAllMocks();
+  });
+
+  it('returns explicit path unchanged', () => {
+    expect(resolveFeedbackDir('/explicit/path')).toBe('/explicit/path');
+  });
+
+  it('honors AT_STATE_DIR override', () => {
+    process.env.AT_STATE_DIR = '/tmp/at-override';
+    expect(resolveFeedbackDir()).toBe('/tmp/at-override');
+  });
+
+  it('ignores project-local .at/ and returns ~/.at/', () => {
+    const projectRoot = path.join(os.tmpdir(), `at-feedback-root-${Date.now()}`);
+    const subDir = path.join(projectRoot, 'packages', 'lib');
+    const atDir = path.join(projectRoot, '.at');
+    fs.mkdirSync(atDir, { recursive: true });
+    fs.writeFileSync(path.join(atDir, 'state.json'), '{}');
+    fs.writeFileSync(path.join(atDir, 'runs.jsonl'), '');
+    fs.mkdirSync(path.join(projectRoot, '.git'), { recursive: true });
+    fs.mkdirSync(subDir, { recursive: true });
+
+    vi.spyOn(process, 'cwd').mockReturnValue(subDir);
+    // sanity: regular resolution IS shadowed by the project .at/
+    expect(resolveStateDir()).toBe(atDir);
+    // feedback resolution is not — queue stays global
+    expect(resolveFeedbackDir()).toBe(path.join(os.homedir(), '.at'));
 
     fs.rmSync(projectRoot, { recursive: true, force: true });
   });
