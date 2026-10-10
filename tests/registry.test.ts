@@ -74,6 +74,18 @@ describe('AgentRegistry', () => {
     expect(agy.buildArgs('hi')).toEqual(['--dangerously-skip-permissions', '-p', 'hi']);
   });
 
+  it('pi buildArgs passes -p and prompt without ollama provider/model', () => {
+    const args = getAgentByName('pi')!.buildArgs('hello');
+    expect(args).toEqual(['-p', 'hello']);
+    expect(args).not.toContain('--provider');
+    expect(args).not.toContain('ollama');
+  });
+
+  it('pi buildArgs includes --model when model provided', () => {
+    const args = getAgentByName('pi')!.buildArgs('hello', 'custom-model');
+    expect(args).toEqual(['-p', '--model', 'custom-model', 'hello']);
+  });
+
   it('cline passes run cwd via --cwd', () => {
     const args = getAgentByName('cline')!.buildArgs('hi', undefined, '/tmp/sbx');
     expect(args).toEqual(expect.arrayContaining(['--cwd', '/tmp/sbx']));

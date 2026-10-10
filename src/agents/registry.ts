@@ -1,6 +1,5 @@
 const NODE_BIN = process.env.NODE_BIN ?? require('path').dirname(process.execPath);
 const LOCAL_BIN = process.env.LOCAL_BIN ?? `${process.env.HOME}/.local/bin`;
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'minimax-m3:cloud';
 const DEVIN_DESKTOP_BIN = '/usr/share/devin-desktop/resources/app/extensions/windsurf/devin/bin/devin';
 
 function findBin(name: string): string {
@@ -69,13 +68,10 @@ export const AGENTS: AgentDef[] = [
     name: 'pi',
     tier: 2,
     bin: () => process.env.PI_BIN ?? `${NODE_BIN}/pi`,
-    buildArgs: (prompt, model) => [
-      '-p',
-      '--provider', 'ollama',
-      '--model', model ?? OLLAMA_MODEL,
-      '--no-session',
-      prompt,
-    ],
+    buildArgs: (prompt, model) =>
+      model
+        ? ['-p', '--model', model, prompt]
+        : ['-p', prompt],
   },
 
   // Tier 3: boilerplate / gen
