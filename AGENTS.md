@@ -113,6 +113,17 @@ Deep dives: [docs/architecture.md](docs/architecture.md) (source map, key design
 | 3             | kilo, agy, kiro, devin               | experimental / boilerplate |
 | 4             | mock, mock-long                       | dry-run / test agents      |
 
+### Scheduling modes
+
+| Mode  | Selected by        | Behavior |
+|-------|--------------------|----------|
+| tier  | `-t <N>`           | Round-robin within that tier (legacy behavior) |
+| line  | no `-t` (default)  | All agents in one ordered queue; default order t3 → t2 → t1, mocks excluded |
+
+Line order is stored in `~/.at/config.json` (`"line": ["agent", ...]`, HMAC-signed). Manage with `at line add <agent>` / `at line rm <agent>` / `at line move <agent> <pos>` / `at line show`. Scheduler uses a separate round-robin key per mode (`tier-N` vs `line`).
+
+`--sandbox` (or `sandbox.enabled` in config): after a successful run in a blocking mode (`-s` / `--wait`), run a real `at -a <agent>` call with a trivial task in `/tmp/at-sandbox-*` to verify the agent is alive; failure counts as an agent failure (retry-with-next-agent applies).
+
 ## More docs
 
 - [docs/cli.md](docs/cli.md) — prompts, output modes, retry, `--verify`, JSON mode

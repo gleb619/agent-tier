@@ -1,3 +1,4 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { formatStatusTable, formatStatusJson, formatStateReport, buildStateReport, AgentHealthEntry } from '../src/status';
 import { RunRecord } from '../src/run-store';
 import { writeFileSync, mkdirSync, rmSync } from 'fs';
@@ -113,11 +114,11 @@ describe('formatStatusJson', () => {
 
 const tmpDir = path.join(os.tmpdir(), 'at-status-test-' + process.pid);
 
-function writeTestStateFile(agentlyHealth: Record<string, unknown>) {
+function writeTestStateFile(agentlyHealth: Record<string, unknown>, scheduler?: Record<string, { index: number }>) {
   mkdirSync(tmpDir, { recursive: true });
   const state = {
     agents: agentlyHealth,
-    scheduler: { default: { index: 1 } },
+    scheduler: scheduler ?? { default: { index: 1 } },
     runs: { maxEntries: 50 },
   };
   writeFileSync(path.join(tmpDir, 'state.json'), JSON.stringify(state, null, 2));
@@ -187,6 +188,26 @@ describe('buildStateReport', () => {
     const report = buildStateReport(tmpDir);
     expect(report.agents).toEqual([]);
   });
+
+  it('handles line scheduler key (uses line mode agents)', () => {
+    writeTestStateFile(
+      {
+        agy: { failureTimes: [], disabledTo: null, deactivated: false },
+        'mm-code': { failureTimes: [], disabledTo: null, deactivated: false },
+        'glm-code': { failureTimes: [], disabledTo: null, deactivated: false },
+        'kilo': { failureTimes: [], disabledTo: null, deactivated: false },
+        mock: { failureTimes: [], disabledTo: null, deactivated: false },
+      },
+      {
+        line: { index: 1 }, // agy is index 1 in tier 3
+      }
+    );
+
+    const report = buildStateReport(tmpDir);
+    expect(report.scheduler[0]?.key).toBe('line');
+    expect(report.scheduler[0]?.agentName).toBe('agy');
+    expect(report.scheduler[0]?.index).toBe(1);
+  });
 });
 
 describe('formatStateReport', () => {
@@ -232,5 +253,23 @@ describe('formatStateReport', () => {
     const out = formatStateReport(tmpDir);
     expect(out).toContain('disabled until');
     expect(out).toContain('from now');
+  });
+
+  it('formats line scheduler key in state report', () => {
+    writeTestStateFile(
+      {
+        agy: { failureTimes: [], disabledTo: null, deactivated: false },
+        'mm-code': { failureTimes: [], disabledTo: null, deactivated: false },
+        'glm-code': { failureTimes: [], disabledTo: null, deactivated: false },
+        'kilo': { failureTimes: [], disabledTo: null, deactivated: false },
+        mock: { failureTimes: [], disabledTo: null, deactivated: false },
+      },
+      {
+        line: { index: 1 }, // agy
+      }
+    );
+
+    const out = formatStateReport(tmpDir);
+    expect(out).toContain('- line → index 1 (agy)');
   });
 });

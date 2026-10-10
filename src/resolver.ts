@@ -3,7 +3,11 @@ import { readPromptFile } from './prompt-file';
 
 export interface RunOptions {
   agent: string;
-  tier: 1 | 2 | 3 | 4;
+  /**
+   * Scheduling tier. When undefined, `run()` falls back to "line mode" — a
+   * single ordered queue (see `getLineAgents` in `src/config.ts`).
+   */
+  tier?: 1 | 2 | 3 | 4;
   prompt: string;
   model?: string;
   cwd?: string;
@@ -38,6 +42,12 @@ export interface RunOptions {
    */
   verify?: string;
   normka?: boolean;
+  /**
+   * Opt-in: after a successful run in stream/wait mode, spawn a real
+   * `at -a <agent>` call in a /tmp sandbox to confirm the agent is alive.
+   * Failure throws `AgentError` and counts as a retry-able attempt.
+   */
+  sandbox?: boolean;
 }
 
 interface ArgvOptions {
@@ -59,10 +69,12 @@ interface ArgvOptions {
   ssePort?: string | number;
   verify?: string;
   normka?: boolean;
+  sandbox?: boolean;
 }
 
 export interface ParsedJson {
   agent: string;
+  tier?: 1 | 2 | 3 | 4;
   prompt: string;
   model?: string;
   cwd?: string;
@@ -78,14 +90,23 @@ export interface ParsedJson {
    */
   promptFileContent?: string;
   normka?: boolean;
+  sandbox?: boolean;
+}
+
+function parseTier(raw: unknown, source: 'argv' | 'json'): 1 | 2 | 3 | 4 {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || ![1, 2, 3, 4].includes(n)) {
+    throw new Error(`tier must be 1, 2, 3, or 4 (got ${JSON.stringify(raw)}) [${source}]`);
+  }
+  return n as 1 | 2 | 3 | 4;
 }
 
 export function resolveFromArgs(argv: ArgvOptions): RunOptions {
   const prompt = argv.prompt?.trim() ?? '';
   if (!prompt) throw new Error('prompt is required and cannot be empty');
 
-  const tierNum = Number(argv.tier ?? 2);
-  if (![1, 2, 3, 4].includes(tierNum)) throw new Error(`tier must be 1, 2, 3, or 4 (got ${argv.tier})`);
+  // No implicit default — absent tier means line mode.
+  const tier = argv.tier !== undefined ? parseTier(argv.tier, 'argv') : undefined;
 
   const timeoutMs = Number(argv.timeout ?? 3600000);
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('timeout must be a positive number (ms)');
@@ -122,7 +143,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
 
   return {
     agent: argv.agent?.trim() || 'auto',
-    tier: tierNum as 1 | 2 | 3 | 4,
+    tier,
     prompt,
     model: argv.model,
     cwd: argv.cwd,
@@ -139,6 +160,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     ssePort,
     verify: argv.verify?.trim() || undefined,
     normka: argv.normka === true,
+    sandbox: argv.sandbox === true ? true : undefined,
   };
 }
 
@@ -192,8 +214,12 @@ export function parseJsonInput(raw: string): ParsedJson {
     }
   }
 
+  const tierRaw = parsed.tier;
+  const tier = tierRaw !== undefined ? parseTier(tierRaw, 'json') : undefined;
+
   return {
     agent: (parsed.agent as string | undefined) ?? 'auto',
+    tier,
     prompt,
     model: parsed.model as string | undefined,
     cwd: parsed.cwd as string | undefined,
@@ -204,5 +230,6 @@ export function parseJsonInput(raw: string): ParsedJson {
     verify: (parsed.verify as string | undefined)?.trim() || undefined,
     promptFileContent,
     normka: parsed.normka === true,
+    sandbox: parsed.sandbox === true ? true : undefined,
   };
 }

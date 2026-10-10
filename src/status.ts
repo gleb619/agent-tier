@@ -2,6 +2,8 @@ import { RunRecord, loadRuns, pruneRuns, detectStuck, saveRuns } from './run-sto
 import { loadStateFile } from './scheduler';
 import { getStateFilePath } from './state-dir';
 import { AGENTS, getAgentsByTier } from './agents/registry';
+import { loadGenericAgents } from './agents/generic-loader';
+import { loadConfig, getLineAgents } from './config';
 import { loadHealth, AgentHealth } from './health';
 
 // --- Data types ---
@@ -43,14 +45,21 @@ export function buildStateReport(stateDir: string): StateReport {
   const scheduler: SchedulerEntry[] = [];
 
   if (state.scheduler && Object.keys(state.scheduler).length > 0) {
+    const allAgents = [...AGENTS, ...loadGenericAgents()];
+    const config = loadConfig();
+    const lineAgents = getLineAgents(allAgents, config);
     for (const [key, sched] of Object.entries(state.scheduler)) {
       let agentName: string | undefined;
-      const tierMatch = key.match(/^tier-([1-4])$/) || key.match(/^([1-4])$/);
-      if (tierMatch) {
-        const tier = Number(tierMatch[1]) as 1 | 2 | 3 | 4;
-        agentName = getAgentsByTier(tier)[sched.index]?.name;
+      if (key === 'line') {
+        agentName = lineAgents[sched.index]?.name;
       } else {
-        agentName = AGENTS[sched.index]?.name;
+        const tierMatch = key.match(/^tier-([1-4])$/) || key.match(/^([1-4])$/);
+        if (tierMatch) {
+          const tier = Number(tierMatch[1]) as 1 | 2 | 3 | 4;
+          agentName = getAgentsByTier(tier)[sched.index]?.name;
+        } else {
+          agentName = AGENTS[sched.index]?.name;
+        }
       }
       scheduler.push({ key, index: sched.index, agentName });
     }

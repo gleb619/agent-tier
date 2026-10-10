@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { registerDefaultCommand } from './default';
 import { registerConfigCommand } from './config';
+import { registerLineCommand } from './line';
 import { registerInitCommand } from './init';
 import { registerStatusCommand } from './status';
 import { registerStopCommand } from './stop';
@@ -17,6 +18,7 @@ import { registerDiscussCommand } from './discuss';
 export function registerCommands(program: Command): void {
   registerDefaultCommand(program);
   registerConfigCommand(program);
+  registerLineCommand(program);
   registerInitCommand(program);
   registerStatusCommand(program);
   registerStopCommand(program);

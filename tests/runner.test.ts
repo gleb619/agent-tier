@@ -12,6 +12,16 @@ import os from 'os';
 vi.mock('../src/scheduler');
 vi.mock('../src/health');
 vi.mock('../src/run-watch');
+vi.mock('../src/sandbox', () => ({
+  runSandboxTest: vi.fn(() => Promise.resolve()),
+}));
+vi.mock('../src/config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/config')>();
+  return {
+    ...actual,
+    loadConfig: vi.fn(() => null),
+  };
+});
 vi.mock('../src/namer', () => ({
   generateSessionName: vi.fn(() => Promise.resolve({ name: 'test-name', provider: 'mock' as string | null })),
 }));
@@ -624,5 +634,115 @@ describe('defaultSpawner — namer name propagation', () => {
     expect(exitCode).toBe(0);
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(readFileSync(envCapture, 'utf8').trim()).toBe('unnamed');
+  });
+});
+
+describe('run — line mode (tier undefined)', () => {
+  // Mixed-tier agents to prove line mode is NOT just one tier.
+  const lineAgents: AgentDef[] = [
+    { name: 'a-tier1', tier: 1, bin: () => '/bin/true', buildArgs: (p) => [p] },
+    { name: 'b-tier2', tier: 2, bin: () => '/bin/true', buildArgs: (p) => [p] },
+    { name: 'c-tier3', tier: 3, bin: () => '/bin/true', buildArgs: (p) => [p] },
+    { name: 'd-mock', tier: 4, bin: () => '/bin/true', buildArgs: (p) => [p] },
+  ];
+
+  it('picks first candidate from line pool (tier 3 first by default)', async () => {
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
+    const opts: RunOptions = { ...baseOptions };
+    delete (opts as { tier?: number }).tier;
+    await run(opts, lineAgents, spawner);
+    const calledAgent = (spawner as Mock).mock.calls[0][0] as AgentDef;
+    // Default order excludes tier 4; tier 3 comes first.
+    expect(calledAgent.name).toBe('c-tier3');
+  });
+
+  it('uses scheduler key "line" (not "tier-N") for pickAgent', async () => {
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
+    const opts: RunOptions = { ...baseOptions };
+    delete (opts as { tier?: number }).tier;
+    await run(opts, lineAgents, spawner);
+    expect(scheduler.pickAgent).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(String),
+      'line',
+    );
+  });
+
+  it('retries pick next line agent on failure', async () => {
+    const spawner: Spawner = vi.fn().mockResolvedValue(1);
+    const opts: RunOptions = { ...baseOptions, retries: 3 };
+    delete (opts as { tier?: number }).tier;
+    await expect(run(opts, lineAgents, spawner)).rejects.toThrow();
+    // 1 + min(3, 3) = 4 — but d-mock (tier 4) is excluded from line pool, so 3 candidates.
+    expect(spawner).toHaveBeenCalledTimes(3);
+  });
+
+  it('throws when no non-tier-4 agents exist (line pool is empty)', async () => {
+    const spawner: Spawner = vi.fn();
+    const onlyMocks: AgentDef[] = [
+      { name: 'mock1', tier: 4, bin: () => '/bin/true', buildArgs: (p) => [p] },
+    ];
+    const opts: RunOptions = { ...baseOptions };
+    delete (opts as { tier?: number }).tier;
+    await expect(run(opts, onlyMocks, spawner)).rejects.toThrow(/line/);
+  });
+
+  it('does not call runSandboxTest when sandbox option is not set', async () => {
+    const { runSandboxTest } = await import('../src/sandbox');
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
+    const opts: RunOptions = { ...baseOptions };
+    delete (opts as { tier?: number }).tier;
+    await run(opts, lineAgents, spawner);
+    expect(runSandboxTest).not.toHaveBeenCalled();
+  });
+
+  it('triggers runSandboxTest when sandbox: true', async () => {
+    const { runSandboxTest } = await import('../src/sandbox');
+    (runSandboxTest as Mock).mockClear();
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
+    const opts: RunOptions = { ...baseOptions, sandbox: true };
+    delete (opts as { tier?: number }).tier;
+    await run(opts, lineAgents, spawner);
+    expect(runSandboxTest).toHaveBeenCalledTimes(1);
+    expect(runSandboxTest).toHaveBeenCalledWith('c-tier3');
+  });
+
+  it('retries next line agent when runSandboxTest throws', async () => {
+    const { runSandboxTest } = await import('../src/sandbox');
+    (runSandboxTest as Mock).mockClear();
+    (runSandboxTest as Mock)
+      .mockImplementationOnce(() => Promise.reject(new AgentError('sandbox test failed for c-tier3', 1)))
+      .mockResolvedValue(undefined);
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
+    const opts: RunOptions = { ...baseOptions, sandbox: true, retries: 2 };
+    delete (opts as { tier?: number }).tier;
+    const exitCode = await run(opts, lineAgents, spawner);
+    expect(exitCode).toBe(0);
+    // 2 attempts: first fails sandbox, second succeeds.
+    expect(spawner).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws when runSandboxTest fails and no more retries', async () => {
+    const { runSandboxTest } = await import('../src/sandbox');
+    (runSandboxTest as Mock).mockClear();
+    (runSandboxTest as Mock).mockImplementation(() => Promise.reject(new AgentError('sandbox test failed', 1)));
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
+    const opts: RunOptions = { ...baseOptions, sandbox: true, retries: 0 };
+    delete (opts as { tier?: number }).tier;
+    await expect(run(opts, lineAgents, spawner)).rejects.toThrow(/sandbox/);
+  });
+});
+
+describe('run — line mode error messages', () => {
+  it('error says "line" not "tier-N" when all line agents deactivated', async () => {
+    (health.isDeactivated as Mock).mockReturnValue(true);
+    const lineAgents: AgentDef[] = [
+      { name: 'a', tier: 2, bin: () => '/bin/true', buildArgs: (p) => [p] },
+      { name: 'b', tier: 3, bin: () => '/bin/true', buildArgs: (p) => [p] },
+    ];
+    const opts: RunOptions = { ...baseOptions };
+    delete (opts as { tier?: number }).tier;
+    const spawner: Spawner = vi.fn();
+    await expect(run(opts, lineAgents, spawner)).rejects.toThrow(/line/i);
   });
 });

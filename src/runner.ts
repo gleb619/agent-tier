@@ -12,6 +12,9 @@ import { getStateFilePath } from './state-dir';
 import { setupNotify, startHub, tailLogFile, type Hub, type NotifyEvent } from './notify';
 import { applyRunName } from './naming';
 import { spawnRunWatch } from './run-watch';
+import { loadConfig, getLineAgents } from './config';
+import { runSandboxTest } from './sandbox';
+import { AgentError } from './agent-error';
 
 interface TrackedChild {
   pid: number;
@@ -46,13 +49,10 @@ export function killActiveChildren(): void {
   activeChildren.length = 0;
 }
 
-export class AgentError extends Error {
-  code: number;
-  constructor(message: string, code: number) {
-    super(message);
-    this.code = code;
-  }
-}
+// AgentError lives in src/agent-error.ts so non-runner modules (e.g. sandbox)
+// can throw the same type without creating a circular import. Re-exported here
+// for backwards compatibility.
+export { AgentError } from './agent-error';
 
 export type Spawner = (agent: AgentDef, options: RunOptions, runId: string) => Promise<number>;
 
@@ -440,15 +440,26 @@ export async function run(
       if (!named) throw new Error(`Unknown agent: ${options.agent}`);
       candidates = [named];
     } else {
-      const tierAgents = agents.filter((a) => a.tier === options.tier);
-      if (tierAgents.length === 0) throw new Error(`No agents defined for tier ${options.tier}`);
-      const enabled = tierAgents.filter((a) => !isDeactivated(stateFilePath, a.name, healthState));
+      const isLineMode = options.tier === undefined;
+      const poolAgents = isLineMode
+        ? getLineAgents(agents, loadConfig())
+        : agents.filter((a) => a.tier === options.tier);
+      if (poolAgents.length === 0) {
+        throw new Error(isLineMode
+          ? 'No agents available for line mode (line pool is empty)'
+          : `No agents defined for tier ${options.tier}`);
+      }
+      const enabled = poolAgents.filter((a) => !isDeactivated(stateFilePath, a.name, healthState));
       if (enabled.length === 0) {
-        throw new Error(`All tier-${options.tier} agents are deactivated`);
+        throw new Error(isLineMode
+          ? 'All line agents are deactivated'
+          : `All tier-${options.tier} agents are deactivated`);
       }
       const healthy = await filterHealthy(stateFilePath, enabled, healthState);
       if (healthy.length === 0) {
-        console.warn(`[at] all tier-${options.tier} agents are temporarily disabled, using full enabled pool`);
+        console.warn(isLineMode
+          ? '[at] all line agents are temporarily disabled, using full enabled pool'
+          : `[at] all tier-${options.tier} agents are temporarily disabled, using full enabled pool`);
         candidates = enabled;
       } else {
         candidates = healthy;
@@ -457,12 +468,13 @@ export async function run(
 
     const isNamed = options.agent !== 'auto';
     const stateFile = getStateFile(options.stateDir);
+    const schedKey = options.tier != null ? `tier-${options.tier}` : 'line';
     const maxAttempts = isNamed ? 1 : 1 + Math.min(options.retries, candidates.length - 1);
-    let agent = isNamed ? candidates[0] : await pickAgent(candidates, stateFile, `tier-${options.tier}`);
+    let agent = isNamed ? candidates[0] : await pickAgent(candidates, stateFile, schedKey);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) {
-        agent = await pickAgent(candidates, stateFile, `tier-${options.tier}`);
+        agent = await pickAgent(candidates, stateFile, schedKey);
         console.warn('[at] retrying with next agent...');
       }
 
@@ -492,6 +504,14 @@ export async function run(
           if (exitCode !== 0) {
             throw new AgentError(`${agent.name} exited with code ${exitCode}`, exitCode);
           }
+        }
+        // Sandbox test: opt-in, blocking modes (stream / wait) only. After a
+        // successful spawner exit, spawn a real `at -a <agent>` call in /tmp
+        // to verify the agent is alive. Failure throws AgentError so the
+        // existing retry-with-next-agent loop picks the next candidate.
+        // Detached non-wait path: skipped (supervisor wiring is out of scope).
+        if (options.sandbox && (options.stream || options.wait)) {
+          await runSandboxTest(agent.name);
         }
         return 0;
       } catch (err) {

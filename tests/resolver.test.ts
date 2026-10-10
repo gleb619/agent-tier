@@ -34,10 +34,10 @@ describe('parseJsonInput', () => {
 });
 
 describe('resolveFromArgs', () => {
-  it('applies all defaults', () => {
+  it('applies all defaults (tier is undefined = line mode)', () => {
     const opts = resolveFromArgs({ prompt: 'hello' });
     expect(opts.agent).toBe('auto');
-    expect(opts.tier).toBe(2);
+    expect(opts.tier).toBeUndefined();
     expect(opts.stream).toBe(false);
     expect(opts.stateDir).toBe(resolveStateDir());
     expect(opts.retries).toBe(0);
@@ -48,6 +48,23 @@ describe('resolveFromArgs', () => {
 
   it('accepts tier as numeric string', () => {
     expect(resolveFromArgs({ prompt: 'hello', tier: '1' }).tier).toBe(1);
+  });
+
+  it('treats absent tier as undefined (line mode), not defaulting to 2', () => {
+    const opts = resolveFromArgs({ prompt: 'hello' });
+    expect(opts.tier).toBeUndefined();
+  });
+
+  it('accepts tier as numeric value', () => {
+    expect(resolveFromArgs({ prompt: 'hello', tier: 3 }).tier).toBe(3);
+  });
+
+  it('accepts sandbox: true in argv', () => {
+    expect(resolveFromArgs({ prompt: 'hello', sandbox: true }).sandbox).toBe(true);
+  });
+
+  it('sandbox defaults to undefined (falsy)', () => {
+    expect(resolveFromArgs({ prompt: 'hello' }).sandbox).toBeUndefined();
   });
 
   it('defaults wait to false', () => {
@@ -209,6 +226,41 @@ describe('parseJsonInput edge cases', () => {
   it('defaults verify to undefined when missing from JSON', () => {
     const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello' }));
     expect(opts.verify).toBeUndefined();
+  });
+
+  it('parses tier as number when present in JSON', () => {
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello', tier: 2 }));
+    expect(opts.tier).toBe(2);
+  });
+
+  it('parses tier as numeric string in JSON', () => {
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello', tier: '3' }));
+    expect(opts.tier).toBe(3);
+  });
+
+  it('treats absent tier in JSON as undefined (line mode)', () => {
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello' }));
+    expect(opts.tier).toBeUndefined();
+  });
+
+  it('throws on invalid tier in JSON (string out of range)', () => {
+    expect(() => parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello', tier: '9' })))
+      .toThrow('tier');
+  });
+
+  it('throws on invalid tier in JSON (non-numeric string)', () => {
+    expect(() => parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello', tier: 'foo' })))
+      .toThrow('tier');
+  });
+
+  it('parses sandbox: true from JSON', () => {
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello', sandbox: true }));
+    expect(opts.sandbox).toBe(true);
+  });
+
+  it('sandbox defaults to undefined in JSON', () => {
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello' }));
+    expect(opts.sandbox).toBeUndefined();
   });
 });
 

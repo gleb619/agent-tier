@@ -19,7 +19,7 @@ async function readStdin(): Promise<string> {
 export function registerDefaultCommand(program: Command): void {
   program
     .option('-a, --agent <name>', 'Agent name or "auto"', 'auto')
-    .option('-t, --tier <number>', 'Tier: 1=architect, 2=dev (default), 3=experimental', '2')
+    .option('-t, --tier <number>', 'Tier: 1=architect, 2=dev, 3=experimental. Omit = line mode (single ordered queue)')
     .option('-p, --prompt <text>', 'Prompt text')
     .option('-f, --prompt-file <path>', 'Path to a file containing the prompt (.md or .json)')
     .option('-s, --stream', 'Stream agent output to terminal via chop/tail (default: detached, fire-and-forget with report)', false)
@@ -28,6 +28,7 @@ export function registerDefaultCommand(program: Command): void {
       'In detached mode, block until the agent exits (enables timeout, retry, agent-health tracking and callback with the real exit code). Default: return immediately after the run box',
       false,
     )
+    .option('--sandbox', 'After a successful run, verify the agent with a real `at` sandbox test in /tmp (also enabled by sandbox.enabled in config)', false)
     .option('--no-chop', 'Disable chop output-log compression in stream mode (default: enabled when chop is available)')
     .option('-r, --retries <number>', 'Max extra retry attempts with next agent in tier (default: 0). Total attempts = min(retries+1, agents-in-tier). Named agents never retry', '0')
     .option('--state-dir <path>', 'State directory (default: .at/ in CWD if exists, else ~/.at/)')
@@ -86,6 +87,7 @@ export function registerDefaultCommand(program: Command): void {
             sse: parsed.sse,
             ssePort: parsed.ssePort,
             normka: parsed.normka ?? (opts.normka as boolean | undefined),
+            sandbox: opts.sandbox as boolean,
           });
         } else {
           const stdinData = !opts.prompt && !opts.promptFile && !process.stdin.isTTY ? await readStdin() : '';
@@ -106,6 +108,7 @@ export function registerDefaultCommand(program: Command): void {
             verify: opts.verify as string | undefined,
             sse: opts.sse,
             normka: opts.normka as boolean,
+            sandbox: opts.sandbox as boolean,
           });
         }
 
@@ -132,7 +135,8 @@ Examples:
   # Stream output to terminal — see progress in real time (most common)
   at -s -p "refactor the auth module"
 
-  # Choose a tier: 1=architect (complex refactors), 2=dev (default), 3=experimental
+  # Line mode — no -t = single ordered queue (line agents rotate)
+  at -s -p "..."
   at -s -t 1 -p "review auth middleware for security issues across src/auth/"
 
   # Named agent — skip round-robin, no retry
@@ -153,6 +157,9 @@ Examples:
   # SSE live-progress
   at -p "big refactor" --sse
   at -p "big refactor" --sse 0
+
+  # Sandbox verification after success
+  at -s -a mock --wait --sandbox -p "say OK"
 `
     );
 }

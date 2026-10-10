@@ -42,7 +42,7 @@ Options:
   -p, --prompt <text>      Prompt text (or pipe via stdin, or use -f)
   -f, --prompt-file <path> Read prompt from a file (.md raw text; .json uses its `prompt` field, raw contents otherwise)
   -a, --agent <name>       Agent name, or "auto" (default: auto)
-  -t, --tier <number>      Tier: 1=architect, 2=dev (default), 3=experimental
+  -t, --tier <number>      Tier: 1=architect, 2=dev, 3=experimental. Omit = line mode (single ordered queue)
   -m, --model <name>       Model name to pass to the agent
   -s, --stream             Stream output to terminal (default: detached + log file)
   --wait                   Block until the agent exits (enables timeout, retry, real exit code)
@@ -53,10 +53,12 @@ Options:
   --log-dir <path>         Log file directory for detached mode (default: /tmp/at-logs)
   --callback <command>     Shell command to run after the agent job finishes (AT_* env vars)
   --verify <command>       Post-run verification hook; non-zero exit fails the run (details in docs/cli.md)
+  --sandbox                After success, verify agent with a real `at` sandbox test in /tmp
   --sse [port]             SSE live-progress hub (default port 7777, 0=random); see docs/progress.md
   --json                   Read JSON from stdin (see docs/cli.md#json-mode)
 
 Commands:
+  line show|add|rm|move    Manage the line-mode queue (no -t = line mode, default t3→t2→t1)
   status, stop, enable, disable, config sign, feedback, discuss, events, serve, mcp, index, compose
 ```
 
