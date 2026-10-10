@@ -70,6 +70,37 @@ export function resolveStateDir(explicit?: string): string {
  * Precedence: explicit path → AT_STATE_DIR env → project-root `.at/` with
  * feedback.jsonl → CWD `.at/` with feedback.jsonl → ~/.at/.
  */
+function hasAtState(dir: string): boolean {
+  return existsSync(path.join(dir, 'state.json')) || existsSync(path.join(dir, 'runs.jsonl'));
+}
+
+function homeAtDir(): string {
+  return path.join(os.homedir(), AT_DIR);
+}
+
+/**
+ * Resolve the state directories whose state `at status` should JOIN:
+ * project-local `.at/` (when it holds state) first, then `~/.at/`.
+ * Any explicit override (arg or AT_STATE_DIR) collapses to a single dir.
+ */
+export function resolveStatusDirs(explicit?: string): string[] {
+  if (explicit) return [explicit];
+  if (process.env.AT_STATE_DIR) return [process.env.AT_STATE_DIR];
+
+  const dirs: string[] = [];
+  const projectRoot = findProjectRoot(process.cwd());
+  if (projectRoot) {
+    const projectAt = path.join(projectRoot, AT_DIR);
+    if (hasAtState(projectAt)) dirs.push(projectAt);
+  }
+  const cwdAt = path.join(process.cwd(), AT_DIR);
+  if (!dirs.includes(cwdAt) && hasAtState(cwdAt)) dirs.push(cwdAt);
+
+  const home = homeAtDir();
+  if (!dirs.includes(home)) dirs.push(home);
+  return dirs;
+}
+
 export function resolveFeedbackDir(explicit?: string): string {
   if (explicit) return explicit;
   if (process.env.AT_STATE_DIR) return process.env.AT_STATE_DIR;

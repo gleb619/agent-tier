@@ -6,8 +6,13 @@ import { loadGenericAgents } from './agents/generic-loader';
 import { loadConfig, getLineAgents } from './config';
 import { loadHealth, AgentHealth } from './health';
 import { drainNamingQueue } from './naming';
+import os from 'os';
+import path from 'path';
 
 // --- Data types ---
+
+/** A run tagged with the state dir it came from (joined `at status` only). */
+export type ScopedRun = RunRecord & { scope?: 'project' | 'global' };
 
 export interface StatusReport {
   total: number;
@@ -19,6 +24,8 @@ export interface SchedulerEntry {
   key: string;
   index: number;
   agentName: string | null;
+  /** Which state dir the entry came from (joined `at status` only). */
+  scope?: 'project' | 'global';
 }
 
 export interface AgentHealthEntry {
@@ -73,6 +80,49 @@ export function buildStateReport(stateDir: string, opts?: { quiet?: boolean }): 
   );
 
   return { scheduler, maxEntries: state.runs?.maxEntries ?? null, agents };
+}
+
+// --- Joined (multi-dir) reports ---
+
+function scopeOf(stateDir: string): 'project' | 'global' {
+  return stateDir === path.join(os.homedir(), '.at') ? 'global' : 'project';
+}
+
+/** Merge per-dir state reports: scheduler entries keep both (scoped), agent
+ *  health dedupes by name (earlier dir wins), maxEntries first non-null. */
+export function buildJoinedStateReport(dirs: string[]): StateReport {
+  const reports = dirs.map((d) => buildStateReport(d, { quiet: true }));
+  const scheduler: SchedulerEntry[] = reports.flatMap((r, i) =>
+    r.scheduler.map((e) => ({ ...e, scope: scopeOf(dirs[i]) })),
+  );
+  const agents: AgentHealthEntry[] = [];
+  const seen = new Set<string>();
+  for (const r of reports) {
+    for (const a of r.agents) {
+      if (!seen.has(a.name)) {
+        seen.add(a.name);
+        agents.push(a);
+      }
+    }
+  }
+  const maxEntries = reports.map((r) => r.maxEntries).find((m) => m != null) ?? null;
+  return { scheduler, maxEntries, agents };
+}
+
+/** Union of per-dir run lists, tagged with scope; dedupe by runId (earlier
+ *  dir wins), newest first. Single dir: returned untouched (back-compat). */
+export function joinRuns(dirs: string[], runsPerDir: RunRecord[][]): ScopedRun[] {
+  if (dirs.length === 1) return runsPerDir[0];
+  const byId = new Map<string, ScopedRun>();
+  dirs.forEach((dir, i) => {
+    const scope = scopeOf(dir);
+    for (const r of runsPerDir[i] ?? []) {
+      if (!byId.has(r.runId)) byId.set(r.runId, { ...r, scope });
+    }
+  });
+  return [...byId.values()].sort(
+    (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+  );
 }
 
 function formatIsoRelative(iso: string): string {
@@ -157,15 +207,18 @@ export function formatStatusTable(runs: RunRecord[]): string {
       status: statusIcon(r.status),
       duration,
       log: r.logFile,
+      scope: (r as ScopedRun).scope,
     };
   });
 
+  const showScope = rows.some((r) => r.scope);
   const colRun = Math.max(3, ...rows.map((r) => r.runId.length));
   const colName = Math.max(4, ...rows.map((r) => r.name.length));
   const colAgent = Math.max(5, ...rows.map((r) => r.agent.length));
   const colStatus = Math.max(6, ...rows.map((r) => r.status.length));
   const colDur = Math.max(8, ...rows.map((r) => r.duration.length));
   const colLog = Math.max(3, ...rows.map((r) => r.log.length));
+  const colScope = Math.max(5, ...rows.map((r) => (r.scope ?? '').length));
 
   const header =
     '| ' +
@@ -174,6 +227,7 @@ export function formatStatusTable(runs: RunRecord[]): string {
     padRight('AGENT', colAgent) + ' | ' +
     padRight('STATUS', colStatus) + ' | ' +
     padRight('DURATION', colDur) + ' | ' +
+    (showScope ? padRight('SCOPE', colScope) + ' | ' : '') +
     padRight('LOG', colLog) + ' |';
 
   const divider =
@@ -183,6 +237,7 @@ export function formatStatusTable(runs: RunRecord[]): string {
     '-'.repeat(colAgent) + ' | ' +
     '-'.repeat(colStatus) + ' | ' +
     '-'.repeat(colDur) + ' | ' +
+    (showScope ? '-'.repeat(colScope) + ' | ' : '') +
     '-'.repeat(colLog) + ' |';
 
   const lines = rows.map((r) =>
@@ -192,6 +247,7 @@ export function formatStatusTable(runs: RunRecord[]): string {
     padRight(r.agent, colAgent) + ' | ' +
     padRight(r.status, colStatus) + ' | ' +
     padRight(r.duration, colDur) + ' | ' +
+    (showScope ? padRight(r.scope ?? '', colScope) + ' | ' : '') +
     padRight(r.log, colLog) + ' |',
   );
 
@@ -203,7 +259,12 @@ export function formatStatusJson(runs: RunRecord[], state?: StateReport): string
 }
 
 export function formatStateReport(stateDir: string): string {
-  const report = buildStateReport(stateDir);
+  return formatStateReports([stateDir]);
+}
+
+export function formatStateReports(dirs: string[]): string {
+  const scoped = dirs.length > 1;
+  const report = scoped ? buildJoinedStateReport(dirs) : buildStateReport(dirs[0]);
   const lines: string[] = [];
 
   lines.push('## State');
@@ -212,10 +273,11 @@ export function formatStateReport(stateDir: string): string {
 
   if (report.scheduler.length > 0) {
     for (const entry of report.scheduler) {
+      const label = scoped && entry.scope ? `[${entry.scope}] ` : '';
       if (entry.agentName) {
-        lines.push(`- ${entry.key} → index ${entry.index} (${entry.agentName})`);
+        lines.push(`- ${label}${entry.key} → index ${entry.index} (${entry.agentName})`);
       } else {
-        lines.push(`- ${entry.key} → index ${entry.index}`);
+        lines.push(`- ${label}${entry.key} → index ${entry.index}`);
       }
     }
   } else {
@@ -246,29 +308,39 @@ export function formatStateReport(stateDir: string): string {
   return lines.join('\n');
 }
 
-export function formatCombinedReport(stateDir: string, runs: RunRecord[]): string {
-  return formatStatusTable(runs) + '\n\n' + formatStateReport(stateDir);
+export function formatCombinedReport(stateDirs: string | string[], runs: RunRecord[]): string {
+  const dirs = Array.isArray(stateDirs) ? stateDirs : [stateDirs];
+  return formatStatusTable(runs) + '\n\n' + formatStateReports(dirs);
 }
 
-export async function runStatus(stateDir: string, opts?: { json?: boolean }): Promise<void> {
+export async function runStatus(stateDirs: string | string[], opts?: { json?: boolean }): Promise<void> {
+  const dirs = Array.isArray(stateDirs) ? stateDirs : [stateDirs];
   // Best-effort flush of the naming queue (jobs land there when the namer
   // lock timed out). Drain is silent and never throws — naming is
   // enrichment and must not break or add stderr noise to `at status`,
   // especially in --json mode.
-  try {
-    await drainNamingQueue(stateDir);
-  } catch {
-    // ignore — status must work regardless
+  for (const dir of dirs) {
+    try {
+      await drainNamingQueue(dir);
+    } catch {
+      // ignore — status must work regardless
+    }
   }
-  // Single locked read→prune→detect→write: output matches disk, no race with
-  // concurrent addRun/updateRun (the old code fired pruneRuns() without
-  // awaiting it, then persisted an unpruned snapshot via unlocked saveRuns).
-  const runs = await refreshRuns(stateDir);
+  // Single locked read→prune→detect→write per dir: output matches disk, no
+  // race with concurrent addRun/updateRun (the old code fired pruneRuns()
+  // without awaiting it, then persisted an unpruned snapshot via unlocked
+  // saveRuns).
+  const runsPerDir: RunRecord[][] = [];
+  for (const dir of dirs) {
+    runsPerDir.push(await refreshRuns(dir));
+  }
+  const runs = joinRuns(dirs, runsPerDir);
 
   if (opts?.json) {
-    process.stdout.write(formatStatusJson(runs, buildStateReport(stateDir, { quiet: true })) + '\n');
+    const state = dirs.length > 1 ? buildJoinedStateReport(dirs) : buildStateReport(dirs[0], { quiet: true });
+    process.stdout.write(formatStatusJson(runs, state) + '\n');
     return;
   }
 
-  console.log(formatCombinedReport(stateDir, runs));
+  console.log(formatCombinedReport(dirs, runs));
 }

@@ -2,17 +2,25 @@ import { Command } from 'commander';
 import { existsSync, readFileSync } from 'fs';
 import { spawn } from 'child_process';
 import path from 'path';
-import { resolveStateDir } from '../state-dir';
+import { resolveStatusDirs } from '../state-dir';
 import { runStatus } from '../status';
 import { loadRuns } from '../run-store';
 import { chopLines } from '../chop';
 
 function showRunLogs(
-  stateDir: string,
+  stateDirs: string[],
   runId: string,
   opts: { lines?: number; head?: boolean; tail?: boolean; follow?: boolean; noChop?: boolean } = {},
 ): void {
-  const runs = loadRuns(stateDir);
+  // Joined lookup: project `.at/` first, then `~/.at/`
+  let runs: ReturnType<typeof loadRuns> = [];
+  for (const dir of stateDirs) {
+    const dirRuns = loadRuns(dir);
+    if (dirRuns.some((r) => r.runId === runId || r.runId.startsWith(runId))) {
+      runs = dirRuns;
+      break;
+    }
+  }
   const run = runs.find((r) => r.runId === runId || r.runId.startsWith(runId));
   if (!run) {
     console.error(`[at] run not found: ${runId}`);
@@ -63,9 +71,9 @@ export function registerStatusCommand(program: Command): void {
     .option('--json', 'Output as JSON without text trimming', false)
     .action(async (runId: string | undefined, opts: Record<string, unknown>, cmd: Command) => {
       try {
-        const stateDir = resolveStateDir();
+        const stateDirs = resolveStatusDirs();
         if (runId) {
-          showRunLogs(stateDir, runId, {
+          showRunLogs(stateDirs, runId, {
             lines: opts.lines as number | undefined,
             head: opts.head as boolean,
             tail: opts.tail as boolean,
@@ -78,7 +86,7 @@ export function registerStatusCommand(program: Command): void {
           // on this subcommand's `opts`. Use optsWithGlobals so `--json`
           // is honoured regardless of registration order.
           const json = (opts.json as boolean | undefined) || ((cmd.optsWithGlobals().json as boolean | undefined) ?? false);
-          await runStatus(stateDir, { json });
+          await runStatus(stateDirs, { json });
         }
       } catch (err) {
         console.error(`[at] error: ${(err as Error).message}`);
