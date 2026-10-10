@@ -11,9 +11,11 @@ import {
   setSettingsRow,
   setSidebarFilter,
   setShowPromptOverlay,
+  setSidebarIndex,
   settingsRow,
   showPromptOverlay,
   sidebarFilter,
+  sidebarIndex,
   zonesForView,
   type ActiveView,
 } from '../../src/tui2/store/ui';
@@ -25,6 +27,7 @@ describe('tui2 ui store', () => {
     setSidebarFilter('');
     setShowPromptOverlay(false);
     setSettingsRow(0);
+    setSidebarIndex(0);
   });
 
   describe('activeView', () => {
@@ -147,6 +150,19 @@ describe('tui2 ui store', () => {
       expect(settingsRow()).toBe(0);
       setSettingsRow(3);
       expect(settingsRow()).toBe(3);
+    });
+  });
+
+  describe('sidebarIndex', () => {
+    it('starts on the filter row (index 0)', () => {
+      expect(sidebarIndex()).toBe(0);
+    });
+
+    it('moves through the flat row model', () => {
+      setSidebarIndex(2);
+      expect(sidebarIndex()).toBe(2);
+      setSidebarIndex(-1);
+      expect(sidebarIndex()).toBe(-1);
     });
   });
 });

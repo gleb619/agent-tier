@@ -38,11 +38,15 @@ import {
   settingsRow,
   setSettingsRow,
   setShowPromptOverlay,
+  setSidebarIndex,
+  sidebarFilter,
+  sidebarIndex,
   type ActiveView,
 } from './store/ui';
-import { Sidebar } from './components/Sidebar';
+import { Sidebar, nextSidebarIndex } from './components/Sidebar';
 import { MainView } from './components/MainView';
 import { SETTING_ACTIONS, clampRow } from './components/Settings';
+import { buildRowModel, groupRunsByDate, type Row } from './components/sidebar/row-model';
 import { formatClock, truncate } from './format';
 
 const AUTO_REFRESH_MS = 5000;
@@ -139,6 +143,42 @@ export function App(): JSX.Element {
     else goToHead();
   }
 
+  /**
+   * Build the current row model for the keyboard handler. Reading these
+   * signals here keeps the handler reactive when filters or runs change.
+   */
+  function currentRows(): Row[] {
+    return buildRowModel({
+      groups: groupRunsByDate(filteredSessions2()),
+      filter: sidebarFilter(),
+      activeView: activeView(),
+    });
+  }
+
+  /** Hotkey target: switch view and snap the sidebar cursor to the matching menu row. */
+  function jumpToView(view: ActiveView, menuRowIndex: number): void {
+    goToView(view);
+    setSidebarIndex(menuRowIndex);
+  }
+
+  /** Enter on the highlighted row: filter row → edit, menu row → switch view, run row → open details. */
+  function activateSidebarRow(idx: number): void {
+    const row = currentRows()[idx];
+    if (!row) return;
+    if (row.kind === 'filter') {
+      setFocusZone('sidebar-filter');
+      return;
+    }
+    if (row.kind === 'menu') {
+      goToView(row.view);
+      return;
+    }
+    if (row.kind === 'run') {
+      setSelectedRunId(row.runId);
+      goToView('run-details');
+    }
+  }
+
   useKeyboard((key: KeyEvent) => {
     if (key.eventType !== 'press') return;
 
@@ -198,10 +238,12 @@ export function App(): JSX.Element {
 
     const zone = focusZone();
 
-    if (name === '1') goToView('dashboard');
-    else if (name === '2') goToView('new-task');
-    else if (name === '3') goToView('run-details');
-    else if (name === '4') goToView('settings');
+    // Direct view jumps: synchronise the sidebar cursor with the matching
+    // menu row so the highlight follows the hotkey.
+    if (name === '1') jumpToView('dashboard', 1);
+    else if (name === '2') jumpToView('new-task', 2);
+    else if (name === '3') jumpToView('run-details', 3);
+    else if (name === '4') jumpToView('settings', 4);
     else if (name === 'q') quit();
     else if (zone === 'settings') {
       if (name === 'up' || name === 'k') setSettingsRow(clampRow(settingsRow() - 1));
@@ -217,11 +259,21 @@ export function App(): JSX.Element {
       else if (name === 'p') togglePrompt();
       else if (name === 'r') retrySelected();
     } else if (zone === 'sidebar-list') {
-      if (name === 'down' || name === 'j') moveRunSelection(1);
-      else if (name === 'up' || name === 'k') moveRunSelection(-1);
-      else if (name === 'return' && selectedRunId()) goToView('run-details');
-      else if (name === 'r' && view === 'run-details') retrySelected();
-      else if (name === 'p' && view === 'run-details') togglePrompt();
+      // Unified list navigation: filter → menu → runs are one continuous
+      // selection; separators and group headers are skipped automatically.
+      if (name === 'down' || name === 'j') {
+        const next = nextSidebarIndex(1);
+        if (next !== -1) setSidebarIndex(next);
+      } else if (name === 'up' || name === 'k') {
+        const next = nextSidebarIndex(-1);
+        if (next !== -1) setSidebarIndex(next);
+      } else if (name === 'return') {
+        activateSidebarRow(sidebarIndex());
+      } else if (name === 'r' && view === 'run-details') {
+        retrySelected();
+      } else if (name === 'p' && view === 'run-details') {
+        togglePrompt();
+      }
     }
   });
 

@@ -1,6 +1,5 @@
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, createEffect, createMemo } from 'solid-js';
 import type { JSX } from 'solid-js';
-import { UNNAMED_PLACEHOLDER, type RunRecord } from '../../run-store';
 import { selectedRunId, setSelectedRunId } from '../../tui/store/sessions';
 import { filteredSessions2 } from '../store/filtered-sessions';
 import {
@@ -8,58 +7,185 @@ import {
   focusZone,
   goToView,
   setFocusZone,
-  sidebarFilter,
   setSidebarFilter,
+  setSidebarIndex,
+  sidebarFilter,
+  sidebarIndex,
   type ActiveView,
 } from '../store/ui';
-import { dateBucket, formatDuration, statusColor, statusIcon, truncate } from '../format';
+import { formatDuration, statusColor, statusIcon, truncate } from '../format';
+import {
+  buildRowModel,
+  groupRunsByDate as groupRunsByDateImpl,
+  moveSelection,
+  runLabel as runLabelImpl,
+  selectableRowIndices,
+  SIDEBAR_MENU_ITEMS,
+  type Row,
+  type RunGroup,
+} from './sidebar/row-model';
 
+/**
+ * Public re-exports — older callers (and the row-model test) still import the
+ * grouping helpers and the menu item list from this module path.
+ */
 export interface MenuItem {
   key: string;
   label: string;
   view: ActiveView;
 }
 
-/** Numeric hotkeys per design doc §11.6 (3 = Run Details, 4 = Settings). */
-export const MENU_ITEMS: MenuItem[] = [
-  { key: '1', label: 'Dashboard', view: 'dashboard' },
-  { key: '2', label: 'New Task', view: 'new-task' },
-  { key: '3', label: 'Run Details', view: 'run-details' },
-  { key: '4', label: 'Settings', view: 'settings' },
-];
+export const MENU_ITEMS: MenuItem[] = SIDEBAR_MENU_ITEMS.map(({ key, label, view }) => ({ key, label, view }));
 
-export interface RunGroup {
-  label: string;
-  runs: RunRecord[];
+export function groupRunsByDate(runs: Parameters<typeof groupRunsByDateImpl>[0]): RunGroup[] {
+  return groupRunsByDateImpl(runs);
 }
 
-/** Bucket an already-ordered run list by day, keeping the input order. */
-export function groupRunsByDate(runs: RunRecord[]): RunGroup[] {
-  const groups: RunGroup[] = [];
-  for (const run of runs) {
-    const label = dateBucket(run.startedAt);
-    const last = groups[groups.length - 1];
-    if (last && last.label === label) {
-      last.runs.push(run);
-    } else {
-      groups.push({ label, runs: [run] });
-    }
+export function runLabel(run: Parameters<typeof runLabelImpl>[0]): string {
+  return runLabelImpl(run);
+}
+
+const HINT = '#6e7681';
+const DIM = '#8b949e';
+const DIMMER = '#484f58';
+const SECTION_RULE = '#30363d';
+const ACTIVE = '#58a6ff';
+const SELECTION = '#1c2128';
+const NORMAL = '#c9d1d9';
+
+function rowBox(selected: boolean): {
+  flexDirection: 'row' | 'column';
+  paddingX: 1;
+  backgroundColor: string | undefined;
+  marginBottom: number;
+} {
+  return {
+    flexDirection: 'row',
+    paddingX: 1,
+    backgroundColor: selected ? SELECTION : undefined,
+    marginBottom: 1,
+  };
+}
+
+/** Single, uniform list entry — every row goes through this render path. */
+function SidebarRow(props: { row: Row; index: number }): JSX.Element {
+  const selected = (): boolean => props.index === sidebarIndex();
+
+  if (props.row.kind === 'separator') {
+    return (
+      <box paddingX={1} marginBottom={1}>
+        <text content="──────────────────────" fg={SECTION_RULE} />
+      </box>
+    );
   }
-  return groups;
-}
 
-/** Namer output when it resolved, otherwise the run id. */
-export function runLabel(run: RunRecord): string {
-  return run.name === UNNAMED_PLACEHOLDER ? run.runId : run.name;
+  if (props.row.kind === 'group-header') {
+    return (
+      <box paddingX={1} marginBottom={1}>
+        <text content={`── ${props.row.label} ──`} fg={DIMMER} />
+      </box>
+    );
+  }
+
+  if (props.row.kind === 'filter') {
+    const row = props.row;
+    const editing = (): boolean => focusZone() === 'sidebar-filter';
+    if (editing()) {
+      return (
+        <box {...rowBox(true)}>
+          <text fg={ACTIVE}>{'/  '}</text>
+          <input
+            value={sidebarFilter()}
+            placeholder="filter runs…"
+            focused={true}
+            onInput={(v: string) => setSidebarFilter(v)}
+            width="100%"
+          />
+        </box>
+      );
+    }
+    const hintText = (): string => (row.filter ? truncate(row.filter, 12) : '');
+    const activate = (): void => {
+      setSidebarIndex(props.index);
+      setFocusZone('sidebar-filter');
+    };
+    return (
+      <box {...rowBox(selected())} onMouseDown={activate}>
+        <text fg={ACTIVE}>{'/  '}</text>
+        <text fg={selected() ? NORMAL : DIM}>{'Filter runs…'}</text>
+        <text fg={HINT}>{'  '}{hintText()}</text>
+      </box>
+    );
+  }
+
+  if (props.row.kind === 'menu') {
+    const row = props.row;
+    const activate = (): void => {
+      setSidebarIndex(props.index);
+      goToView(row.view);
+    };
+    const marker = row.active ? `▶ [${row.key}]` : `  [${row.key}]`;
+    return (
+      <box {...rowBox(selected())} onMouseDown={activate}>
+        <text fg={row.active ? ACTIVE : DIM}>{`${marker} ${row.label}`}</text>
+      </box>
+    );
+  }
+
+  // run
+  const row = props.row;
+  if (row.kind !== 'run') {
+    return <box />;
+  }
+  const onClick = (): void => {
+    setSelectedRunId(row.runId);
+    setSidebarIndex(props.index);
+    goToView('run-details');
+  };
+  const statusLine = (): string => {
+    const cursor = selected() ? '▶ ' : '  ';
+    return `${cursor}${statusIcon(row.run.status)} ${truncate(runLabel(row.run), 18)}`;
+  };
+  const subLabel = (): string => {
+    const indent = selected() ? '   ' : '    ';
+    return `${indent}${row.run.agent} t${row.run.tier} · ${formatDuration(row.run)}`;
+  };
+  return (
+    <box
+      {...rowBox(selected())}
+      flexDirection="column"
+      onMouseDown={onClick}
+    >
+      <text fg={statusColor(row.run.status)}>{statusLine()}</text>
+      <text fg={row.runId === selectedRunId() ? NORMAL : HINT}>{subLabel()}</text>
+    </box>
+  );
 }
 
 export function Sidebar(): JSX.Element {
   const groups = createMemo(() => groupRunsByDate(filteredSessions2()));
+  const rows = createMemo(() =>
+    buildRowModel({
+      groups: groups(),
+      filter: sidebarFilter(),
+      activeView: activeView(),
+    }),
+  );
+  const selectable = createMemo(() => selectableRowIndices(rows()));
 
-  function openRun(run: RunRecord): void {
-    setSelectedRunId(run.runId);
-    goToView('run-details');
-  }
+  // Whenever the row list shrinks (runs filtered out), snap the cursor back
+  // onto the first selectable row instead of leaving it on a now-vanished row.
+  createEffect(() => {
+    const sel = selectable();
+    const idx = sidebarIndex();
+    if (sel.length === 0) {
+      if (idx !== -1) setSidebarIndex(-1);
+      return;
+    }
+    if (idx < 0 || !sel.includes(idx)) {
+      setSidebarIndex(sel[0]);
+    }
+  });
 
   return (
     <box
@@ -71,69 +197,29 @@ export function Sidebar(): JSX.Element {
       flexGrow={1}
       padding={1}
     >
-      <For each={MENU_ITEMS}>
-        {(item) => (
-          <box
-            flexDirection="row"
-            paddingX={1}
-            backgroundColor={activeView() === item.view ? '#1c2128' : undefined}
-            onMouseDown={() => goToView(item.view)}
-          >
-            <text fg={activeView() === item.view ? '#58a6ff' : '#8b949e'}>
-              {activeView() === item.view ? '▶ ' : '  '}[{item.key}] {item.label}
-            </text>
-          </box>
-        )}
-      </For>
-
-      <text content="──────────────────────" fg="#30363d" />
-
-      <input
-        value={sidebarFilter()}
-        placeholder={focusZone() === 'sidebar-filter' ? '🔍 id / agent / prompt…' : '🔍 Filter runs…'}
-        focused={focusZone() === 'sidebar-filter'}
-        onInput={(v: string) => setSidebarFilter(v)}
-        width="100%"
-      />
-
-      <text content="──────────────────────" fg="#30363d" />
-
       <scrollbox flexGrow={1} onMouseDown={() => setFocusZone('sidebar-list')}>
-        <Show
-          when={groups().length > 0}
-          fallback={<text fg="#484f58" content="  (no runs match)" />}
-        >
-          <For each={groups()}>
-            {(group) => (
-              <>
-                <box width="100%" justifyContent="center">
-                  <text content={`── ${group.label} ──`} fg="#484f58" />
-                </box>
-                <For each={group.runs}>
-                  {(run) => {
-                    const selected = run.runId === selectedRunId();
-                    return (
-                      <box
-                        flexDirection="column"
-                        paddingX={1}
-                        backgroundColor={selected ? '#1c2128' : undefined}
-                        onMouseDown={() => openRun(run)}
-                      >
-                        <text fg={statusColor(run.status)}>
-                          {selected ? '▶ ' : '  '}{statusIcon(run.status)} {truncate(runLabel(run), 22)}
-                        </text>
-                        <text fg="#8b949e" marginBottom={1}>
-                          {selected ? '   ' : '    '}{run.agent} t{run.tier} · {formatDuration(run)}
-                        </text>
-                      </box>
-                    );
-                  }}
-                </For>
-              </>
-            )}
-          </For>
+        <For each={rows()}>
+          {(row, i) => <SidebarRow row={row} index={i()} />}
+        </For>
+        <Show when={groups().length === 0}>
+          <box paddingX={1}>
+            <text fg={DIMMER} content="(no runs match)" />
+          </box>
         </Show>
       </scrollbox>
     </box>
+  );
+}
+
+/** Pure helper for the keyboard handler in App.tsx. */
+export function nextSidebarIndex(delta: 1 | -1): number {
+  return moveSelection(
+    buildRowModel({
+      groups: groupRunsByDate(filteredSessions2()),
+      filter: sidebarFilter(),
+      activeView: activeView(),
+    }),
+    sidebarIndex(),
+    delta,
   );
 }

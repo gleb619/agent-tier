@@ -15,6 +15,13 @@ const [focusZone, setFocusZone] = createSignal<FocusZone>('sidebar-list');
 const [showPromptOverlay, setShowPromptOverlay] = createSignal<boolean>(false);
 const [settingsRow, setSettingsRow] = createSignal<number>(0);
 
+/**
+ * Index into the flat sidebar row model (filter → menu → separator → runs).
+ * `-1` means "no selection" — used when the selectable subset is empty.
+ * The Sidebar component owns clamping this against the current row list.
+ */
+const [sidebarIndex, setSidebarIndex] = createSignal<number>(0);
+
 export {
   activeView,
   setActiveView,
@@ -26,6 +33,8 @@ export {
   setShowPromptOverlay,
   settingsRow,
   setSettingsRow,
+  sidebarIndex,
+  setSidebarIndex,
 };
 
 /** True while a text field owns the keyboard (plain-char hotkeys stay off). */
