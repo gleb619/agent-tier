@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   OllamaProvider,
   sanitizeName,
-  generateSessionName,
   NAMER_MIN_LEN,
   NAMER_MAX_LEN,
+  NAMER_PROMPT_MAX_CHARS,
   DEFAULT_NAMER_MODEL,
   DEFAULT_NAMER_URL,
 } from '../../../src/namer/providers/ollama';
@@ -73,7 +73,7 @@ describe('sanitizeName', () => {
   });
 });
 
-// ---------- back-compat generateSessionName (free function) ----------
+// ---------- shared test plumbing ----------
 
 interface CapturedCall {
   url: string;
@@ -107,24 +107,40 @@ function errorResponse(status = 500): Response {
 
 const SUCCESS_BODY = 'kebab-case-session-name-please-okay';
 
-describe('generateSessionName (back-compat)', () => {
+function sentBody(captured: CapturedCall[]): Record<string, unknown> {
+  return JSON.parse(captured[0]!.init.body as string) as Record<string, unknown>;
+}
+
+// ---------- OllamaProvider.generate (was the back-compat free function) ----------
+
+describe('OllamaProvider.generate', () => {
   it('returns null for empty prompt', async () => {
     const fetchImpl = vi.fn();
-    const out = await generateSessionName('', { fetchImpl: fetchImpl as unknown as typeof fetch });
+    const p = new OllamaProvider({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const out = await p.generate('', new AbortController().signal);
     expect(out).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('returns null when fetch is missing', async () => {
-    const out = await generateSessionName('hello world', { fetchImpl: undefined as unknown as typeof fetch });
+  it('returns null for whitespace-only prompt', async () => {
+    const fetchImpl = vi.fn();
+    const p = new OllamaProvider({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    const out = await p.generate('   \n\t ', new AbortController().signal);
     expect(out).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('returns null when fetchImpl is not a function', async () => {
+    const p = new OllamaProvider({ fetchImpl: {} as unknown as typeof fetch });
+    expect(await p.generate('hello world', new AbortController().signal)).toBeNull();
   });
 
   it('returns sanitized name on success', async () => {
     const { fetchImpl, captured } = makeCapturingFetch(() =>
       okResponse({ response: 'add-error-handling-to-api' }),
     );
-    const out = await generateSessionName('please add error handling', { fetchImpl });
+    const p = new OllamaProvider({ fetchImpl });
+    const out = await p.generate('please add error handling', new AbortController().signal);
     expect(out).toBe('add-error-handling-to-api');
     expect(captured).toHaveLength(1);
   });
@@ -133,47 +149,97 @@ describe('generateSessionName (back-compat)', () => {
     const { fetchImpl, captured } = makeCapturingFetch(() =>
       okResponse({ response: SUCCESS_BODY }),
     );
-    await generateSessionName('do a thing', {
-      fetchImpl,
-      url: 'http://example.com',
-      model: 'gemma:2b',
-    });
+    const p = new OllamaProvider({ fetchImpl, url: 'http://example.com', model: 'gemma:2b' });
+    await p.generate('do a thing', new AbortController().signal);
     expect(captured).toHaveLength(1);
     const call = captured[0]!;
     expect(call.url).toBe('http://example.com/api/generate');
-    const body = JSON.parse(call.init.body as string);
+    expect(call.init.method).toBe('POST');
+    const body = sentBody(captured);
     expect(body.model).toBe('gemma:2b');
     expect(body.stream).toBe(false);
     expect(body.prompt).toContain('Prompt:');
     expect(body.prompt).toContain('do a thing');
+    expect(body.options).toEqual({ temperature: 0.2, num_predict: 64 });
     expect(call.init.signal).toBeDefined();
     expect((call.init.headers as Record<string, string>)['content-type']).toBe('application/json');
   });
 
+  it('sends think:false at the top level so thinking models still emit a name', async () => {
+    const { fetchImpl, captured } = makeCapturingFetch(() =>
+      okResponse({ response: SUCCESS_BODY }),
+    );
+    const p = new OllamaProvider({ fetchImpl, url: 'http://x', model: 'gemma4' });
+    await p.generate('simplify the namer', new AbortController().signal);
+    const body = sentBody(captured);
+    expect(body.think).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(body, 'think')).toBe(true);
+    const options = body.options as Record<string, unknown>;
+    expect(options.think).toBeUndefined();
+  });
+
+  it('truncates the prompt to NAMER_PROMPT_MAX_CHARS, keeping system prompt + Name suffix', async () => {
+    const { fetchImpl, captured } = makeCapturingFetch(() =>
+      okResponse({ response: SUCCESS_BODY }),
+    );
+    const long = Array.from({ length: NAMER_PROMPT_MAX_CHARS + 150 }, (_unused, i) => `w${i}`).join(' ');
+    expect(long.length).toBeGreaterThan(NAMER_PROMPT_MAX_CHARS);
+
+    const p = new OllamaProvider({ fetchImpl, url: 'http://x', model: 'm' });
+    await p.generate(long, new AbortController().signal);
+
+    const prompt = sentBody(captured).prompt as string;
+    expect(prompt.startsWith('You generate short, kebab-case session names')).toBe(true);
+    expect(prompt.endsWith('\n\nName:')).toBe(true);
+
+    const marker = '\n\nPrompt:\n';
+    const start = prompt.indexOf(marker);
+    expect(start).toBeGreaterThan(0);
+    const embedded = prompt.slice(start + marker.length, prompt.length - '\n\nName:'.length);
+    expect(embedded).toBe(long.slice(0, NAMER_PROMPT_MAX_CHARS));
+    expect(embedded).toHaveLength(NAMER_PROMPT_MAX_CHARS);
+  });
+
+  it('leaves a short prompt untouched', async () => {
+    const { fetchImpl, captured } = makeCapturingFetch(() =>
+      okResponse({ response: SUCCESS_BODY }),
+    );
+    const p = new OllamaProvider({ fetchImpl, url: 'http://x', model: 'm' });
+    await p.generate('do a thing', new AbortController().signal);
+    const prompt = sentBody(captured).prompt as string;
+    expect(prompt).toContain('\n\nPrompt:\ndo a thing\n\nName:');
+  });
+
   it('returns null on non-2xx response', async () => {
     const { fetchImpl } = makeCapturingFetch(() => errorResponse(500));
-    const out = await generateSessionName('hello', { fetchImpl });
-    expect(out).toBeNull();
+    const p = new OllamaProvider({ fetchImpl });
+    expect(await p.generate('hello', new AbortController().signal)).toBeNull();
   });
 
   it('returns null when ollama returns error field', async () => {
     const { fetchImpl } = makeCapturingFetch(() => okResponse({ error: 'model not found' }));
-    const out = await generateSessionName('hello', { fetchImpl });
-    expect(out).toBeNull();
+    const p = new OllamaProvider({ fetchImpl });
+    expect(await p.generate('hello', new AbortController().signal)).toBeNull();
   });
 
   it('returns null when response field is missing', async () => {
     const { fetchImpl } = makeCapturingFetch(() => okResponse({ model: 'gemma:2b' }));
-    const out = await generateSessionName('hello', { fetchImpl });
-    expect(out).toBeNull();
+    const p = new OllamaProvider({ fetchImpl });
+    expect(await p.generate('hello', new AbortController().signal)).toBeNull();
+  });
+
+  it('returns null when response is an empty string (num_predict eaten by reasoning)', async () => {
+    const { fetchImpl } = makeCapturingFetch(() => okResponse({ response: '' }));
+    const p = new OllamaProvider({ fetchImpl, url: 'http://x', model: 'gemma4' });
+    expect(await p.generate('simplify the namer', new AbortController().signal)).toBeNull();
   });
 
   it('returns null when fetch throws', async () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error('ECONNREFUSED');
     });
-    const out = await generateSessionName('hello', { fetchImpl: fetchImpl as unknown as typeof fetch });
-    expect(out).toBeNull();
+    const p = new OllamaProvider({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    expect(await p.generate('hello', new AbortController().signal)).toBeNull();
   });
 
   it('returns null when JSON body is malformed', async () => {
@@ -184,11 +250,11 @@ describe('generateSessionName (back-compat)', () => {
         throw new SyntaxError('not json');
       },
     }));
-    const out = await generateSessionName('hello', { fetchImpl: fetchImpl as unknown as typeof fetch });
-    expect(out).toBeNull();
+    const p = new OllamaProvider({ fetchImpl: fetchImpl as unknown as typeof fetch });
+    expect(await p.generate('hello', new AbortController().signal)).toBeNull();
   });
 
-  it('uses defaults from env when not provided', async () => {
+  it('uses url and model from env when not provided', async () => {
     const previousUrl = process.env.AT_NAMER_URL;
     const previousModel = process.env.AT_NAMER_MODEL;
     process.env.AT_NAMER_URL = 'http://from-env:11434';
@@ -198,9 +264,10 @@ describe('generateSessionName (back-compat)', () => {
       const { fetchImpl, captured } = makeCapturingFetch(() =>
         okResponse({ response: SUCCESS_BODY }),
       );
-      await generateSessionName('hi', { fetchImpl });
+      const p = new OllamaProvider({ fetchImpl });
+      await p.generate('hi', new AbortController().signal);
       expect(captured[0]!.url).toBe('http://from-env:11434/api/generate');
-      expect(JSON.parse(captured[0]!.init.body as string).model).toBe('gemma:from-env');
+      expect(sentBody(captured).model).toBe('gemma:from-env');
     } finally {
       if (previousUrl === undefined) delete process.env.AT_NAMER_URL;
       else process.env.AT_NAMER_URL = previousUrl;
@@ -219,15 +286,53 @@ describe('generateSessionName (back-compat)', () => {
       const { fetchImpl, captured } = makeCapturingFetch(() =>
         okResponse({ response: SUCCESS_BODY }),
       );
-      await generateSessionName('hi', { fetchImpl });
+      const p = new OllamaProvider({ fetchImpl });
+      await p.generate('hi', new AbortController().signal);
       expect(captured[0]!.url).toBe(`${DEFAULT_NAMER_URL}/api/generate`);
-      expect(JSON.parse(captured[0]!.init.body as string).model).toBe(DEFAULT_NAMER_MODEL);
+      expect(sentBody(captured).model).toBe(DEFAULT_NAMER_MODEL);
     } finally {
       if (previousUrl === undefined) delete process.env.AT_NAMER_URL;
       else process.env.AT_NAMER_URL = previousUrl;
       if (previousModel === undefined) delete process.env.AT_NAMER_MODEL;
       else process.env.AT_NAMER_MODEL = previousModel;
     }
+  });
+
+  it('honours AT_NAMER_TIMEOUT_MS for the abort timer', async () => {
+    const previous = process.env.AT_NAMER_TIMEOUT_MS;
+    process.env.AT_NAMER_TIMEOUT_MS = '50';
+    try {
+      let seenSignal: AbortSignal | undefined;
+      const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+        seenSignal = init?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      });
+      const p = new OllamaProvider({ url: 'http://x', model: 'm', fetchImpl: fetchImpl as unknown as typeof fetch });
+      expect(await p.generate('hi', new AbortController().signal)).toBeNull();
+      expect(seenSignal?.aborted).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.AT_NAMER_TIMEOUT_MS;
+      else process.env.AT_NAMER_TIMEOUT_MS = previous;
+    }
+  });
+
+  it('aborts the in-flight request when the caller signal aborts', async () => {
+    const controller = new AbortController();
+    let seenSignal: AbortSignal | undefined;
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      seenSignal = init?.signal ?? undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    });
+    const p = new OllamaProvider({ url: 'http://x', model: 'm', fetchImpl: fetchImpl as unknown as typeof fetch });
+    const pending = p.generate('hi', controller.signal);
+    await Promise.resolve();
+    controller.abort();
+    expect(await pending).toBeNull();
+    expect(seenSignal?.aborted).toBe(true);
   });
 });
 
@@ -262,12 +367,14 @@ describe('OllamaProvider', () => {
   });
 
   it('isAvailable returns true when GET /api/tags is 2xx', async () => {
-    const { fetchImpl } = makeCapturingFetch((url) => {
+    const { fetchImpl, captured } = makeCapturingFetch((url) => {
       if (url.endsWith('/api/tags')) return okResponse({ models: [] });
       return errorResponse(404);
     });
     const p = new OllamaProvider({ url: 'http://x', model: 'm', fetchImpl });
     expect(await p.isAvailable(new AbortController().signal)).toBe(true);
+    expect(captured[0]!.url).toBe('http://x/api/tags');
+    expect(captured[0]!.init.method).toBe('GET');
   });
 
   it('isAvailable returns false on non-2xx', async () => {
@@ -282,8 +389,13 @@ describe('OllamaProvider', () => {
     expect(await p.isAvailable(new AbortController().signal)).toBe(false);
   });
 
-  it('dispose resolves without error (no tunnel to close)', async () => {
+  it('isAvailable returns false when fetchImpl is not a function', async () => {
+    const p = new OllamaProvider({ url: 'http://x', model: 'm', fetchImpl: {} as unknown as typeof fetch });
+    expect(await p.isAvailable(new AbortController().signal)).toBe(false);
+  });
+
+  it('holds no resources to dispose', () => {
     const p = new OllamaProvider({ fetchImpl: vi.fn() as unknown as typeof fetch });
-    await expect(p.dispose?.()).resolves.toBeUndefined();
+    expect((p as unknown as { dispose?: unknown }).dispose).toBeUndefined();
   });
 });

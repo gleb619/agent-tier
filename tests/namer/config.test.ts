@@ -42,15 +42,71 @@ describe('loadNamerConfig', () => {
         { name: 'b', type: 'openrouter', url: 'http://y', model: 'm2', apiKeyRef: 'openrouter', timeoutMs: 2000 },
       ],
       fallbackName: 'unnamed',
-      minLen: 20,
-      maxLen: 40,
     });
     const cfg = await loadNamerConfig(tmpDir);
     expect(cfg.providers).toHaveLength(2);
     expect(cfg.providers[0]!.name).toBe('a');
     expect(cfg.providers[1]!.name).toBe('b');
-    expect(cfg.minLen).toBe(20);
-    expect(cfg.maxLen).toBe(40);
+    expect(cfg.fallbackName).toBe('unnamed');
+  });
+
+  it('ignores removed minLen / maxLen keys in namer.json', async () => {
+    writeAtJson(tmpDir, 'namer.json', {
+      providers: [
+        { name: 'a', type: 'ollama', url: 'http://x', model: 'm1', timeoutMs: 1000 },
+      ],
+      minLen: 20,
+      maxLen: 40,
+    });
+    const cfg = await loadNamerConfig(tmpDir);
+    expect(cfg.providers).toHaveLength(1);
+    expect(cfg).not.toHaveProperty('minLen');
+    expect(cfg).not.toHaveProperty('maxLen');
+  });
+
+  it('drops a legacy ollama-ssh-tunnel provider as unknown type and warns', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    writeAtJson(tmpDir, 'namer.json', {
+      providers: [
+        {
+          name: 'b3',
+          type: 'ollama-ssh-tunnel',
+          ssh: { host: 'borispc3.ai', user: 'boris', identityFile: '~/.ssh/id_rsa' },
+          remoteUrl: 'http://127.0.0.1:11434',
+          model: 'gemma3:1b',
+          timeoutMs: 4000,
+        },
+        { name: 'good', type: 'ollama', url: 'http://x', model: 'm', timeoutMs: 1000 },
+      ],
+    });
+    const cfg = await loadNamerConfig(tmpDir);
+    expect(cfg.providers).toHaveLength(1);
+    expect(cfg.providers[0]!.name).toBe('good');
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[at] namer: dropping provider "b3" with unknown type "ollama-ssh-tunnel"',
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('falls back to the embedded default when only legacy ssh-tunnel providers are configured', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    writeAtJson(tmpDir, 'namer.json', {
+      providers: [
+        {
+          name: 'b3',
+          type: 'ollama-ssh-tunnel',
+          ssh: { host: 'borispc3.ai', user: 'boris' },
+          remoteUrl: 'http://127.0.0.1:11434',
+          model: 'gemma3:1b',
+        },
+      ],
+      fallbackName: 'legacy-fb',
+    });
+    const cfg = await loadNamerConfig(tmpDir);
+    expect(cfg.providers).toEqual(DEFAULT_NAMER_CONFIG.providers);
+    expect(cfg.fallbackName).toBe('legacy-fb');
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it('drops invalid provider entries and warns', async () => {

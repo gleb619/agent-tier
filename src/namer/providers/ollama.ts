@@ -3,19 +3,18 @@
  *
  * Plain local-ollama provider. Implements `NamerProvider`. Probes
  * `GET /api/tags` for availability, posts to `/api/generate` for naming.
- *
- * The `generateSessionName` free function is preserved for back-compat with
- * callers that don't want to construct an `OllamaProvider` explicitly — it
- * delegates internally to the class.
  */
 
 import type { NamerProvider } from '../types';
+import { fetchWithTimeout } from './shared';
 
 export const NAMER_MIN_LEN = 20;
 export const NAMER_MAX_LEN = 40;
 export const DEFAULT_NAMER_URL = 'http://localhost:11434';
 export const DEFAULT_NAMER_MODEL = 'gemma3:1b';
 export const DEFAULT_NAMER_TIMEOUT_MS = 5000;
+/** Only the head of the prompt is sent — a 7 KB task file names no better than its first 400 chars, and costs 3-5x the latency. */
+export const NAMER_PROMPT_MAX_CHARS = 400;
 
 export interface NamerOptions {
   url?: string;
@@ -81,20 +80,15 @@ export class OllamaProvider implements NamerProvider {
   /** Probe `GET /api/tags` — true if 2xx. Used by orchestrator as cheap health check. */
   async isAvailable(signal: AbortSignal): Promise<boolean> {
     if (typeof this.fetchImpl !== 'function') return false;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    const off = linkAbort(signal, controller);
     try {
-      const res = await this.fetchImpl(`${this.url}/api/tags`, {
-        method: 'GET',
-        signal: controller.signal,
+      const res = await fetchWithTimeout(`${this.url}/api/tags`, { method: 'GET' }, {
+        timeoutMs: this.timeoutMs,
+        signal,
+        fetchImpl: this.fetchImpl,
       });
       return !!res && res.ok === true;
     } catch {
       return false;
-    } finally {
-      clearTimeout(timer);
-      off();
     }
   }
 
@@ -103,20 +97,23 @@ export class OllamaProvider implements NamerProvider {
     if (!prompt || !prompt.trim()) return null;
     if (typeof this.fetchImpl !== 'function') return null;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    const off = linkAbort(signal, controller);
     try {
-      const res = await this.fetchImpl(`${this.url}/api/generate`, {
+      const res = await fetchWithTimeout(`${this.url}/api/generate`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: this.model,
-          prompt: `${SYSTEM_PROMPT}\n\nPrompt:\n${prompt}\n\nName:`,
+          prompt: `${SYSTEM_PROMPT}\n\nPrompt:\n${prompt.slice(0, NAMER_PROMPT_MAX_CHARS)}\n\nName:`,
           stream: false,
+          // gemma3/gemma4-class models are *thinking* models: without this the whole
+          // num_predict budget goes to reasoning and `response` comes back empty.
+          think: false,
           options: { temperature: 0.2, num_predict: 64 },
         }),
-        signal: controller.signal,
+      }, {
+        timeoutMs: this.timeoutMs,
+        signal,
+        fetchImpl: this.fetchImpl,
       });
 
       if (!res || res.ok !== true) return null;
@@ -127,40 +124,6 @@ export class OllamaProvider implements NamerProvider {
       return sanitizeName(body.response);
     } catch {
       return null;
-    } finally {
-      clearTimeout(timer);
-      off();
     }
   }
-
-  /** No-op for plain ollama (no tunnel). */
-  async dispose(): Promise<void> {
-    /* no resources to release */
-  }
-}
-
-/** Forward `signal` aborts to `controller` so caller-side cancellation works. */
-function linkAbort(signal: AbortSignal, controller: AbortController): () => void {
-  if (!signal) return () => {};
-  if (signal.aborted) {
-    controller.abort();
-    return () => {};
-  }
-  const onAbort = () => controller.abort();
-  signal.addEventListener('abort', onAbort);
-  return () => signal.removeEventListener('abort', onAbort);
-}
-
-/**
- * Back-compat free function preserved for callers that don't want to construct
- * an `OllamaProvider` explicitly (e.g. the existing `runner.ts` integration
- * pre-T09). Delegates to a one-shot `OllamaProvider`.
- */
-export async function generateSessionName(
-  prompt: string,
-  options: NamerOptions = {},
-): Promise<string | null> {
-  if (!prompt || !prompt.trim()) return null;
-  const provider = new OllamaProvider(options);
-  return provider.generate(prompt, new AbortController().signal);
 }

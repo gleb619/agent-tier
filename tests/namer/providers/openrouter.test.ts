@@ -178,11 +178,11 @@ describe('OpenRouterProvider', () => {
     expect(await p.generate('hi', new AbortController().signal)).toBeNull();
   });
 
-  it('dispose resolves without error', async () => {
+  it('holds no resources to dispose', () => {
     const p = new OpenRouterProvider({
       name: 'openrouter', url: 'https://x', model: 'm',
       apiKey: 'k', fetchImpl: vi.fn() as unknown as typeof fetch,
     });
-    await expect(p.dispose?.()).resolves.toBeUndefined();
+    expect((p as unknown as { dispose?: unknown }).dispose).toBeUndefined();
   });
 });

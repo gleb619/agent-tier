@@ -12,28 +12,6 @@ describe('NamerProvider interface (T01)', () => {
     expect(provider.name).toBe('test');
   });
 
-  it('supports optional async dispose', async () => {
-    let disposed = false;
-    const provider: NamerProvider = {
-      name: 'with-dispose',
-      async isAvailable() { return true; },
-      async generate() { return null; },
-      async dispose() { disposed = true; },
-    };
-    await provider.dispose?.();
-    expect(disposed).toBe(true);
-  });
-
-  it('supports optional sync dispose', () => {
-    const provider: NamerProvider = {
-      name: 'sync-dispose',
-      async isAvailable() { return true; },
-      async generate() { return null; },
-      dispose() { /* sync */ },
-    };
-    expect(typeof provider.dispose).toBe('function');
-  });
-
   it('generate returns null for failure', async () => {
     const provider: NamerProvider = {
       name: 'fail',
@@ -55,11 +33,10 @@ describe('NamerProvider interface (T01)', () => {
 });
 
 describe('KNOWN_NAMER_PROVIDER_KINDS (T01 runtime constant)', () => {
-  it('lists the three provider kinds from the plan', () => {
+  it('lists the two provider kinds from the plan', () => {
     expect(KNOWN_NAMER_PROVIDER_KINDS).toEqual([
       'ollama',
       'openrouter',
-      'ollama-ssh-tunnel',
     ]);
   });
 

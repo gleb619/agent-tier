@@ -10,6 +10,7 @@ export {
   sanitizeName,
   NAMER_MIN_LEN,
   NAMER_MAX_LEN,
+  NAMER_PROMPT_MAX_CHARS,
   DEFAULT_NAMER_MODEL,
   DEFAULT_NAMER_URL,
   DEFAULT_NAMER_TIMEOUT_MS,
@@ -20,10 +21,6 @@ export {
   type OpenRouterOptions,
 } from './providers/openrouter';
 export {
-  OllamaSshTunnelProvider,
-  type OllamaSshTunnelOptions,
-} from './providers/ollama-ssh-tunnel';
-export {
   generateSessionName,
   type GenerateSessionNameOpts,
   type GenerateSessionNameResult,
@@ -33,5 +30,5 @@ export {
   loadSecrets,
   resolveSecret,
 } from './config';
-export { buildProviders, type BuildProvidersDeps } from './registry';
+export { buildProviders } from './registry';
 export { DEFAULT_NAMER_CONFIG } from './default-config';

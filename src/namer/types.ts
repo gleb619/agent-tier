@@ -14,8 +14,6 @@ export interface NamerProvider {
   isAvailable(signal: AbortSignal): Promise<boolean>;
   /** Return 20–40 char kebab name or null. Never throws. */
   generate(prompt: string, signal: AbortSignal): Promise<string | null>;
-  /** Optional cleanup (e.g. close SSH tunnel). Sync or async. */
-  dispose?(): Promise<void> | void;
 }
 
 /**
@@ -25,7 +23,6 @@ export interface NamerProvider {
 export const KNOWN_NAMER_PROVIDER_KINDS = [
   'ollama',
   'openrouter',
-  'ollama-ssh-tunnel',
 ] as const;
 
 export type NamerProviderKind = (typeof KNOWN_NAMER_PROVIDER_KINDS)[number];
@@ -33,8 +30,7 @@ export type NamerProviderKind = (typeof KNOWN_NAMER_PROVIDER_KINDS)[number];
 /** Discriminated provider config — `type` selects which fields apply. */
 export type NamerProviderConfig =
   | NamerOllamaConfig
-  | NamerOpenRouterConfig
-  | NamerOllamaSshTunnelConfig;
+  | NamerOpenRouterConfig;
 
 export interface NamerOllamaConfig {
   name: string;
@@ -53,18 +49,7 @@ export interface NamerOpenRouterConfig {
   timeoutMs?: number;
 }
 
-export interface NamerOllamaSshTunnelConfig {
-  name: string;
-  type: 'ollama-ssh-tunnel';
-  ssh: { host: string; user: string; port?: number; identityFile?: string };
-  remoteUrl: string;
-  model: string;
-  timeoutMs?: number;
-}
-
 export interface NamerConfig {
   providers: NamerProviderConfig[];
   fallbackName?: string;
-  minLen?: number;
-  maxLen?: number;
 }

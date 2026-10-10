@@ -18,6 +18,4 @@ export const DEFAULT_NAMER_CONFIG: NamerConfig = {
     },
   ],
   fallbackName: 'unnamed',
-  minLen: 20,
-  maxLen: 40,
 };

@@ -23,7 +23,6 @@ import { DEFAULT_NAMER_CONFIG } from './default-config';
 
 export type { NamerConfig } from './types';
 
-const MAX_SECRET_FILE_MODE = 0o600;
 const SAFE_MODE_MASK = 0o077; // any group/other bit set → refuse
 
 export async function loadNamerConfig(stateDir: string): Promise<NamerConfig> {
@@ -136,8 +135,6 @@ function validateConfig(body: unknown): NamerConfig {
   return {
     providers: providers.length > 0 ? providers : DEFAULT_NAMER_CONFIG.providers,
     fallbackName: typeof root.fallbackName === 'string' ? root.fallbackName : DEFAULT_NAMER_CONFIG.fallbackName,
-    minLen: typeof root.minLen === 'number' ? root.minLen : DEFAULT_NAMER_CONFIG.minLen,
-    maxLen: typeof root.maxLen === 'number' ? root.maxLen : DEFAULT_NAMER_CONFIG.maxLen,
   };
 }
 
@@ -175,33 +172,5 @@ function validateProvider(entry: unknown): NamerConfig['providers'][number] | nu
     }
     return { name, type: kind, url: e.url, model, apiKeyRef: e.apiKeyRef as string | undefined, timeoutMs };
   }
-  // ollama-ssh-tunnel
-  if (!e.ssh || typeof e.ssh !== 'object') {
-    console.warn(`[at] namer: dropping provider "${name}" (ollama-ssh-tunnel missing ssh)`);
-    return null;
-  }
-  if (typeof e.remoteUrl !== 'string') {
-    console.warn(`[at] namer: dropping provider "${name}" (ollama-ssh-tunnel missing remoteUrl)`);
-    return null;
-  }
-  const sshObj = e.ssh as Record<string, unknown>;
-  if (typeof sshObj.host !== 'string' || typeof sshObj.user !== 'string') {
-    console.warn(`[at] namer: dropping provider "${name}" (ssh.host/user missing)`);
-    return null;
-  }
-  return {
-    name, type: kind,
-    ssh: {
-      host: sshObj.host,
-      user: sshObj.user,
-      port: typeof sshObj.port === 'number' ? sshObj.port : undefined,
-      identityFile: typeof sshObj.identityFile === 'string' ? sshObj.identityFile : undefined,
-    },
-    remoteUrl: e.remoteUrl,
-    model,
-    timeoutMs,
-  };
+  return null;
 }
-
-// Suppress unused warning — kept for future export
-void MAX_SECRET_FILE_MODE;

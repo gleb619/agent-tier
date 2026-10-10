@@ -79,7 +79,6 @@ describe('Namer /tmp sandbox integration (real mock HTTP)', () => {
         url: `http://localhost:${TEST_PORT}`, model: 'gemma3:1b', timeoutMs: 2000,
       }],
       fallbackName: 'my-fb-name',
-      minLen: 20, maxLen: 40,
     }));
     const cfg = await loadNamerConfig(d);
     expect(cfg.providers.length).toBe(1);

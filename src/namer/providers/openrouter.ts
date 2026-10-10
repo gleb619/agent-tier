@@ -10,6 +10,7 @@
 
 import type { NamerProvider } from '../types';
 import { sanitizeName } from './ollama';
+import { fetchWithTimeout } from './shared';
 
 export interface OpenRouterOptions {
   name?: string;
@@ -57,11 +58,8 @@ export class OpenRouterProvider implements NamerProvider {
     if (!this.apiKey) return null;
     if (typeof this.fetchImpl !== 'function') return null;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    const off = linkAbort(signal, controller);
     try {
-      const res = await this.fetchImpl(this.url, {
+      const res = await fetchWithTimeout(this.url, {
         method: 'POST',
         headers: {
           'authorization': `Bearer ${this.apiKey}`,
@@ -72,7 +70,10 @@ export class OpenRouterProvider implements NamerProvider {
           messages: [{ role: 'user', content: prompt }],
           stream: false,
         }),
-        signal: controller.signal,
+      }, {
+        timeoutMs: this.timeoutMs,
+        signal,
+        fetchImpl: this.fetchImpl,
       });
 
       if (!res || res.ok !== true) return null;
@@ -85,25 +86,6 @@ export class OpenRouterProvider implements NamerProvider {
       return sanitizeName(content);
     } catch {
       return null;
-    } finally {
-      clearTimeout(timer);
-      off();
     }
   }
-
-  /** No-op for OpenRouter (no persistent resources). */
-  async dispose(): Promise<void> {
-    /* nothing to release */
-  }
-}
-
-function linkAbort(signal: AbortSignal, controller: AbortController): () => void {
-  if (!signal) return () => {};
-  if (signal.aborted) {
-    controller.abort();
-    return () => {};
-  }
-  const onAbort = () => controller.abort();
-  signal.addEventListener('abort', onAbort);
-  return () => signal.removeEventListener('abort', onAbort);
 }
