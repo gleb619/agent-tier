@@ -1,3 +1,4 @@
+import fs from "fs";
 import { Command } from 'commander';
 import { AGENTS } from '../agents/registry';
 import { loadGenericAgents } from '../agents/generic-loader';
@@ -15,11 +16,34 @@ async function readStdin(): Promise<string> {
   });
 }
 
+function readPromptFile(filePath: string): string {
+  try {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    const content = fs.readFileSync(filePath, 'utf8');
+    
+    if (ext === 'json') {
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed.prompt && typeof parsed.prompt === 'string') {
+          return parsed.prompt;
+        }
+        return content;
+      } catch (e) {
+        return content;
+      }
+    }
+    return content;
+  } catch (error) {
+    throw new Error(`Failed to read prompt file: ${(error as Error).message}`);
+  }
+}
+
 export function registerDefaultCommand(program: Command): void {
   program
     .option('-a, --agent <name>', 'Agent name or "auto"', 'auto')
     .option('-t, --tier <number>', 'Tier: 1=architect, 2=dev (default), 3=experimental', '2')
     .option('-p, --prompt <text>', 'Prompt text')
+    .option('-f, --prompt-file <path>', 'Path to a file containing the prompt (.md or .json)')
     .option('-s, --stream', 'Stream agent output to terminal via chop/tail (default: detached, fire-and-forget with report)', false)
     .option(
       '--wait',
@@ -50,14 +74,20 @@ export function registerDefaultCommand(program: Command): void {
       try {
         let runOptions;
         const effectiveAgents = applyTierOverrides([...AGENTS, ...loadGenericAgents()], loadConfig());
+        let filePrompt = '';
+        if (opts.promptFile) {
+          filePrompt = readPromptFile(opts.promptFile as string);
+        }
+
 
         if (opts.json) {
           const stdinData = await readStdin();
           const parsed = parseJsonInput(stdinData);
+          const finalPrompt = (parsed.prompt || filePrompt || opts.prompt || '').trim();
           runOptions = resolveFromArgs({
             agent: parsed.agent,
             tier: opts.tier,
-            prompt: parsed.prompt,
+            prompt: finalPrompt,
             model: parsed.model,
             cwd: parsed.cwd,
             env: parsed.env,
@@ -74,12 +104,12 @@ export function registerDefaultCommand(program: Command): void {
             ssePort: parsed.ssePort,
           });
         } else {
-          const stdinData = !opts.prompt && !process.stdin.isTTY ? await readStdin() : '';
-          const prompt = stdinData || (opts.prompt as string | undefined) || '';
+          const stdinData = !opts.prompt && !opts.promptFile && !process.stdin.isTTY ? await readStdin() : '';
+          const finalPrompt = (stdinData || filePrompt || (opts.prompt as string | undefined) || '').trim();
           runOptions = resolveFromArgs({
             agent: opts.agent,
             tier: opts.tier,
-            prompt,
+            prompt: finalPrompt,
             model: opts.model as string | undefined,
             stream: opts.stream as boolean,
             wait: opts.wait as boolean,
