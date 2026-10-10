@@ -5,8 +5,8 @@ PKG    := mock-agent
 .PHONY: build test-go clean
 
 build:
-	$(GO) build -o $(BINDIR)/mock-agent       ./$(PKG)/cmd/mock-agent
-	$(GO) build -o $(BINDIR)/mock-long-agent  ./$(PKG)/cmd/mock-long-agent
+	cd $(PKG) && $(GO) build -o ../$(BINDIR)/mock-agent       ./cmd/mock-agent
+	cd $(PKG) && $(GO) build -o ../$(BINDIR)/mock-long-agent  ./cmd/mock-long-agent
 
 test-go:
 	cd $(PKG) && $(GO) test ./...
