@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { AGENTS } from '../agents/registry';
 import { loadGenericAgents } from '../agents/generic-loader';
-import { resolveFromArgs, parseJsonInput } from '../resolver';
+import { resolveFromArgs, parseJsonInput, mergeJsonDefaults } from '../resolver';
 import { run } from '../runner';
 import { loadConfig, applyTierOverrides } from '../config';
 import { readPromptFile } from '../prompt-file';
@@ -49,35 +49,36 @@ export function registerDefaultCommand(program: Command): void {
       'Forward --normka flag to tier-4 agents (mock / mock-long) so they parse the prompt as a JSON normka spec. Auto-applied when the prompt itself starts with `#NORMKA` or contains a `// normka:on` block.',
       false,
     )
-    .option('--global-prompt <text>', 'Global prompt text to prepend to every run\'s prompt')
+    .option(
+      '--global-prompt <text>',
+      'Global prompt text prepended to every run\'s prompt (overrides config globalPrompt and JSON globalPrompt)',
+    )
     .option(
       '--json',
-      'Read JSON from stdin: {"agent":"...","prompt":"...","globalPrompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0}. globalPrompt is prepended to prompt.',
+      'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0}',
       false,
     )
     .action(async (opts) => {
       try {
         let runOptions;
-        const effectiveAgents = applyTierOverrides([...AGENTS, ...loadGenericAgents()], loadConfig());
+        const config = loadConfig();
+        const effectiveAgents = applyTierOverrides([...AGENTS, ...loadGenericAgents()], config);
         let filePrompt = '';
         if (opts.promptFile) {
           filePrompt = readPromptFile(opts.promptFile as string);
         }
 
-        const config = loadConfig();
-        const cliGlobalPrompt = (opts.globalPrompt as string | undefined)?.trim();
-        const configGlobalPrompt = config?.globalPrompt || '';
-
         if (opts.json) {
           const stdinData = await readStdin();
-          const parsed = parseJsonInput(stdinData);
-          let userPrompt = (parsed.prompt || parsed.promptFileContent || filePrompt || opts.prompt || '').trim();
-          
-          // Precedence: CLI --global-prompt > JSON globalPrompt > config globalPrompt
-          const jsonGlobalPrompt = (parsed.globalPrompt as string | undefined)?.trim();
-          const effectiveGlobalPrompt = cliGlobalPrompt || jsonGlobalPrompt || configGlobalPrompt;
-          
-          const finalPrompt = effectiveGlobalPrompt ? (effectiveGlobalPrompt + '\n\n' + userPrompt).trim() : userPrompt;
+          let stdinJson: Record<string, unknown>;
+          try {
+            stdinJson = JSON.parse(stdinData);
+          } catch {
+            throw new Error('Invalid JSON input');
+          }
+          const mergedJson = mergeJsonDefaults(stdinJson, config?.jsonDefaults);
+          const parsed = parseJsonInput(JSON.stringify(mergedJson));
+          const finalPrompt = (parsed.prompt || parsed.promptFileContent || filePrompt || opts.prompt || '').trim();
           runOptions = resolveFromArgs({
             agent: parsed.agent,
             tier: opts.tier,
@@ -101,9 +102,7 @@ export function registerDefaultCommand(program: Command): void {
           });
         } else {
           const stdinData = !opts.prompt && !opts.promptFile && !process.stdin.isTTY ? await readStdin() : '';
-          let userPrompt = (stdinData || filePrompt || (opts.prompt as string | undefined) || '').trim();
-          const effectiveGlobalPrompt = cliGlobalPrompt || configGlobalPrompt;
-          const finalPrompt = effectiveGlobalPrompt ? (effectiveGlobalPrompt + '\n\n' + userPrompt).trim() : userPrompt;
+          const finalPrompt = (stdinData || filePrompt || (opts.prompt as string | undefined) || '').trim();
           runOptions = resolveFromArgs({
             agent: opts.agent,
             tier: opts.tier,

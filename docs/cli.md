@@ -51,6 +51,29 @@ When an agent exits non-zero, `at` automatically picks the next agent in the sam
 | `--sse [port]` | Live-progress SSE hub, default port 7777, `0` = random (see [progress.md](progress.md)) |
 | `--global-prompt <text>` | Global prompt text prepended to every run's prompt |
 
+## Global JSON defaults
+
+Set default values for JSON mode (`at --json`) in `~/.at/config.json` under `"jsonDefaults"`:
+
+```json
+{
+  "jsonDefaults": {
+    "agent": "opencode",
+    "model": "gpt-4o",
+    "cwd": "/path/to/repo",
+    "env": { "NODE_ENV": "production" }
+  }
+}
+```
+
+These defaults are merged into the stdin JSON on every `--json` invocation. Fields present in the per-invocation JSON override the config defaults. The `env` object is deep-merged (config provides base, stdin overrides specific keys).
+
+Example — only pass the prompt in JSON, rest comes from config:
+
+```bash
+echo '{"prompt":"fix the login bug"}' | at --json
+```
+
 ## Global prompt
 
 Set a reusable global prompt in `~/.at/config.json` as `"globalPrompt": "your instructions here"`. It is

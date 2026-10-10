@@ -15,7 +15,17 @@ export interface AtConfig {
   line?: string[];
   /** Optional sandbox-test settings. Opt-in via `--sandbox` or `enabled: true`. */
   sandbox?: { enabled?: boolean; prompt?: string; timeoutMs?: number };
-  /** Optional global prompt prepended to every agent run's prompt. Stored in config JSON. */
+  /**
+   * Default JSON payload merged into stdin JSON when running `at --json`.
+   * Fields present in the per-invocation JSON override these defaults.
+   * Allows omitting boilerplate like agent/model/cwd/env in every call.
+   */
+  jsonDefaults?: Record<string, unknown>;
+  /**
+   * Global prompt prepended to every run's prompt before sending it to the
+   * agent. Added with a blank line before it. CLI `--global-prompt` overrides
+   * JSON `globalPrompt`, which overrides config `globalPrompt`.
+   */
   globalPrompt?: string;
 }
 

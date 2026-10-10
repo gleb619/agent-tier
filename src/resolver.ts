@@ -42,14 +42,7 @@ export interface RunOptions {
    */
   verify?: string;
   normka?: boolean;
-  /**
-   * Opt-in: after a successful run in stream/wait mode, spawn a real
-   * `at -a <agent>` call in a /tmp sandbox to confirm the agent is alive.
-   * Failure throws `AgentError` and counts as a retry-able attempt.
-   */
   sandbox?: boolean;
-  /** Optional global prompt from config; prepended to the run prompt. */
-  globalPrompt?: string;
 }
 
 interface ArgvOptions {
@@ -72,7 +65,6 @@ interface ArgvOptions {
   verify?: string;
   normka?: boolean;
   sandbox?: boolean;
-  globalPrompt?: string;
 }
 
 export interface ParsedJson {
@@ -165,8 +157,20 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     verify: argv.verify?.trim() || undefined,
     normka: argv.normka === true,
     sandbox: argv.sandbox === true ? true : undefined,
-    globalPrompt: argv.globalPrompt?.trim() || undefined,
   };
+}
+
+export function mergeJsonDefaults(stdin: Record<string, unknown>, defaults: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!defaults) return stdin;
+  const out: Record<string, unknown> = { ...defaults };
+  for (const [k, v] of Object.entries(stdin)) {
+    if (k === 'env' && v && typeof v === 'object' && !Array.isArray(v) && typeof defaults.env === 'object' && !Array.isArray(defaults.env)) {
+      out.env = { ...(defaults.env as Record<string, unknown>), ...(v as Record<string, unknown>) };
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 export function parseJsonInput(raw: string): ParsedJson {
@@ -236,6 +240,5 @@ export function parseJsonInput(raw: string): ParsedJson {
     promptFileContent,
     normka: parsed.normka === true,
     sandbox: parsed.sandbox === true ? true : undefined,
-    globalPrompt: (parsed.globalPrompt as string | undefined)?.trim() || undefined,
   };
 }
