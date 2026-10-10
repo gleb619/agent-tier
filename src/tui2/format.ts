@@ -1,5 +1,25 @@
 import type { RunRecord } from '../run-store';
 
+/** Shared palette for the v2 dashboard and its helpers. Single source of truth. */
+export const TUI2_COLORS = {
+  fg: '#c9d1d9',
+  muted: '#8b949e',
+  dim: '#6e7681',
+  dimmer: '#484f58',
+  accent: '#58a6ff',
+  ok: '#3fb950',
+  warn: '#d29922',
+  error: '#f85149',
+  border: '#555555',
+} as const;
+
+/** Column widths kept in one place so dashboard rows stay aligned. */
+export const RUN_COL = {
+  ID: 20,
+  AGENT: 12,
+  STATUS: 8,
+} as const;
+
 export function statusIcon(status: RunRecord['status']): string {
   switch (status) {
     case 'running':
@@ -84,6 +104,37 @@ export function formatClockRange(startedAt: string, finishedAt: string | null): 
 export function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   return text.slice(0, maxLen - 1) + '…';
+}
+
+/**
+ * Tabular row for a single run. Status column + exit-code column are opt-in so
+ * the active-runs and recent-completions sections can share one formatter.
+ * Pure helper — unit-tested without a renderer.
+ */
+export function formatRunRow(
+  r: RunRecord,
+  opts: { status?: boolean; exitCode?: boolean } = {},
+): string {
+  const parts: string[] = [
+    statusIcon(r.status),
+    truncate(r.runId, RUN_COL.ID).padEnd(RUN_COL.ID),
+    r.agent.padEnd(RUN_COL.AGENT),
+  ];
+  if (opts.status) parts.push(r.status.padEnd(RUN_COL.STATUS));
+  if (opts.exitCode) parts.push(`code ${r.exitCode ?? '-'}`);
+  parts.push(formatMs(durationMs(r)));
+  return parts.join('  ');
+}
+
+/** Tabular row for an agent health entry. Deactivated agents get a trailing tag. */
+export function formatAgentRow(a: {
+  name: string;
+  failures: number;
+  deactivated: boolean;
+}): string {
+  const icon = a.deactivated ? '✗' : '✓';
+  const suffix = a.deactivated ? '  (disabled)' : '';
+  return `${icon} ${a.name.padEnd(RUN_COL.AGENT)} failures ${a.failures}${suffix}`;
 }
 
 /** Log-line tint, same palette as the classic TUI. */

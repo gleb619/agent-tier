@@ -6,7 +6,15 @@ import { resolveStateDir } from '../../state-dir';
 import { autoRefresh } from '../../tui/store/log';
 import { agent, tier } from '../../tui/store/settings';
 import { filteredSessions2 } from '../store/filtered-sessions';
-import { durationMs, formatMs, isToday, statusColor, statusIcon, truncate } from '../format';
+import {
+  durationMs,
+  formatAgentRow,
+  formatMs,
+  formatRunRow,
+  isToday,
+  statusColor,
+  TUI2_COLORS,
+} from '../format';
 
 const RECENT_LIMIT = 8;
 
@@ -40,15 +48,32 @@ export function computeStats(runs: RunRecord[]): DashStats {
   };
 }
 
-function Section(props: { title: string; children?: JSX.Element }): JSX.Element {
+// No helper imports below the imports block — everything `computeStats` and
+// `Dashboard` need from `format.ts` is already imported at the top.
+
+/** Title row with consistent spacing underneath. */
+function SectionHeader(props: { title: string }): JSX.Element {
   return (
-    <>
-      <text fg="#58a6ff">
+    <box marginBottom={1}>
+      <text fg={TUI2_COLORS.accent}>
         <b>{props.title}</b>
       </text>
-      <text content="" />
-      {props.children}
-    </>
+    </box>
+  );
+}
+
+/** Padded, dim-bordered box for "nothing here yet" messages. */
+function EmptyState(props: { message: string }): JSX.Element {
+  return (
+    <box
+      borderColor={TUI2_COLORS.dim}
+      borderStyle="round"
+      paddingX={2}
+      paddingY={1}
+      marginBottom={1}
+    >
+      <text fg={TUI2_COLORS.dimmer} content={props.message} />
+    </box>
   );
 }
 
@@ -66,72 +91,91 @@ export function Dashboard(): JSX.Element {
       title="Dashboard"
       border
       borderStyle="single"
-      borderColor="#555555"
+      borderColor={TUI2_COLORS.border}
       flexDirection="column"
       flexGrow={1}
       padding={1}
     >
       <scrollbox flexGrow={1}>
-        <box flexDirection="column" paddingX={1}>
-          <Section title="Quick stats">
+        <box flexDirection="column" paddingX={1} paddingTop={1} gap={1}>
+          {/* Quick stats */}
+          <box>
+            <SectionHeader title="Quick stats" />
             <box flexDirection="row" gap={3}>
-              <text fg="#c9d1d9" content={`runs: ${stats().total}`} />
-              <text fg="#3fb950" content={`active: ${stats().running.length}`} />
-              <text fg="#d29922" content={`stuck: ${stats().stuck}`} />
-              <text fg="#c9d1d9" content={`today: ${stats().today}`} />
-              <text fg="#c9d1d9" content={successText()} />
-              <text fg="#c9d1d9" content={`avg: ${formatMs(stats().avgDurationMs)}`} />
+              <text fg={TUI2_COLORS.fg} content={`runs: ${stats().total}`} />
+              <text fg={TUI2_COLORS.ok} content={`active: ${stats().running.length}`} />
+              <text fg={TUI2_COLORS.warn} content={`stuck: ${stats().stuck}`} />
+              <text fg={TUI2_COLORS.fg} content={`today: ${stats().today}`} />
+              <text fg={TUI2_COLORS.fg} content={successText()} />
+              <text fg={TUI2_COLORS.fg} content={`avg: ${formatMs(stats().avgDurationMs)}`} />
             </box>
-          </Section>
+          </box>
 
-          <Section title={`Active runs (${stats().running.length})`}>
+          {/* Active runs */}
+          <box>
+            <SectionHeader title={`Active runs (${stats().running.length})`} />
             <Show
               when={stats().running.length > 0}
-              fallback={<text fg="#484f58" content="  (nothing running)" />}
+              fallback={<EmptyState message="(nothing running)" />}
             >
-              <For each={stats().running.slice(0, RECENT_LIMIT)}>
-                {(r) => (
-                  <text
-                    fg={statusColor(r.status)}
-                    content={`  ${statusIcon(r.status)} ${truncate(r.runId, 20)}  ${r.agent.padEnd(12)} ${formatMs(durationMs(r))}`}
-                  />
-                )}
-              </For>
+              <box flexDirection="column">
+                <For each={stats().running.slice(0, RECENT_LIMIT)}>
+                  {(r) => (
+                    <text
+                      fg={statusColor(r.status)}
+                      content={`  ${formatRunRow(r, { status: true })}`}
+                    />
+                  )}
+                </For>
+              </box>
             </Show>
-          </Section>
+          </box>
 
-          <Section title="Recent completions">
+          {/* Recent completions */}
+          <box>
+            <SectionHeader title="Recent completions" />
             <Show
               when={stats().completed.length > 0}
-              fallback={<text fg="#484f58" content="  (no finished runs)" />}
+              fallback={<EmptyState message="(no finished runs)" />}
             >
-              <For each={stats().completed.slice(0, RECENT_LIMIT)}>
-                {(r) => (
-                  <text
-                    fg={statusColor(r.status)}
-                    content={`  ${statusIcon(r.status)} ${truncate(r.runId, 20)}  ${r.agent.padEnd(12)} ${r.status.padEnd(8)} code ${r.exitCode ?? '-'}  ${formatMs(durationMs(r))}`}
-                  />
-                )}
-              </For>
+              <box flexDirection="column">
+                <For each={stats().completed.slice(0, RECENT_LIMIT)}>
+                  {(r) => (
+                    <text
+                      fg={statusColor(r.status)}
+                      content={`  ${formatRunRow(r, { status: true, exitCode: true })}`}
+                    />
+                  )}
+                </For>
+              </box>
             </Show>
-          </Section>
+          </box>
 
-          <Section title="Agents">
-            <text fg="#8b949e" content={`  defaults: tier ${tier()} · agent ${agent()} · auto-refresh ${autoRefresh() ? 'ON' : 'OFF'}`} />
+          {/* Agents */}
+          <box>
+            <SectionHeader title="Agents" />
+            <text
+              fg={TUI2_COLORS.muted}
+              content={`  defaults: tier ${tier()} · agent ${agent()} · auto-refresh ${autoRefresh() ? 'ON' : 'OFF'}`}
+            />
             <Show
               when={health().agents.length > 0}
-              fallback={<text fg="#484f58" content="  (no health records)" />}
+              fallback={<EmptyState message="(no health records)" />}
             >
-              <For each={health().agents}>
-                {(a) => (
-                  <text
-                    fg={a.deactivated ? '#f85149' : '#3fb950'}
-                    content={`  ${a.deactivated ? '✗' : '✓'} ${a.name.padEnd(12)} failures ${a.failures}${a.deactivated ? '  (disabled)' : ''}`}
-                  />
-                )}
-              </For>
+              <box flexDirection="column">
+                <For each={health().agents}>
+                  {(a) => (
+                    <box marginBottom={a.deactivated ? 1 : 0}>
+                      <text
+                        fg={a.deactivated ? TUI2_COLORS.error : TUI2_COLORS.ok}
+                        content={`  ${formatAgentRow(a)}`}
+                      />
+                    </box>
+                  )}
+                </For>
+              </box>
             </Show>
-          </Section>
+          </box>
         </box>
       </scrollbox>
     </box>

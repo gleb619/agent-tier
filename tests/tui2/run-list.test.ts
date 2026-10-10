@@ -6,14 +6,18 @@ import { SETTING_ACTIONS, SETTINGS_ROW_COUNT, clampRow } from '../../src/tui2/co
 import {
   dateBucket,
   durationMs,
+  formatAgentRow,
   formatClock,
   formatDuration,
   formatMs,
+  formatRunRow,
   isToday,
   lineColor,
+  RUN_COL,
   statusColor,
   statusIcon,
   truncate,
+  TUI2_COLORS,
 } from '../../src/tui2/format';
 
 const NOW = new Date();
@@ -181,5 +185,53 @@ describe('tui2 format helpers', () => {
     expect(lineColor('[WARN] careful')).toBe('#d29922');
     expect(lineColor('✓ done')).toBe('#3fb950');
     expect(lineColor('plain output')).toBe('#c9d1d9');
+  });
+
+  it('exposes shared tui2 palette and column widths', () => {
+    expect(TUI2_COLORS.accent).toBe('#58a6ff');
+    expect(TUI2_COLORS.error).toBe('#f85149');
+    expect(RUN_COL).toEqual({ ID: 20, AGENT: 12, STATUS: 8 });
+  });
+
+  it('formats a running row with status and no exit code', () => {
+    const r = mockRun('alpha-111', { agent: 'mm-code', status: 'running' });
+    const row = formatRunRow(r, { status: true });
+    expect(row.startsWith('●  alpha-111')).toBe(true);
+    expect(row).toContain('mm-code'.padEnd(12));
+    expect(row).toContain('running');
+    // No exit-code column means the row is exactly: icon + id + agent + status + duration.
+    expect(row).not.toMatch(/code -|code \d/);
+    expect(row).toBe(
+      ['●', 'alpha-111'.padEnd(20), 'mm-code'.padEnd(12), 'running'.padEnd(8), formatMs(durationMs(r))].join('  '),
+    );
+  });
+
+  it('formats a completed row with status + exit code + duration', () => {
+    const started = new Date('2026-03-01T10:00:00.000Z');
+    const r = mockRun('beta-222', {
+      agent: 'opencode',
+      status: 'failed',
+      exitCode: 1,
+      startedAt: started.toISOString(),
+      finishedAt: new Date(started.getTime() + 65_000).toISOString(),
+    });
+    const row = formatRunRow(r, { status: true, exitCode: true });
+    expect(row).toContain('✗  beta-222');
+    expect(row).toContain('opencode  ');
+    expect(row).toContain('failed');
+    expect(row).toContain('code 1');
+    expect(row.endsWith('1m 05s')).toBe(true);
+  });
+
+  it('formats a healthy vs disabled agent row', () => {
+    const healthy = formatAgentRow({ name: 'mm-code', failures: 0, deactivated: false });
+    expect(healthy.startsWith('✓ mm-code   ')).toBe(true);
+    expect(healthy).toContain('failures 0');
+    expect(healthy).not.toContain('disabled');
+
+    const down = formatAgentRow({ name: 'opencode', failures: 3, deactivated: true });
+    expect(down.startsWith('✗ opencode')).toBe(true);
+    expect(down).toContain('failures 3');
+    expect(down).toContain('(disabled)');
   });
 });
