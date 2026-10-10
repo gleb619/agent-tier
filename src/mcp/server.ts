@@ -16,7 +16,16 @@ function getVersion(): string {
   }
 }
 
-export async function startMcpServer(stateDir: string): Promise<void> {
+/**
+ * Build and connect the `at` MCP server.
+ *
+ * `transport` defaults to the production stdio transport but is injectable so
+ * tests can wire an in-memory transport (no real stdio, no spawned process).
+ */
+export async function startMcpServer(
+  stateDir: string,
+  transport: InstanceType<typeof StdioServerTransport> = new StdioServerTransport(),
+): Promise<void> {
   const server = new Server(
     { name: 'at', version: getVersion() },
     { capabilities: { tools: {} } },
@@ -28,7 +37,6 @@ export async function startMcpServer(stateDir: string): Promise<void> {
     return handleToolCall(request.params.name, request.params.arguments ?? {}, stateDir);
   });
 
-  const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write('[at] MCP server ready on stdio\n');
 }
