@@ -10,11 +10,15 @@
  *
  * Responsibilities — deliberately minimal:
  *   1. poll the agent pid with `isPidAlive` every POLL_INTERVAL_MS
- *   2. when the pid is gone, mark the run record `done` with `exitCode: null`
+ *   2. when `AT_NAME_RUN=1`, name the run via `src/naming` — kicked off
+ *      immediately, awaited before exit. The parent CLI is already gone in this
+ *      mode, so the supervisor is the only process that can persist the name.
+ *   3. when the pid is gone, mark the run record `done` with `exitCode: null`
  *      (the exit status of a process that is not our child is unknowable)
- *   3. optionally run the `--callback` command with the same `AT_*` env
+ *   4. optionally run the `--callback` command with the same `AT_*` env
  *      contract as `executeCallback` in runner.ts, except `AT_EXIT_CODE=0`
- *   4. exit 0
+ *      (plus `AT_RUN_NAME`, which the supervisor knows by then)
+ *   5. exit 0
  *
  * It intentionally does NOT call `recordResult` (agent health): failure
  * detection is impossible without the real exit code, so health tracking stays
@@ -26,9 +30,10 @@ import { appendFileSync, readFileSync } from 'fs';
 import path from 'path';
 
 import { isPidAlive } from './process-utils';
-import { updateRun } from './run-store';
+import { updateRun, UNNAMED_PLACEHOLDER } from './run-store';
 import { recordResult } from './health';
 import { getStateFilePath } from './state-dir';
+import { applyRunName } from './naming';
 
 export const POLL_INTERVAL_MS = 2000;
 /**
@@ -56,6 +61,12 @@ export interface RunWatchOptions {
   verify?: string;
   /** Agent's working directory (forwarded via `AT_CWD`) — verify runs there when set. */
   cwd?: string;
+  /**
+   * Ask the supervisor to name the run (forwarded via `AT_NAME_RUN=1`). Set by
+   * the default detached path, whose parent CLI exits before a namer provider
+   * can answer; blocking modes name the run in-process instead.
+   */
+  nameRun?: boolean;
 }
 
 /** Absolute path of the compiled supervisor entry (next to this module). */
@@ -86,6 +97,7 @@ export function spawnRunWatch(o: RunWatchOptions): void {
     const env: NodeJS.ProcessEnv = { ...process.env, AT_PROMPT: o.prompt };
     if (o.verify && o.verify.trim()) env.AT_VERIFY_CMD = o.verify.trim();
     if (o.cwd) env.AT_CWD = o.cwd;
+    if (o.nameRun) env.AT_NAME_RUN = '1';
     const child = spawn(process.execPath, [getRunWatchScript(), ...buildRunWatchArgs(o)], {
       detached: true,
       stdio: 'ignore',
@@ -125,7 +137,12 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function runCallback(callback: string, o: RunWatchOptions, status: 'done' | 'failed' = 'done'): void {
+function runCallback(
+  callback: string,
+  o: RunWatchOptions,
+  status: 'done' | 'failed' = 'done',
+  name: string = UNNAMED_PLACEHOLDER,
+): void {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     AT_RUN_ID: o.runId,
@@ -136,6 +153,7 @@ function runCallback(callback: string, o: RunWatchOptions, status: 'done' | 'fai
     AT_LOG_FILE: o.logFile,
     AT_PROMPT: o.prompt,
     AT_STATUS: status,
+    AT_RUN_NAME: name,
   };
 
   const result = spawnSync(callback, [], { env, stdio: 'ignore', shell: true });
@@ -173,6 +191,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     callback,
     prompt: process.env.AT_PROMPT ?? '',
   };
+
+  // Kick naming off immediately so it overlaps with the agent run, then await
+  // it before exiting — otherwise a fast agent (mock: ~60 ms) would let this
+  // process end while the namer is still in flight and the name would be lost.
+  const naming =
+    process.env.AT_NAME_RUN === '1'
+      ? applyRunName({ stateDir, runId, prompt: options.prompt, logFile })
+      : Promise.resolve(null);
 
   try {
     const startedAt = Date.now();
@@ -226,6 +252,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       }
     }
 
+    // Awaited here (not fire-and-forget): the name must be in runs.jsonl
+    // before this process exits, and the callback should see it.
+    const named = await naming;
+
     let finalStatus: 'done' | 'failed' = 'done';
     const verifyCmd = process.env.AT_VERIFY_CMD?.trim();
     if (verifyCmd) {
@@ -258,7 +288,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     }
 
     if (callback && callback.trim()) {
-      runCallback(callback.trim(), options, finalStatus);
+      runCallback(callback.trim(), options, finalStatus, named?.name ?? UNNAMED_PLACEHOLDER);
     }
 
     return 0;

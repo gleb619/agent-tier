@@ -7,10 +7,10 @@ import { applyNormkaFlag } from './agents/normka-flag';
 import { RunOptions } from './resolver';
 import { pickAgent, getStateFile } from './scheduler';
 import { filterHealthy, recordResult, isDeactivated, loadHealth } from './health';
-import { addRun, updateRun } from './run-store';
+import { addRun, updateRun, UNNAMED_PLACEHOLDER } from './run-store';
 import { getStateFilePath } from './state-dir';
 import { setupNotify, startHub, tailLogFile, type Hub, type NotifyEvent } from './notify';
-import { generateSessionName } from './namer';
+import { applyRunName } from './naming';
 import { spawnRunWatch } from './run-watch';
 
 interface TrackedChild {
@@ -143,14 +143,13 @@ interface LaunchExtras {
   extraPrompt?: string;
   extraEnv?: Record<string, string>;
   /**
-   * Session name forwarded to the child as `AT_RUN_NAME` and persisted on
-   * the run record. Defaults to `'unnamed'` when the namer is disabled or
-   * failed; the field is always populated so downstream columns stay stable.
+   * Session name forwarded to the child as `AT_RUN_NAME` and persisted on the
+   * run record. Stays at `UNNAMED_PLACEHOLDER` until the namer resolves — or
+   * forever when every provider fails. Always populated so downstream columns
+   * stay stable.
    */
   name?: string;
 }
-
-export const UNNAMED_PLACEHOLDER = 'unnamed';
 
 /**
  * Shell-quoted `node /abs/path/to/cli.js` (or just `at` if the binary is
@@ -412,14 +411,19 @@ export async function run(
   process.once('SIGINT', cleanup);
 
   try {
-    // Fire-and-forget namer (T09): start the orchestrator now so it can run
-    // in parallel with agent selection + spawn. The child gets `'unnamed'`
-    // as AT_RUN_NAME during launch; the real name lands later via updateRun
-    // when the orchestrator resolves.
+    // Naming runs in parallel with agent selection + spawn: the child launches
+    // with `UNNAMED_PLACEHOLDER` as AT_RUN_NAME and the real name lands on the
+    // run record when a namer provider answers.
+    //
+    // Only the blocking modes (`-s`, `--wait`, `--sse`) name here, because they
+    // keep this process alive for the whole run. The default detached mode exits
+    // right after the run box, so it delegates naming to the supervisor
+    // (`spawnRunWatch({ nameRun: true })`) — a name produced by a process that
+    // is about to die is a name that never reaches runs.jsonl.
     const runId = generateRunId();
-    const namePromise: Promise<{ name: string; provider: string | null } | null> =
-      !options.runName
-        ? (generateSessionName(options.prompt, options.stateDir) as Promise<{ name: string; provider: string | null }>).catch(() => null)
+    const naming =
+      !options.runName && (options.stream || options.wait || options.sse)
+        ? applyRunName({ stateDir: options.stateDir, runId, prompt: options.prompt })
         : Promise.resolve(null);
 
     const stateFilePath = getStateFilePath(options.stateDir);
@@ -465,26 +469,22 @@ export async function run(
       let healthRecorded = false;
       try {
         const exitCode = await spawner(agent, options, runId);
-        // Wire namer result to run-store now that runId is known (fire-and-forget)
-        if (!options.runName) {
-          namePromise.then(async (result) => {
-            if (!result || result.provider === null) return; // fallback, no point updating
-            void updateRun(options.stateDir, runId, { name: result.name }).catch(() => {});
-            // T10: SSE rename event — published only when sse is on
-            if (options.sse) {
-              try {
-                const hub = await getProcessHub(options);
-                hub.publish({
-                  runId,
-                  agent: agent.name,
-                  ts: new Date().toISOString(),
-                  seq: 0,
-                  type: 'rename',
-                  data: { name: result.name },
-                } as NotifyEvent);
-              } catch { /* hub not available — skip */ }
-            }
-          }).catch(() => {});
+        // Awaited (not fire-and-forget) so the name is on disk before this
+        // process is allowed to exit — usually already resolved by now.
+        const namedRun = await naming;
+        // T10: SSE rename event — published only when sse is on
+        if (namedRun && options.sse) {
+          try {
+            const hub = await getProcessHub(options);
+            hub.publish({
+              runId,
+              agent: agent.name,
+              ts: new Date().toISOString(),
+              seq: 0,
+              type: 'rename',
+              data: { name: namedRun.name },
+            } as NotifyEvent);
+          } catch { /* hub not available — skip */ }
         }
         if (options.stream) {
           await recordResult(stateFilePath, agent.name, exitCode === 0);
@@ -648,6 +648,9 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
       prompt: options.prompt,
       verify: options.verify,
       cwd: options.cwd,
+      // This process is about to exit — the supervisor owns naming for
+      // non-blocking detached runs (see the `naming` comment in `run()`).
+      nameRun: !options.runName,
     });
     return 0;
   }

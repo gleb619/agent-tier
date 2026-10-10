@@ -4,6 +4,9 @@ import { getStateFilePath } from './state-dir';
 import { withLock } from './lock';
 import { isPidAlive, getProcessTicks } from './process-utils';
 
+/** Placeholder `RunRecord.name` until the namer resolves — or forever, when it never does. */
+export const UNNAMED_PLACEHOLDER = 'unnamed';
+
 export interface RunRecord {
   runId: string;
   agent: string;
@@ -16,10 +19,10 @@ export interface RunRecord {
   exitCode: number | null;
   status: 'running' | 'done' | 'failed' | 'stuck';
   /**
-   * Human-readable session name. Set by the experimental `--namer` flag
-   * (calls a local Ollama model). Defaults to `'unnamed'` when the namer
-   * is disabled or fails — the field is always present so consumers
-   * (`at status`, TUI sidebar) can render a stable column.
+   * Human-readable session name produced by the namer (`src/namer`). Starts as
+   * `UNNAMED_PLACEHOLDER` and is overwritten asynchronously once a provider
+   * answers; stays at the placeholder when every provider fails, so consumers
+   * (`at status`, TUI sidebar) can always render a stable column.
    */
   name: string;
 }

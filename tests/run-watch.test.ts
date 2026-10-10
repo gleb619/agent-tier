@@ -1,20 +1,23 @@
-import { main, buildRunWatchArgs, POLL_INTERVAL_MS, HEARTBEAT_INTERVAL_MS } from '../src/run-watch';
+import { main, buildRunWatchArgs, spawnRunWatch, POLL_INTERVAL_MS, HEARTBEAT_INTERVAL_MS } from '../src/run-watch';
 
-const { isPidAliveMock, updateRunMock, spawnSyncMock, appendFileMock, readFileMock, recordResultMock } = vi.hoisted(() => ({
+const { isPidAliveMock, updateRunMock, spawnSyncMock, spawnMock, appendFileMock, readFileMock, recordResultMock, applyRunNameMock } = vi.hoisted(() => ({
   isPidAliveMock: vi.fn<boolean, [number]>(),
   updateRunMock: vi.fn(async () => {}),
   spawnSyncMock: vi.fn(),
+  spawnMock: vi.fn(),
   appendFileMock: vi.fn(),
   readFileMock: vi.fn(() => ''),
   recordResultMock: vi.fn(async () => {}),
+  applyRunNameMock: vi.fn(async () => null),
 }));
 
 vi.mock('../src/process-utils', () => ({ isPidAlive: isPidAliveMock }));
-vi.mock('../src/run-store', () => ({ updateRun: updateRunMock }));
+vi.mock('../src/run-store', () => ({ updateRun: updateRunMock, UNNAMED_PLACEHOLDER: 'unnamed' }));
 vi.mock('../src/health', () => ({ recordResult: recordResultMock }));
+vi.mock('../src/naming', () => ({ applyRunName: applyRunNameMock }));
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
-  return { ...actual, spawnSync: spawnSyncMock };
+  return { ...actual, spawnSync: spawnSyncMock, spawn: spawnMock };
 });
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
@@ -247,5 +250,98 @@ describe('run-watch — quota/rate-limit detection', () => {
       finishedAt: expect.any(String),
       exitCode: null,
     });
+  });
+});
+
+describe('run-watch — supervisor naming (AT_NAME_RUN)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.resetAllMocks();
+    isPidAliveMock.mockReturnValue(false);
+    spawnSyncMock.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+    process.env.AT_PROMPT = 'refactor the auth module';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete process.env.AT_NAME_RUN;
+    delete process.env.AT_PROMPT;
+  });
+
+  it('names the run and hands the name to the callback', async () => {
+    process.env.AT_NAME_RUN = '1';
+    applyRunNameMock.mockResolvedValue({ name: 'refactor-auth-module-oidc', provider: 'local-ollama' });
+    expect(await main([...ARGS, 'cb'])).toBe(0);
+    expect(applyRunNameMock).toHaveBeenCalledWith({
+      stateDir: '/tmp/at-state',
+      runId: 'run-1',
+      prompt: 'refactor the auth module',
+      logFile: '/tmp/at-logs/run.log',
+    });
+    const cbCall = spawnSyncMock.mock.calls.find((c) => c[0] === 'cb');
+    expect((cbCall as any)[2].env.AT_RUN_NAME).toBe('refactor-auth-module-oidc');
+  });
+
+  it('does not exit while naming is still in flight (fast agent would lose the name)', async () => {
+    process.env.AT_NAME_RUN = '1';
+    applyRunNameMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve({ name: 'slow-but-persisted-name', provider: 'openrouter' }), 50);
+        }),
+    );
+    let exited = false;
+    const p = main(ARGS).then((code) => {
+      exited = true;
+      return code;
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(exited).toBe(false);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await p).toBe(0);
+    expect(exited).toBe(true);
+  });
+
+  it('leaves naming alone when AT_NAME_RUN is not set', async () => {
+    expect(await main(ARGS)).toBe(0);
+    expect(applyRunNameMock).not.toHaveBeenCalled();
+  });
+
+  it('reports the placeholder to the callback when naming failed', async () => {
+    process.env.AT_NAME_RUN = '1';
+    applyRunNameMock.mockResolvedValue(null);
+    expect(await main([...ARGS, 'cb'])).toBe(0);
+    const cbCall = spawnSyncMock.mock.calls.find((c) => c[0] === 'cb');
+    expect((cbCall as any)[2].env.AT_RUN_NAME).toBe('unnamed');
+  });
+});
+
+describe('spawnRunWatch — naming flag', () => {
+  const base = {
+    pid: 42,
+    runId: 'r1',
+    stateDir: '/tmp/s',
+    agent: 'a',
+    tier: 2,
+    logFile: '/tmp/l.log',
+    prompt: 'do the thing',
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    spawnMock.mockReturnValue({ unref: vi.fn(), once: vi.fn() });
+  });
+
+  it('sets AT_NAME_RUN=1 when the supervisor should name the run', () => {
+    spawnRunWatch({ ...base, nameRun: true });
+    const env = (spawnMock.mock.calls[0]![2] as any).env;
+    expect(env.AT_NAME_RUN).toBe('1');
+    expect(env.AT_PROMPT).toBe('do the thing');
+  });
+
+  it('leaves AT_NAME_RUN unset when the parent names the run itself', () => {
+    spawnRunWatch(base);
+    const env = (spawnMock.mock.calls[0]![2] as any).env;
+    expect(env.AT_NAME_RUN).toBeUndefined();
   });
 });

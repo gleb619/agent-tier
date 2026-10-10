@@ -99,11 +99,9 @@ describe('run — async namer (T09)', () => {
     expect(spawner).toHaveBeenCalledTimes(1);
   });
 
-  it('updateRun is called with the namer-resolved name (fire-and-forget)', async () => {
+  it('updateRun is called with the namer-resolved name (awaited before run() resolves)', async () => {
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
     await run({ ...baseOptions }, agents, spawner);
-    // Microtask flush — fire-and-forget runs after run() returns
-    await new Promise((r) => setTimeout(r, 10));
     expect(updateRunMock).toHaveBeenCalledWith(
       baseOptions.stateDir,
       expect.any(String),
@@ -127,16 +125,52 @@ describe('run — async namer (T09)', () => {
     expect(updateRunMock).not.toHaveBeenCalled(); // because .catch(() => null) → provider=null → no update
   });
 
-  it('does not throw if run resolves before namer promise resolves', async () => {
-    let resolveName!: (v: { name: string; provider: string }) => void;
+  it('blocking mode: run() does not resolve until the name is persisted', async () => {
+    let resolveName!: (v: { name: string; provider: string | null }) => void;
     generateSessionNameMock.mockImplementation(() => new Promise((r) => { resolveName = r; }));
     const spawner: Spawner = vi.fn().mockResolvedValue(0);
-    const runP = run({ ...baseOptions }, agents, spawner);
-    // Wait for run() to finish
-    await runP;
-    // Now resolve namer — must not throw unhandled rejection
-    resolveName({ name: 'post-hoc-name', provider: 'local-ollama' });
+
+    let settled = false;
+    const runP = run({ ...baseOptions }, agents, spawner).then((code) => {
+      settled = true;
+      return code;
+    });
+
     await new Promise((r) => setTimeout(r, 10));
+    expect(settled).toBe(false); // namer still in flight → CLI must not exit yet
+    expect(updateRunMock).not.toHaveBeenCalled();
+
+    resolveName({ name: 'name-lands-before-exit', provider: 'local-ollama' });
+    await expect(runP).resolves.toBe(0);
+    expect(updateRunMock).toHaveBeenCalledWith(baseOptions.stateDir, expect.any(String), {
+      name: 'name-lands-before-exit',
+    });
+  });
+
+  it('detached non-blocking mode leaves naming to the supervisor', async () => {
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
+    await run({ ...baseOptions, stream: false, wait: false, sse: false }, agents, spawner);
+    await new Promise((r) => setTimeout(r, 10));
+    // The parent CLI exits right after the run box — naming there would race
+    // its own death, so run-watch owns it (AT_NAME_RUN=1).
+    expect(generateSessionNameMock).not.toHaveBeenCalled();
+    expect(updateRunMock).not.toHaveBeenCalled();
+  });
+
+  it('--wait names in-process too', async () => {
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
+    await run({ ...baseOptions, stream: false, wait: true }, agents, spawner);
+    expect(generateSessionNameMock).toHaveBeenCalledTimes(1);
+    expect(updateRunMock).toHaveBeenCalledWith(baseOptions.stateDir, expect.any(String), {
+      name: 'add-error-handling-to-api',
+    });
+  });
+
+  it('an explicit runName skips the namer entirely', async () => {
+    const spawner: Spawner = vi.fn().mockResolvedValue(0);
+    await run({ ...baseOptions, runName: 'my-own-name' }, agents, spawner);
+    expect(generateSessionNameMock).not.toHaveBeenCalled();
+    expect(updateRunMock).not.toHaveBeenCalled();
   });
 });
 

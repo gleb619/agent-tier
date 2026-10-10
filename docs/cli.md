@@ -29,7 +29,7 @@ JSON `prompt` > JSON `promptFile` > `-f` file > `-p` text.
 
 | Mode               | Behavior                                                                                                                                                  |
 |--------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Detached (default) | Agent spawns in the background; `at` prints the run box (runId, pid, log path) and returns immediately. A background supervisor (`src/run-watch.ts`) marks the run done (`exitCode: null`) and runs `--callback`. |
+| Detached (default) | Agent spawns in the background; `at` prints the run box (runId, pid, log path) and returns immediately. A background supervisor (`src/run-watch.ts`) names the run, marks it done (`exitCode: null`) and runs `--callback`. |
 | Detached `--wait`  | Same as detached, but blocks until the agent exits. Enables `--timeout`, retry, agent-health tracking and a callback with the real exit code.              |
 | Stream (`-s`)      | Agent output is streamed to the terminal and simultaneously written to a log file. Blocks until the agent exits.                                          |
 | SSE (`--sse`)      | Live progress streamed over HTTP/SSE. See [Live progress (SSE)](progress.md#live-progress-sse).                                                                       |

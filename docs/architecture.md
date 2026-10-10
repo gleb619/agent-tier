@@ -9,6 +9,8 @@ src/cli.ts          parse flags + stdin → resolveFromArgs/parseJsonInput → r
 src/resolver.ts     normalise raw argv/JSON into a typed RunOptions struct
 src/scheduler.ts    round-robin state: read/write /tmp/at-<tier>-state.json
 src/runner.ts       spawn agent process (stream or detached), retry on non-zero exit
+src/naming.ts       applyRunName(): prompt → RunRecord.name (shared by runner + run-watch)
+src/run-watch.ts    detached supervisor: poll pid, name run, finalise record, verify, callback
 src/agents/registry.ts  AgentDef[] — name, tier, bin(), buildArgs(), buildEnv(), promptMode
 src/agents/generic-loader.ts  discover plugins from ~/.at/*/generic.js
 src/config.ts            load ~/.at/config.json with HMAC verification
@@ -28,7 +30,7 @@ src/notify/adapters/*   per-agent stream-json/--json/log adapters
 
 - **Binary resolution:** Each `AgentDef.bin()` checks env override (e.g. `OPENCODE_BIN`) then falls back to `$NODE_BIN/<name>`  `$LOCAL_BIN/<name>`. `NODE_BIN` defaults to dir of running `node` binary (`path.dirname(process.execPath)`); `LOCAL_BIN` to `~/.local/bin`. Override via `env.local.sh` (gitignored).
 - **promptMode:** Defaults to `'arg'` (prompt passed as CLI arg). Set to `'stdin'` (supported for generic plugin agents) to pipe prompt to child's stdin instead.
-- **Detached mode (default):** Child is spawned detached; stdout/stderr go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Caller gets the run box (runId, pid, log path) and returns immediately. A background supervisor (`src/run-watch.ts`) polls the pid, marks the run `done` with `exitCode: null` (the real exit code of a non-child process is unknowable) and runs the `--callback` (`AT_EXIT_CODE=0`). `--wait` (or `-s`) blocks until the child exits, enabling `--timeout`, retry, agent-health tracking and a callback with the real exit code.
+- **Detached mode (default):** Child is spawned detached; stdout/stderr go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Caller gets the run box (runId, pid, log path) and returns immediately. A background supervisor (`src/run-watch.ts`) polls the pid, names the run (`src/naming.ts`, opt-in via `AT_NAME_RUN=1` — the CLI is already gone here, so the supervisor is the only process that can persist the name), marks the run `done` with `exitCode: null` (the real exit code of a non-child process is unknowable) and runs the `--callback` (`AT_EXIT_CODE=0`, plus `AT_RUN_NAME`). `--wait` (or `-s`) blocks until the child exits, enabling `--timeout`, retry, agent-health tracking, in-process naming and a callback with the real exit code.
 - **Stream mode (`-s`):** Child output is streamed to terminal and simultaneously written to `/tmp/at-logs/at-<timestamp>-<agent>.log`.
 - **Retry:** On non-zero exit, `runner` picks next agent in same tier and retries, up to `min(retries, candidates.length - 1)` additional attempts. Named agents (`-a <name>`) never retry. Retry only applies to `--wait` / `-s` runs — non-wait detached runs return immediately with no observable exit code.
 - **`--verify <cmd>`:** Post-run shell hook fired after the agent exits and before `--callback`. Non-zero exit fails the run (status `failed`, log line, callback still fires with `AT_STATUS=failed`); in blocking modes the runner raises `AgentError('verify failed …')` so the existing retry-with-next-agent loop applies. The detached supervisor receives the command via `AT_VERIFY_CMD` env (no argv extension) and runs it in `AT_CWD` (`options.cwd`) when set, else its own cwd.
