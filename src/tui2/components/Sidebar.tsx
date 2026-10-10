@@ -59,11 +59,14 @@ function rowBox(selected: boolean): {
   backgroundColor: string | undefined;
   marginBottom: number;
 } {
+  // Per-row marginBottom removed; vertical rhythm now comes from the parent
+  // scrollbox column's `gap`. Keeps all rows flush (no padding creep) so a
+  // single place controls spacing between menu items, runs, and section breaks.
   return {
     flexDirection: 'row',
     paddingX: 1,
     backgroundColor: selected ? SELECTION : undefined,
-    marginBottom: 1,
+    marginBottom: 0,
   };
 }
 
@@ -89,7 +92,11 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
     // column, regardless of column width. No paddingX/left offset, so it
     // can't drift off-center.
     return (
-      <box width="100%" flexDirection="row" justifyContent="center" marginBottom={1}>
+      // marginTop gives a slightly larger breathing room above the header than
+      // the parent gap between run rows — visually marks the section break
+      // without inflating the rest of the list. marginBottom stays 0; the
+      // parent gap handles the space below.
+      <box width="100%" flexDirection="row" justifyContent="center" marginTop={1} marginBottom={0}>
         <text content={`── ${props.row.label} ──`} fg={DIMMER} />
       </box>
     );
@@ -225,14 +232,21 @@ export function Sidebar(): JSX.Element {
       padding={1}
     >
       <scrollbox flexGrow={1} onMouseDown={() => setFocusZone('sidebar-list')}>
-        <For each={rows()}>
-          {(row, i) => <SidebarRow row={row} index={i()} />}
-        </For>
-        <Show when={groups().length === 0}>
-          <box paddingX={1}>
-            <text fg={DIMMER} content="(no runs match)" />
-          </box>
-        </Show>
+        {/* Single flex column with uniform gap — the only place vertical rhythm
+            lives. Rows render with marginBottom=0, so spacing between menu
+            items, runs, separators, and group headers is all driven by this
+            one gap. Group headers layer a small marginTop on top for a
+            slightly larger break above the section title. */}
+        <box flexDirection="column" gap={1}>
+          <For each={rows()}>
+            {(row, i) => <SidebarRow row={row} index={i()} />}
+          </For>
+          <Show when={groups().length === 0}>
+            <box paddingX={1}>
+              <text fg={DIMMER} content="(no runs match)" />
+            </box>
+          </Show>
+        </box>
       </scrollbox>
     </box>
   );
