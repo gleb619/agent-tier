@@ -53,20 +53,20 @@ const ACTIVE = '#58a6ff';
 const SELECTION = '#1c2128';
 const NORMAL = '#c9d1d9';
 
-function rowBox(selected: boolean): {
+function rowBox(selected: boolean, marginBottom: number): {
   flexDirection: 'row' | 'column';
   paddingX: 1;
   backgroundColor: string | undefined;
   marginBottom: number;
 } {
-  // Per-row marginBottom removed; vertical rhythm now comes from the parent
-  // scrollbox column's `gap`. Keeps all rows flush (no padding creep) so a
-  // single place controls spacing between menu items, runs, and section breaks.
+  // Shared box style for selectable rows. `marginBottom` is passed per row kind
+  // (menu rows 0 = flush, run rows 1 = one blank line) so the vertical rhythm
+  // is controlled here, not by a blanket parent gap.
   return {
     flexDirection: 'row',
     paddingX: 1,
     backgroundColor: selected ? SELECTION : undefined,
-    marginBottom: 0,
+    marginBottom,
   };
 }
 
@@ -75,11 +75,12 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
   const selected = (): boolean => props.index === sidebarIndex();
 
   if (props.row.kind === 'separator') {
-    // Decorative divider — sits flush against the row above and the row below
-    // so the filter input hugs its underline and runs don't pile space onto the
-    // closing divider before the next group header.
+    // Decorative divider — flush against the rows above and below
+    // (marginTop/marginBottom 0, and the parent column uses gap={0}) so the
+    // filter input hugs its underline and the closing divider hugs the next
+    // group header.
     return (
-      <box paddingX={1} marginBottom={0}>
+      <box paddingX={1} marginTop={0} marginBottom={0}>
         <text content="──────────────────────" fg={SECTION_RULE} />
       </box>
     );
@@ -92,11 +93,11 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
     // column, regardless of column width. No paddingX/left offset, so it
     // can't drift off-center.
     return (
-      // marginTop gives a slightly larger breathing room above the header than
-      // the parent gap between run rows — visually marks the section break
-      // without inflating the rest of the list. marginBottom stays 0; the
-      // parent gap handles the space below.
-      <box width="100%" flexDirection="row" justifyContent="center" marginTop={1} marginBottom={0}>
+      // marginTop 0 keeps the header glued to whatever sits above it (the
+      // separator closing the menu block, or the previous run). marginBottom 1
+      // gives one blank line before the group's first run row — headers start
+      // a section, so they carry the spacing, not the space above them.
+      <box width="100%" flexDirection="row" justifyContent="center" marginTop={0} marginBottom={1}>
         <text content={`── ${props.row.label} ──`} fg={DIMMER} />
       </box>
     );
@@ -105,19 +106,19 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
   if (props.row.kind === 'filter') {
     const row = props.row;
     const editing = (): boolean => focusZone() === 'sidebar-filter';
-    // The filter row hugs the divider beneath it; spacing below the input
-    // is provided by the separator itself, not by an extra marginBottom.
+    // The filter row carries one blank line below it (marginBottom 1) so the
+    // divider beneath sits at most one line under the input, never more.
     const filterBox = {
       flexDirection: 'row' as const,
       paddingX: 1,
       backgroundColor: undefined as string | undefined,
-      marginBottom: 0,
+      marginBottom: 1,
     };
     const filterBoxSelected = {
       flexDirection: 'row' as const,
       paddingX: 1,
       backgroundColor: SELECTION,
-      marginBottom: 0,
+      marginBottom: 1,
     };
     if (editing()) {
       return (
@@ -160,7 +161,9 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
     const isOn = (): boolean => selected() || row.active;
     const marker = (): string => (isOn() ? `▶ [${row.key}]` : `  [${row.key}]`);
     return (
-      <box {...rowBox(selected())} onMouseDown={activate}>
+      // marginBottom 0 = the menu is a compact list; consecutive items sit on
+      // adjacent lines with no gap between them.
+      <box {...rowBox(selected(), 0)} onMouseDown={activate}>
         <text fg={isOn() ? ACTIVE : DIM}>{`${marker()} ${row.label}`}</text>
       </box>
     );
@@ -185,8 +188,10 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
     return `${indent}${row.run.agent} t${row.run.tier} · ${formatDuration(row.run)}`;
   };
   return (
+    // Two-line run row: status line + agent/tier/duration sub-line.
+    // marginBottom 1 keeps one blank line between consecutive run entries.
     <box
-      {...rowBox(selected())}
+      {...rowBox(selected(), 1)}
       flexDirection="column"
       onMouseDown={onClick}
     >
@@ -232,12 +237,14 @@ export function Sidebar(): JSX.Element {
       padding={1}
     >
       <scrollbox flexGrow={1} onMouseDown={() => setFocusZone('sidebar-list')}>
-        {/* Single flex column with uniform gap — the only place vertical rhythm
-            lives. Rows render with marginBottom=0, so spacing between menu
-            items, runs, separators, and group headers is all driven by this
-            one gap. Group headers layer a small marginTop on top for a
-            slightly larger break above the section title. */}
-        <box flexDirection="column" gap={1}>
+        {/* Spacing map (vertical rhythm is per-row margin, parent gap is 0):
+            filter row     marginBottom 1  → one blank line, then divider
+            separator      margin 0        → hugs rows above and below
+            menu rows      marginBottom 0  → compact list, adjacent lines
+            group header   marginTop 0 /
+                            marginBottom 1 → glued above, one line before first run
+            run rows       marginBottom 1  → one blank line between entries */}
+        <box flexDirection="column" gap={0}>
           <For each={rows()}>
             {(row, i) => <SidebarRow row={row} index={i()} />}
           </For>
