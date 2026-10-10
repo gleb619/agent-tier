@@ -8,7 +8,9 @@ export { KNOWN_NAMER_PROVIDER_KINDS, type NamerProviderKind } from './types';
 export {
   OllamaProvider,
   sanitizeName,
+  deriveName,
   NAMER_MIN_LEN,
+  NAMER_SALVAGE_MIN_LEN,
   NAMER_MAX_LEN,
   NAMER_PROMPT_MAX_CHARS,
   DEFAULT_NAMER_MODEL,

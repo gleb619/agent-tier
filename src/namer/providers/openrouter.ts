@@ -9,7 +9,7 @@
  */
 
 import type { NamerProvider } from '../types';
-import { sanitizeName } from './ollama';
+import { deriveName } from './ollama';
 import { fetchWithTimeout } from './shared';
 
 export interface OpenRouterOptions {
@@ -83,7 +83,7 @@ export class OpenRouterProvider implements NamerProvider {
       const content = body.choices[0]?.message?.content;
       if (typeof content !== 'string') return null;
 
-      return sanitizeName(content);
+      return deriveName(content, prompt);
     } catch {
       return null;
     }

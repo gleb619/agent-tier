@@ -178,6 +178,23 @@ describe('OpenRouterProvider', () => {
     expect(await p.generate('hi', new AbortController().signal)).toBeNull();
   });
 
+  it('generate salvages an undersized answer using the prompt', async () => {
+    const { fetchImpl } = makeCapturingFetch(() => okResponse({
+      choices: [{ message: { role: 'assistant', content: 'Auth-token-v2' } }],
+    }));
+    const p = new OpenRouterProvider({
+      name: 'openrouter', url: 'https://x', model: 'm',
+      apiKey: 'k', fetchImpl,
+    });
+    const out = await p.generate(
+      'refactor authentication service and validate user tokens',
+      new AbortController().signal,
+    );
+    expect(out).not.toBeNull();
+    expect(out!.startsWith('auth-token-v2')).toBe(true);
+    expect(out!.length).toBeGreaterThanOrEqual(20);
+  });
+
   it('holds no resources to dispose', () => {
     const p = new OpenRouterProvider({
       name: 'openrouter', url: 'https://x', model: 'm',

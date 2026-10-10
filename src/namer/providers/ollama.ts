@@ -10,6 +10,14 @@ import { fetchWithTimeout } from './shared';
 
 export const NAMER_MIN_LEN = 20;
 export const NAMER_MAX_LEN = 40;
+/**
+ * Floor for *salvaged* names only. When the prompt offers no more keywords to
+ * pad with, a name built from real model output + real prompt words is still
+ * descriptive well below `NAMER_MIN_LEN` (`test-hello-world`), and far more
+ * useful than discarding it and persisting `unnamed`. Garbage this short (a
+ * lone `x`) is still rejected.
+ */
+export const NAMER_SALVAGE_MIN_LEN = 8;
 export const DEFAULT_NAMER_URL = 'http://localhost:11434';
 export const DEFAULT_NAMER_MODEL = 'gemma3:1b';
 export const DEFAULT_NAMER_TIMEOUT_MS = 5000;
@@ -30,9 +38,21 @@ const SYSTEM_PROMPT =
   'If the prompt is ambiguous, pick a short descriptive label. ' +
   'Never exceed 40 characters. Never go below 20 characters.';
 
-/** Normalize model output to a 20-40 char kebab-case token. Returns null if unrecoverable. */
-export function sanitizeName(raw: string): string | null {
-  if (typeof raw !== 'string') return null;
+/**
+ * Filler words that carry no naming signal. Used only when a too-short model
+ * answer has to be padded back up to `NAMER_MIN_LEN`.
+ */
+const NAME_STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'onto', 'only',
+  'please', 'make', 'need', 'want', 'some', 'very', 'also', 'then', 'than',
+  'when', 'where', 'which', 'while', 'your', 'you', 'our', 'its', 'are', 'was',
+  'were', 'has', 'have', 'had', 'not', 'but', 'all', 'any', 'can', 'could',
+  'should', 'would', 'will', 'may', 'might', 'must', 'does', 'did', 'done',
+  'todo', 'task', 'work', 'file', 'files', 'code', 'repo', 'add', 'fix',
+]);
+
+/** Lowercase kebab normalization with no length gate. Empty string when nothing survives. */
+function kebabCore(raw: string): string {
   let s = raw.trim();
 
   // Strip common code-fence / quote wrappers the model sometimes returns.
@@ -44,16 +64,73 @@ export function sanitizeName(raw: string): string | null {
   s = s.replace(/[^a-z0-9-]+/g, '-');
   s = s.replace(/-+/g, '-');
   s = s.replace(/^-+|-+$/g, '');
+  return s;
+}
 
+/** Clamp an over-long name to NAMER_MAX_LEN, preferring a hyphen boundary. */
+function fitLength(s: string): string {
+  if (s.length <= NAMER_MAX_LEN) return s;
+  const cut = s.slice(0, NAMER_MAX_LEN);
+  const lastDash = cut.lastIndexOf('-');
+  return lastDash >= NAMER_MIN_LEN - 1 ? cut.slice(0, lastDash) : cut;
+}
+
+/** Normalize model output to a 20-40 char kebab-case token. Returns null if unrecoverable. */
+export function sanitizeName(raw: string): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = kebabCore(raw);
   if (s.length === 0) return null;
   if (s.length < NAMER_MIN_LEN) return null; // too short to be a useful name
-  if (s.length > NAMER_MAX_LEN) {
-    // Prefer cutting on a hyphen boundary so the result still looks like a name.
-    const cut = s.slice(0, NAMER_MAX_LEN);
-    const lastDash = cut.lastIndexOf('-');
-    s = lastDash >= NAMER_MIN_LEN - 1 ? cut.slice(0, lastDash) : cut;
+  return fitLength(s);
+}
+
+/** Salient prompt words, in order of appearance, de-duplicated. */
+function promptKeywords(prompt: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const word of prompt.toLowerCase().split(/[^a-z0-9]+/)) {
+    if (word.length < 3 || NAME_STOPWORDS.has(word) || seen.has(word)) continue;
+    seen.add(word);
+    out.push(word);
   }
-  return s;
+  return out;
+}
+
+/**
+ * `sanitizeName` with a salvage path for undersized answers.
+ *
+ * Small local models routinely ignore the "20-40 chars" instruction and reply
+ * with a perfectly good short label — `Auth-token-v2`, `test-hello`,
+ * `smoke test return`. `sanitizeName` throws those away, so every provider
+ * fails and the run is persisted as `unnamed` forever. Instead of discarding
+ * the model's intent, keep its tokens as the prefix and pad with salient words
+ * from the prompt until the name reaches `NAMER_MIN_LEN`.
+ *
+ * Returns null only when the raw answer carries no usable characters at all
+ * (empty, whitespace, punctuation-only) — the same cases `sanitizeName` rejects.
+ */
+export function deriveName(raw: string, prompt: string): string | null {
+  if (typeof raw !== 'string') return null;
+
+  // A compliant answer is used verbatim — no prompt keyword can improve it.
+  const strict = sanitizeName(raw);
+  if (strict) return strict;
+
+  const core = kebabCore(raw);
+  if (core.length === 0) return null;
+
+  const parts = core.split('-').filter(Boolean);
+  for (const word of promptKeywords(prompt)) {
+    if (parts.includes(word)) continue;
+    parts.push(word);
+    if (parts.join('-').length >= NAMER_MIN_LEN) break;
+  }
+
+  const joined = parts.join('-');
+  // Keywords exhausted before reaching NAMER_MIN_LEN: keep the salvaged name
+  // when it is still recognisably a label, else reject (a lone `x` is noise).
+  if (joined.length >= NAMER_SALVAGE_MIN_LEN) return joined;
+  return null;
 }
 
 interface OllamaGenerateResponse {
@@ -121,7 +198,7 @@ export class OllamaProvider implements NamerProvider {
       if (!body || typeof body.response !== 'string') return null;
       if (body.error) return null;
 
-      return sanitizeName(body.response);
+      return deriveName(body.response, prompt);
     } catch {
       return null;
     }

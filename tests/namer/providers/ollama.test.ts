@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   OllamaProvider,
   sanitizeName,
+  deriveName,
   NAMER_MIN_LEN,
+  NAMER_SALVAGE_MIN_LEN,
   NAMER_MAX_LEN,
   NAMER_PROMPT_MAX_CHARS,
   DEFAULT_NAMER_MODEL,
@@ -70,6 +72,76 @@ describe('sanitizeName', () => {
     expect(out.length).toBeLessThanOrEqual(NAMER_MAX_LEN);
     expect(out.length).toBeGreaterThanOrEqual(NAMER_MIN_LEN);
     expect(out).not.toMatch(/-+$/);
+  });
+});
+
+// ---------- deriveName (salvage of undersized model answers) ----------
+
+describe('deriveName', () => {
+  it('returns a compliant model answer verbatim', () => {
+    expect(deriveName('add-error-handling-to-api', 'please add error handling')).toBe(
+      'add-error-handling-to-api',
+    );
+  });
+
+  it('still clamps an over-long model answer to NAMER_MAX_LEN', () => {
+    const out = deriveName('a-'.repeat(100), 'some prompt');
+    expect(out!.length).toBeLessThanOrEqual(NAMER_MAX_LEN);
+  });
+
+  // The actual bug: gemma3:1b answers "Auth-token-v2" (13 chars) for the auth
+  // prompt. sanitizeName drops it -> every provider fails -> run stays unnamed.
+  it('salvages a short model answer by padding with prompt keywords', () => {
+    const out = deriveName('Auth-token-v2', 'refactor authentication service and validate user tokens');
+    expect(out).not.toBeNull();
+    expect(out!.length).toBeGreaterThanOrEqual(NAMER_MIN_LEN);
+    expect(out!.length).toBeLessThanOrEqual(NAMER_MAX_LEN);
+    expect(out!.startsWith('auth-token-v2')).toBe(true);
+    expect(out).toMatch(/^[a-z0-9-]+$/);
+  });
+
+  it('keeps the model prefix when the answer is a space-separated phrase', () => {
+    const out = deriveName('smoke test return', 'smoke test background return')!;
+    expect(out.startsWith('smoke-test-return')).toBe(true);
+    expect(out.length).toBeGreaterThanOrEqual(NAMER_MIN_LEN);
+  });
+
+  it('salvages an underscore name from the model', () => {
+    const out = deriveName('test_hello', 'hello world test')!;
+    expect(out.startsWith('test-hello')).toBe(true);
+    expect(out).not.toBeNull();
+  });
+
+  it('does not repeat a keyword already present in the model answer', () => {
+    const out = deriveName('test-name-1', 'simple test prompt to check naming')!;
+    const parts = out.split('-');
+    expect(new Set(parts).size).toBe(parts.length);
+  });
+
+  it('skips filler words when padding', () => {
+    const out = deriveName('kanban', 'implement at kanban core in the agent-tier repo')!;
+    expect(out).not.toMatch(/-the-|-and-|-for-/);
+  });
+
+  it('returns null when the raw answer has no usable characters', () => {
+    expect(deriveName('', 'a perfectly good prompt')).toBeNull();
+    expect(deriveName('   \n\t ', 'a perfectly good prompt')).toBeNull();
+    expect(deriveName('!!!', 'a perfectly good prompt')).toBeNull();
+  });
+
+  it('never returns a name longer than NAMER_MAX_LEN after padding', () => {
+    const out = deriveName('x', 'refactor authentication service and validate user tokens')!;
+    expect(out.length).toBeLessThanOrEqual(NAMER_MAX_LEN);
+  });
+
+  it('keeps a salvaged name that cannot reach NAMER_MIN_LEN when the prompt runs dry', () => {
+    const out = deriveName('test_hello', 'hello world test')!;
+    expect(out.startsWith('test-hello')).toBe(true);
+    expect(out.length).toBeGreaterThanOrEqual(NAMER_SALVAGE_MIN_LEN);
+  });
+
+  it('rejects noise too short to be a label even after padding', () => {
+    expect(deriveName('x', 'hi ok')).toBeNull();
   });
 });
 
@@ -232,6 +304,27 @@ describe('OllamaProvider.generate', () => {
     const { fetchImpl } = makeCapturingFetch(() => okResponse({ response: '' }));
     const p = new OllamaProvider({ fetchImpl, url: 'http://x', model: 'gemma4' });
     expect(await p.generate('simplify the namer', new AbortController().signal)).toBeNull();
+  });
+
+  // Regression: gemma3:1b ignores the 20-char instruction and answers
+  // "Auth-token-v2". sanitizeName rejected it, so generate() returned null,
+  // every provider failed, and the run was persisted as `unnamed` forever.
+  it('salvages an undersized model answer instead of returning null', async () => {
+    const { fetchImpl } = makeCapturingFetch(() => okResponse({ response: 'Auth-token-v2\n' }));
+    const p = new OllamaProvider({ fetchImpl });
+    const out = await p.generate(
+      'refactor authentication service and validate user tokens',
+      new AbortController().signal,
+    );
+    expect(out).not.toBeNull();
+    expect(out!.length).toBeGreaterThanOrEqual(NAMER_MIN_LEN);
+    expect(out!.startsWith('auth-token-v2')).toBe(true);
+  });
+
+  it('still returns null when the model answer has no usable characters', async () => {
+    const { fetchImpl } = makeCapturingFetch(() => okResponse({ response: '!!!' }));
+    const p = new OllamaProvider({ fetchImpl });
+    expect(await p.generate('a real prompt here', new AbortController().signal)).toBeNull();
   });
 
   it('returns null when fetch throws', async () => {
