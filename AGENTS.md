@@ -78,6 +78,7 @@ git worktree prune
 | TUI | No-arg `at` on TTY → interactive dashboard (opentui/solid, needs Bun) | `src/tui/`, `src/cli.ts` |
 | Compose | Multi-agent goal pipeline: arch → dev → test → review stages | `src/compose/` |
 | CodeGraph index | Wrap `codegraph` CLI for semantic code graph (`at index`) | `src/commands/codegraph.ts` |
+| Normka mock agents | Tier-4 `mock`/`mock-long` Go binaries; `#NORMKA` / `// normka:on` / `--normka` trigger JSON step specs (lorem, file, http, sse, discuss) | `mock-agent/`, `src/agents/normka-flag.ts`, `bin/mock-agent`, `bin/mock-long-agent` |
 
 ## Commands
 
