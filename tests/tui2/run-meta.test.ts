@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { UNNAMED_PLACEHOLDER, type RunRecord } from '../../src/run-store';
 import {
   META_LABEL,
+  META_VALUE_WIDTH,
   exitCodeColor,
   isUnnamed,
   metaLabelWidth,
   padLabel,
+  padValue,
   runMetaRows,
   type MetaField,
   type MetaRow,
@@ -130,6 +132,59 @@ describe('tui2 meta alignment', () => {
         expect(`${field.label}:`.length).toBeLessThanOrEqual(width);
       }
     }
+  });
+});
+
+describe('tui2 meta value column', () => {
+  it('exposes META_VALUE_WIDTH as the shared value column width', () => {
+    expect(META_VALUE_WIDTH).toBe(14);
+  });
+
+  it('pads short values out to the column width', () => {
+    expect(padValue('kimi')).toBe('kimi' + ' '.repeat(META_VALUE_WIDTH - 4));
+    expect(padValue('0')).toBe('0' + ' '.repeat(META_VALUE_WIDTH - 1));
+    expect(padValue('1606355')).toBe('1606355' + ' '.repeat(META_VALUE_WIDTH - 7));
+  });
+
+  it('passes through values that already meet the width', () => {
+    const exact = 'x'.repeat(META_VALUE_WIDTH);
+    expect(padValue(exact)).toBe(exact);
+  });
+
+  it('honours a caller-provided width override', () => {
+    expect(padValue('a', 5)).toBe('a' + ' '.repeat(4));
+    expect(padValue('abc', 2)).toBe('abc');
+  });
+});
+
+describe('tui2 run meta row configuration', () => {
+  const session = mockRun('run-42', {
+    agent: 'kimi',
+    tier: 1,
+    pid: 1606355,
+    status: 'done',
+    exitCode: 0,
+    finishedAt: at(12),
+    name: 'Ship kanban',
+  });
+
+  it('lets the timing row opt into a wider value column', () => {
+    const fieldRowList = runMetaRows(session).filter(
+      (row): row is Extract<MetaRow, { kind: 'fields' }> => row.kind === 'fields',
+    );
+    const timing = fieldRowList[fieldRowList.length - 1];
+    expect(timing.valueWidth).toBeDefined();
+    expect(timing.valueWidth!).toBeGreaterThanOrEqual(
+      formatClockRange(session.startedAt, session.finishedAt).length,
+    );
+  });
+
+  it('keeps the multi-field rows on the shared value width', () => {
+    const fieldRowList = runMetaRows(session).filter(
+      (row): row is Extract<MetaRow, { kind: 'fields' }> => row.kind === 'fields',
+    );
+    expect(fieldRowList[0].valueWidth).toBeUndefined();
+    expect(fieldRowList[1].valueWidth).toBeUndefined();
   });
 });
 

@@ -8,16 +8,21 @@ import { formatClockRange, formatDuration, formatExitCode, statusColor, statusIc
 /**
  * Run-details metadata block (design doc §11.2).
  *
- * The header used to be a flat `label: value` dump spread over two rows; it now
- * renders as one indented, gap-separated block:
+ * The block is a borderless TABLE inside the rounded box owned by RunDetails:
  *
- *   identity   run name (bold) + run id (dim)
- *   execution  agent · tier · pid
- *   outcome    status · exit · duration
- *   timing     started → finished
+ *   identity    bold name + dim run id (title row above the grid)
+ *   execution   agent   t1   1606355
+ *   outcome     ✓ done  0    3m 05s
+ *   timing      10:00 AM → 10:01 AM
  *
- * All label formatting lives in the exported pure helpers below so it can be
- * unit-tested without a renderer.
+ * Every key/value row pads its values to a fixed column width so the cell
+ * boundaries line up across rows. The "timing" row overrides the value width
+ * because `formatClockRange` is longer than the shared column. The identity row
+ * is not part of the column grid — it sits above with its own margin so the
+ * title and the table below read as visually separate.
+ *
+ * Pure helpers (label width, padding, value colour) live in the exported
+ * surface below so the row model stays unit-testable without a renderer.
  */
 
 /** Same colour family as the rest of tui2: dim labels, brighter values. */
@@ -26,6 +31,14 @@ export const META_VALUE = '#c9d1d9';
 export const META_NAME = '#e6edf3';
 export const META_HINT = '#6e7681';
 export const META_OK = '#3fb950';
+
+/** Shared value-column width for multi-field rows (agent/tier/pid, status/exit/duration). */
+export const META_VALUE_WIDTH = 14;
+/** Wider value-column width for single-field rows that need to fit clock ranges. */
+export const META_VALUE_WIDTH_WIDE = 32;
+
+/** Spacing between rows inside the metadata grid. */
+const META_ROW_GAP = 1;
 
 export interface MetaField {
   label: string;
@@ -36,9 +49,9 @@ export interface MetaField {
 /** One metadata line: either the identity headline or an aligned key/value row. */
 export type MetaRow =
   | { kind: 'identity'; name: string; runId: string | null }
-  | { kind: 'fields'; fields: MetaField[] };
+  | { kind: 'fields'; fields: MetaField[]; valueWidth?: number };
 
-/** Longest key label across the key/value rows — the shared value column. */
+/** Longest key label across the key/value rows — the shared label column. */
 export function metaLabelWidth(rows: MetaRow[]): number {
   return rows.reduce(
     (max, row) => (row.kind === 'fields' ? Math.max(max, ...row.fields.map((f) => f.label.length)) : max),
@@ -49,6 +62,15 @@ export function metaLabelWidth(rows: MetaRow[]): number {
 /** Pad a key label so every value starts in the same column. */
 export function padLabel(label: string, width: number): string {
   return label.padEnd(width);
+}
+
+/**
+ * Pad a value string to a fixed column width. Pure — no truncation — so callers
+ * own the bound on what fits in a column (multi-field rows keep within
+ * `META_VALUE_WIDTH`; the timing row opts into `META_VALUE_WIDTH_WIDE`).
+ */
+export function padValue(value: string, width: number = META_VALUE_WIDTH): string {
+  return value.padEnd(width);
 }
 
 /** Green for a clean run, red for a failure, neutral while unknown. */
@@ -86,6 +108,9 @@ export function runMetaRows(session: RunRecord): MetaRow[] {
     },
     {
       kind: 'fields',
+      // `formatClockRange` is wider than the shared value column, so this row
+      // opts into a wider value width to keep the clock readable.
+      valueWidth: META_VALUE_WIDTH_WIDE,
       fields: [
         { label: 'started', value: formatClockRange(session.startedAt, session.finishedAt) },
       ],
@@ -99,7 +124,7 @@ export interface RunMetaProps {
 }
 
 /** One metadata line: the bold identity headline or an aligned key/value row. */
-function MetaRowView(props: { row: MetaRow; width: number }): JSX.Element {
+function MetaRowView(props: { row: MetaRow; labelWidth: number }): JSX.Element {
   if (props.row.kind === 'identity') {
     return (
       <box flexDirection="row" gap={2}>
@@ -113,13 +138,16 @@ function MetaRowView(props: { row: MetaRow; width: number }): JSX.Element {
     );
   }
 
+  const valueWidth = props.row.valueWidth ?? META_VALUE_WIDTH;
+
   return (
     <box flexDirection="row" gap={4}>
       <For each={props.row.fields}>
         {(field) => (
-          <box flexDirection="row" gap={2}>
-            <text fg={META_LABEL} content={padLabel(`${field.label}:`, props.width)} />
-            <text fg={field.color ?? META_VALUE} content={field.value} />
+          <box flexDirection="row">
+            <text fg={META_LABEL} content={padLabel(`${field.label}:`, props.labelWidth)} />
+            <text content=" " />
+            <text fg={field.color ?? META_VALUE} content={padValue(field.value, valueWidth)} />
           </box>
         )}
       </For>
@@ -130,19 +158,20 @@ function MetaRowView(props: { row: MetaRow; width: number }): JSX.Element {
 /**
  * Padded, aligned metadata block for the run-details panel.
  *
- * The component itself renders the rows without any padding — the surrounding
- * bordered container in `RunDetails` provides padding, border and the gap
- * below the block. Keeping the layout here purely structural makes the row
- * model easy to unit-test and lets the panel own all visual chrome.
+ * Identity row sits above the table; grid rows below share the same label
+ * column and a fixed-width value column so every label starts at the same x.
+ * The surrounding bordered container in `RunDetails` provides padding, border
+ * and the gap below the block — keeping the layout here purely structural
+ * makes the row model easy to unit-test and lets the panel own all visual
+ * chrome.
  */
 export function RunMeta(props: RunMetaProps): JSX.Element {
   const rows = createMemo(() => runMetaRows(props.session));
-  const width = createMemo(() => metaLabelWidth(rows()) + 1);
+  const labelWidth = createMemo(() => metaLabelWidth(rows()) + 1);
 
   return (
-    <box flexDirection="column" gap={1}>
-      <For each={rows()}>{(row) => <MetaRowView row={row} width={width()} />}</For>
+    <box flexDirection="column" gap={META_ROW_GAP}>
+      <For each={rows()}>{(row) => <MetaRowView row={row} labelWidth={labelWidth()} />}</For>
     </box>
   );
 }
-
