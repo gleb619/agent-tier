@@ -11,6 +11,7 @@ import { loadHealth, AgentHealth } from './health';
 export interface StatusReport {
   total: number;
   runs: RunRecord[];
+  state?: StateReport;
 }
 
 export interface SchedulerEntry {
@@ -35,8 +36,8 @@ export interface StateReport {
 
 // --- Data layer: build structured reports ---
 
-export function buildStatusReport(runs: RunRecord[]): StatusReport {
-  return { total: runs.length, runs };
+export function buildStatusReport(runs: RunRecord[], state?: StateReport): StatusReport {
+  return state ? { total: runs.length, runs, state } : { total: runs.length, runs };
 }
 
 export function buildStateReport(stateDir: string): StateReport {
@@ -196,8 +197,8 @@ export function formatStatusTable(runs: RunRecord[]): string {
   return headerSection + [header, divider, ...lines].join('\n');
 }
 
-export function formatStatusJson(runs: RunRecord[]): string {
-  return JSON.stringify(buildStatusReport(runs));
+export function formatStatusJson(runs: RunRecord[], state?: StateReport): string {
+  return JSON.stringify(buildStatusReport(runs, state));
 }
 
 export function formatStateReport(stateDir: string): string {
@@ -255,7 +256,7 @@ export async function runStatus(stateDir: string, opts?: { json?: boolean }): Pr
   const runs = await refreshRuns(stateDir);
 
   if (opts?.json) {
-    process.stdout.write(formatStatusJson(runs) + '\n');
+    process.stdout.write(formatStatusJson(runs, buildStateReport(stateDir)) + '\n');
     return;
   }
 

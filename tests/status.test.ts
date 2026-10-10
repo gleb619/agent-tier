@@ -108,6 +108,15 @@ describe('formatStatusJson', () => {
     const result = JSON.parse(formatStatusJson([baseRun]));
     expect(result.runs[0].logFile).toBe('/tmp/at-logs/at-test-opencode.log');
   });
+
+  it('includes state when provided, omits it otherwise (text/JSON parity)', () => {
+    const state = { scheduler: [], maxEntries: undefined, agents: [] };
+    const withState = JSON.parse(formatStatusJson([baseRun], state));
+    expect(withState.state).toEqual(state);
+    expect(withState.total).toBe(1);
+    const withoutState = JSON.parse(formatStatusJson([baseRun]));
+    expect('state' in withoutState).toBe(false);
+  });
 });
 
 // --- State report with agent health ---
