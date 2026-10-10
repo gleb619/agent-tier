@@ -77,7 +77,7 @@ export function registerStatusCommand(program: Command): void {
           // root, so commander populates it as a global option rather than
           // on this subcommand's `opts`. Use optsWithGlobals so `--json`
           // is honoured regardless of registration order.
-          const json = (cmd.optsWithGlobals().json as boolean | undefined) ?? false;
+          const json = (opts.json as boolean | undefined) || ((cmd.optsWithGlobals().json as boolean | undefined) ?? false);
           runStatus(stateDir, { json });
         }
       } catch (err) {
