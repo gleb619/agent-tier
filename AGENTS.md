@@ -70,7 +70,7 @@ git worktree prune
 | SSE live progress | `--sse` hub: `/events`, `/emit`, replay + live; standalone `at serve` | `src/notify/hub.ts`, `src/commands/serve.ts` |
 | Notify adapters | Per-agent output → structured events; log tail fallback | `src/notify/index.ts`, `src/notify/adapters/*`, `src/notify/tailer.ts` |
 | Discuss channel | Blocking agent↔host ask/answer/note over SSE or JSONL | `src/commands/discuss.ts`, `src/notify/discuss-store.ts` |
-| Output chop | Compress stream-mode logs via external `chop` (`--no-chop`) | `src/chop.ts` |
+| Output chop | Stream log filtering + `ChopLogger` buffered batch compression via external `chop` (isolated install `~/.at/chop`, `AT_CHOP_DIR`, raw fallback) | `src/chop.ts` |
 | Feedback store | `feedback.jsonl` CRUD with file locking + autoclean | `src/feedback-store.ts`, `src/commands/feedback.ts` |
 | Session namer | LLM-generated run names via ollama / openrouter (`~/.at/namer.json`, `think: false`); detached runs are named by the supervisor | `src/namer/`, `src/naming.ts`, `docs/namer.ignore.md` |
 | Init wrappers | Create wrapper scripts for built-in agents (`at init`) | `src/init/index.ts`, `src/commands/init.ts` |

@@ -1,6 +1,8 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
 import path from 'path';
 import os from 'os';
+import { spawn, spawnSync } from 'child_process';
+import { randomUUID } from 'crypto';
 
 export interface FilterConfig {
   drop?: string[];
@@ -311,4 +313,231 @@ export function chopLines(logContent: string, opts: ChopOptions = {}): string {
   }
 
   return outLines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Buffered compression via the external `chop` CLI (https://github.com/AgusRdz/chop)
+// ---------------------------------------------------------------------------
+
+/** Official installer script for the `chop` binary. */
+export const CHOP_INSTALL_SCRIPT_URL = 'https://raw.githubusercontent.com/AgusRdz/chop/main/install.sh';
+
+/** Env var that overrides the isolated `chop` install directory. */
+export const CHOP_INSTALL_DIR_ENV = 'AT_CHOP_DIR';
+
+const CHOP_DEFAULT_TIMEOUT_MS = 30_000;
+
+function warnChop(message: string): void {
+  process.stderr.write(`[at] chop: ${message}\n`);
+}
+
+function firstLine(text: string): string {
+  const line = text.trim().split('\n')[0];
+  return line ? `: ${line}` : '';
+}
+
+function withTrailingNewline(text: string): string {
+  return text.endsWith('\n') ? text : `${text}\n`;
+}
+
+/** Isolated install dir for the `chop` binary (`~/.at/chop` unless overridden). */
+export function resolveChopInstallDir(): string {
+  const envDir = process.env[CHOP_INSTALL_DIR_ENV];
+  if (envDir) return envDir;
+  return path.join(os.homedir(), '.at', 'chop');
+}
+
+/** Returns `'chop'` when a usable binary sits on PATH, else `null`. Result is not cached. */
+export function findChopOnPath(): string | null {
+  try {
+    const res = spawnSync('chop', ['version'], { stdio: 'ignore' });
+    return res.error ? null : 'chop';
+  } catch {
+    return null;
+  }
+}
+
+export interface ChopLoggerOptions {
+  /** Where the isolated `chop` binary lives (default: `AT_CHOP_DIR` or `~/.at/chop`). */
+  installDir?: string;
+  /** Timeout for installer / `chop cat` runs (default: 30s). */
+  timeoutMs?: number;
+}
+
+/**
+ * Buffers log lines and compresses them in one batch through the external
+ * `chop` CLI. The binary is kept in an isolated directory (`~/.at/chop`) so the
+ * user's global environment is untouched; when it is missing or fails the raw
+ * output is printed verbatim — the CLI never breaks because of chop.
+ */
+export class ChopLogger {
+  private buffer: string[] = [];
+  private readonly installDir: string;
+  private readonly chopBinPath: string;
+  private readonly timeoutMs: number;
+  private pathChop: string | null | undefined;
+  private installAttempted = false;
+  private installOk = false;
+
+  constructor(opts: string | ChopLoggerOptions = {}) {
+    const o: ChopLoggerOptions = typeof opts === 'string' ? { installDir: opts } : opts;
+    this.installDir = o.installDir ?? resolveChopInstallDir();
+    this.chopBinPath = path.join(this.installDir, 'chop');
+    this.timeoutMs = o.timeoutMs ?? CHOP_DEFAULT_TIMEOUT_MS;
+  }
+
+  /** Absolute path of the isolated `chop` binary. */
+  get binaryPath(): string {
+    return this.chopBinPath;
+  }
+
+  /** Buffered lines waiting for the next flush. */
+  get pending(): number {
+    return this.buffer.length;
+  }
+
+  /** Buffer a line. Nothing is printed until `flush()`. */
+  log(line: string): void {
+    this.buffer.push(line);
+  }
+
+  /** Drop buffered lines without printing them. */
+  clear(): void {
+    this.buffer = [];
+  }
+
+  /** Isolated binary first, then whatever `chop` is on PATH. `null` when neither exists. */
+  resolveBinary(): string | null {
+    if (existsSync(this.chopBinPath)) return this.chopBinPath;
+    if (this.pathChop === undefined) this.pathChop = findChopOnPath();
+    return this.pathChop;
+  }
+
+  /**
+   * Make sure a `chop` binary is usable: no-op when the isolated install or a
+   * PATH copy already exists, otherwise install it into the isolated dir.
+   * Never throws — returns whether compression will be attempted by `flush()`.
+   */
+  async ensureInstalled(): Promise<boolean> {
+    if (this.installAttempted) return this.installOk;
+    this.installAttempted = true;
+    if (this.resolveBinary() !== null) {
+      this.installOk = true;
+      return true;
+    }
+    this.installOk = await this.installChop();
+    return this.installOk;
+  }
+
+  /** Compress the buffer through `chop cat` and print it. Falls back to raw output on any failure. */
+  async flush(): Promise<void> {
+    if (this.buffer.length === 0) return;
+    const rawOutput = this.buffer.join('\n');
+    this.buffer = [];
+
+    const bin = this.resolveBinary();
+    if (!bin) {
+      process.stdout.write(withTrailingNewline(rawOutput));
+      return;
+    }
+
+    const tempFile = path.join(os.tmpdir(), `agent-tier-chop-${randomUUID()}.log`);
+    let compressed: string | null = null;
+    try {
+      writeFileSync(tempFile, rawOutput, { mode: 0o600 });
+      compressed = await this.runChop(bin, tempFile);
+    } catch (err) {
+      warnChop(`compression failed: ${(err as Error).message}`);
+    } finally {
+      try {
+        unlinkSync(tempFile);
+      } catch {
+        // temp file already gone
+      }
+    }
+
+    if (compressed === null) {
+      warnChop('compression failed, falling back to raw output');
+      process.stdout.write(withTrailingNewline(rawOutput));
+      return;
+    }
+    process.stdout.write(withTrailingNewline(compressed));
+  }
+
+  private async installChop(): Promise<boolean> {
+    try {
+      mkdirSync(this.installDir, { recursive: true, mode: 0o755 });
+    } catch (err) {
+      warnChop(`cannot create ${this.installDir}: ${(err as Error).message}`);
+      return false;
+    }
+
+    const command = `curl -fsSL ${CHOP_INSTALL_SCRIPT_URL} | CHOP_INSTALL_DIR="${this.installDir}" sh`;
+    return new Promise<boolean>((resolve) => {
+      const child = spawn('sh', ['-c', command], { stdio: ['ignore', 'ignore', 'pipe'] });
+      let stderr = '';
+      child.stderr?.on('data', (d) => {
+        stderr += d.toString();
+      });
+      const timer = setTimeout(() => {
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // already dead
+        }
+      }, this.timeoutMs);
+
+      child.on('error', (err) => {
+        clearTimeout(timer);
+        warnChop(`install spawn failed: ${err.message}`);
+        resolve(false);
+      });
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        const installed = code === 0 && existsSync(this.chopBinPath);
+        if (!installed) warnChop(`install failed (exit ${code})${firstLine(stderr)}`);
+        resolve(installed);
+      });
+    });
+  }
+
+  private runChop(bin: string, tempFile: string): Promise<string | null> {
+    return new Promise<string | null>((resolve) => {
+      const child = spawn(bin, ['cat', tempFile], { stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '';
+      let stderr = '';
+      child.stdout?.on('data', (d) => {
+        stdout += d.toString();
+      });
+      child.stderr?.on('data', (d) => {
+        stderr += d.toString();
+      });
+      const timer = setTimeout(() => {
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // already dead
+        }
+      }, this.timeoutMs);
+
+      const done = (result: string | null) => {
+        clearTimeout(timer);
+        resolve(result);
+      };
+
+      child.on('error', (err) => {
+        warnChop(`spawn failed: ${err.message}`);
+        done(null);
+      });
+      child.on('close', (code) => {
+        if (code === 0 && stdout.trim().length > 0) {
+          done(stdout);
+          return;
+        }
+        const reason = code === 0 ? 'cat produced no output' : `cat exited ${code}`;
+        warnChop(`${reason}${firstLine(stderr)}`);
+        done(null);
+      });
+    });
+  }
 }
