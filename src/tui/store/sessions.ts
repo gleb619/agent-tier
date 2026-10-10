@@ -2,7 +2,7 @@ import { createSignal, createMemo, Accessor } from 'solid-js';
 import { spawn } from 'child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { RunRecord } from '../../run-store';
-import { loadRuns, pruneRuns, detectStuck } from '../../run-store';
+import { refreshRuns } from '../../run-store';
 import { resolveStateDir, getStateFilePath } from '../../state-dir';
 
 const stateDir = resolveStateDir();
@@ -38,19 +38,20 @@ export const filteredSessions: Accessor<RunRecord[]> = createMemo(() => {
 });
 
 export function refreshSessions(): void {
-  pruneRuns(stateDir);
-  const runs = loadRuns(stateDir);
-  const updated = detectStuck(runs);
-  setSessions(updated);
+  // Atomic prune+detect under the runs-file lock; the old fire-and-forget
+  // pruneRuns() + loadRuns() pair rendered a snapshot from before the prune.
+  void refreshRuns(stateDir).then((updated) => {
+    setSessions(updated);
 
-  const currentId = selectedRunId();
-  if (!currentId || !updated.find((s) => s.runId === currentId)) {
-    if (updated.length > 0) {
-      setSelectedRunId(updated[0].runId);
-    } else {
-      setSelectedRunId(null);
+    const currentId = selectedRunId();
+    if (!currentId || !updated.find((s) => s.runId === currentId)) {
+      if (updated.length > 0) {
+        setSelectedRunId(updated[0].runId);
+      } else {
+        setSelectedRunId(null);
+      }
     }
-  }
+  });
 }
 
 export function killSession(runId: string): void {

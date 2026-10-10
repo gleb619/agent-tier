@@ -78,22 +78,68 @@ describe('runStatus + formatInitResults', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('runStatus: writes "no runs found" when runs.jsonl empty', () => {
+  it('runStatus: writes "no runs found" when runs.jsonl empty', async () => {
     fs.writeFileSync(getRunsFile(tmpDir), '', 'utf8');
     let output = '';
     const orig = console.log;
     console.log = (...a: unknown[]) => { output += a.join(' ') + '\n'; };
-    try { runStatus(tmpDir); } finally { console.log = orig; }
+    try { await runStatus(tmpDir); } finally { console.log = orig; }
     expect(output).toContain('no runs found');
   });
 
-  it('runStatus: outputs JSON when json:true', () => {
+  it('runStatus: outputs JSON when json:true', async () => {
     fs.writeFileSync(getRunsFile(tmpDir), '', 'utf8');
     let output = '';
     const orig = process.stdout.write;
     process.stdout.write = (s) => { output += s; return true; };
-    try { runStatus(tmpDir, { json: true }); } finally { process.stdout.write = orig; }
+    try { await runStatus(tmpDir, { json: true }); } finally { process.stdout.write = orig; }
     expect(JSON.parse(output.trim())).toHaveProperty('runs');
+  });
+
+  it('runStatus: excludes TTL-expired runs from output and prunes file atomically', async () => {
+    const runsFile = getRunsFile(tmpDir);
+    const base = {
+      agent: 'mock',
+      tier: 4,
+      pid: 12345,
+      prompt: 'seeded',
+      logFile: '/tmp/at-logs/seeded.log',
+      exitCode: 0,
+      status: 'done' as const,
+    };
+    const stale = {
+      ...base,
+      runId: 'stale-1',
+      startedAt: new Date(Date.now() - 25 * 3600 * 1000).toISOString(),
+      finishedAt: new Date(Date.now() - 25 * 3600 * 1000).toISOString(),
+      name: 'stale',
+    };
+    const fresh = {
+      ...base,
+      runId: 'fresh-1',
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      name: 'fresh',
+    };
+    fs.writeFileSync(runsFile, JSON.stringify(stale) + '\n' + JSON.stringify(fresh) + '\n', 'utf8');
+
+    let output = '';
+    const orig = process.stdout.write;
+    process.stdout.write = (s) => { output += s; return true; };
+    try { await runStatus(tmpDir, { json: true }); } finally { process.stdout.write = orig; }
+
+    // Output must reflect the prune: expired run gone.
+    const parsed = JSON.parse(output.trim()) as { total: number; runs: Array<{ runId: string }> };
+    expect(parsed.total).toBe(1);
+    expect(parsed.runs[0].runId).toBe('fresh-1');
+
+    // File must match what was printed — one atomic locked write, no race.
+    const onDisk = fs
+      .readFileSync(runsFile, 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => (JSON.parse(l) as { runId: string }).runId);
+    expect(onDisk).toEqual(['fresh-1']);
   });
 
   it('formatInitResults: CREATED / SKIP / WOULD CREATE', () => {

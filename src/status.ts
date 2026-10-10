@@ -1,4 +1,4 @@
-import { RunRecord, loadRuns, pruneRuns, detectStuck, saveRuns } from './run-store';
+import { RunRecord, refreshRuns } from './run-store';
 import { loadStateFile } from './scheduler';
 import { getStateFilePath } from './state-dir';
 import { AGENTS, getAgentsByTier } from './agents/registry';
@@ -248,13 +248,11 @@ export function formatCombinedReport(stateDir: string, runs: RunRecord[]): strin
   return formatStatusTable(runs) + '\n\n' + formatStateReport(stateDir);
 }
 
-export function runStatus(stateDir: string, opts?: { json?: boolean }): void {
-  pruneRuns(stateDir);
-
-  let runs = loadRuns(stateDir);
-  runs = detectStuck(runs);
-
-  saveRuns(stateDir, runs);
+export async function runStatus(stateDir: string, opts?: { json?: boolean }): Promise<void> {
+  // Single locked read→prune→detect→write: output matches disk, no race with
+  // concurrent addRun/updateRun (the old code fired pruneRuns() without
+  // awaiting it, then persisted an unpruned snapshot via unlocked saveRuns).
+  const runs = await refreshRuns(stateDir);
 
   if (opts?.json) {
     process.stdout.write(formatStatusJson(runs) + '\n');

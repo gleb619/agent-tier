@@ -110,6 +110,17 @@ export async function updateRun(stateDir: string, runId: string, updates: Partia
   });
 }
 
+/** TTL/max cutoff filter + newest-first ordering. Pure: no I/O. */
+function pruneList(runs: RunRecord[], ttlMs: number, maxRuns: number): RunRecord[] {
+  const cutoff = Date.now() - ttlMs;
+  const filtered = runs.filter((r) => {
+    const end = r.finishedAt ? new Date(r.finishedAt).getTime() : new Date(r.startedAt).getTime();
+    return end >= cutoff;
+  });
+  filtered.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  return filtered.slice(0, maxRuns);
+}
+
 export async function pruneRuns(
   stateDir: string,
   ttlMs: number = getTtl(),
@@ -118,16 +129,31 @@ export async function pruneRuns(
   const runsFile = getRunsFile(stateDir);
   return withLock(runsFile, () => {
     const runs = readJsonl(runsFile);
-    const cutoff = Date.now() - ttlMs;
-    const filtered = runs.filter((r) => {
-      const end = r.finishedAt ? new Date(r.finishedAt).getTime() : new Date(r.startedAt).getTime();
-      return end >= cutoff;
-    });
-    filtered.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-    const pruned = filtered.slice(0, maxRuns);
+    const pruned = pruneList(runs, ttlMs, maxRuns);
     if (pruned.length !== runs.length) {
       writeJsonl(runsFile, pruned);
     }
+  });
+}
+
+/**
+ * One atomic status refresh: prune expired runs (TTL + maxEntries), annotate
+ * dead/stuck processes, and persist — all under the runs-file lock. The
+ * returned snapshot is guaranteed to match what lands on disk, so callers can
+ * print it directly without a follow-up unlocked `saveRuns` racing
+ * `addRun`/`updateRun` or a fire-and-forget `pruneRuns`.
+ */
+export async function refreshRuns(
+  stateDir: string,
+  ttlMs: number = getTtl(),
+  maxRuns: number = getMaxRuns(stateDir),
+): Promise<RunRecord[]> {
+  const runsFile = getRunsFile(stateDir);
+  return withLock(runsFile, () => {
+    const pruned = pruneList(readJsonl(runsFile), ttlMs, maxRuns);
+    const annotated = detectStuck(pruned);
+    writeJsonl(runsFile, annotated);
+    return annotated;
   });
 }
 
