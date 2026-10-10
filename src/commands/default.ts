@@ -55,7 +55,7 @@ export function registerDefaultCommand(program: Command): void {
     )
     .option(
       '--json',
-      'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0}',
+      'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0,"globalPrompt":"..."}. Supports globalPrompt field and --global-prompt flag.',
       false,
     )
     .action(async (opts) => {
@@ -78,7 +78,17 @@ export function registerDefaultCommand(program: Command): void {
           }
           const mergedJson = mergeJsonDefaults(stdinJson, config?.jsonDefaults);
           const parsed = parseJsonInput(JSON.stringify(mergedJson));
-          const finalPrompt = (parsed.prompt || parsed.promptFileContent || filePrompt || opts.prompt || '').trim();
+          
+          // Determine effective globalPrompt based on precedence: CLI > JSON > config
+          const cliGlobalPrompt = (opts.globalPrompt as string | undefined)?.trim();
+          const jsonGlobalPrompt = parsed.globalPrompt;
+          const configGlobalPrompt = config?.globalPrompt;
+          const effectiveGlobalPrompt = cliGlobalPrompt || jsonGlobalPrompt || configGlobalPrompt;
+          
+          // Build final prompt with globalPrompt prepended (if any)
+          const basePrompt = (parsed.prompt || parsed.promptFileContent || filePrompt || opts.prompt || '').trim();
+          const finalPrompt = effectiveGlobalPrompt ? (effectiveGlobalPrompt + '\n\n' + basePrompt).trim() : basePrompt;
+          
           runOptions = resolveFromArgs({
             agent: parsed.agent,
             tier: opts.tier,
@@ -99,10 +109,18 @@ export function registerDefaultCommand(program: Command): void {
             ssePort: parsed.ssePort,
             normka: parsed.normka ?? (opts.normka as boolean | undefined),
             sandbox: opts.sandbox as boolean,
+            globalPrompt: effectiveGlobalPrompt,
           });
-        } else {
-          const stdinData = !opts.prompt && !opts.promptFile && !process.stdin.isTTY ? await readStdin() : '';
-          const finalPrompt = (stdinData || filePrompt || (opts.prompt as string | undefined) || '').trim();
+         } else {
+           // For non-JSON mode: precedence CLI > config
+           const cliGlobalPrompt = (opts.globalPrompt as string | undefined)?.trim();
+           const configGlobalPrompt = config?.globalPrompt;
+           const effectiveGlobalPrompt = cliGlobalPrompt || configGlobalPrompt;
+           
+           const stdinData = !opts.prompt && !opts.promptFile && !process.stdin.isTTY ? await readStdin() : '';
+           const basePrompt = (stdinData || filePrompt || (opts.prompt as string | undefined) || '').trim();
+           const finalPrompt = effectiveGlobalPrompt ? (effectiveGlobalPrompt + '\n\n' + basePrompt).trim() : basePrompt;
+          
           runOptions = resolveFromArgs({
             agent: opts.agent,
             tier: opts.tier,
@@ -120,6 +138,7 @@ export function registerDefaultCommand(program: Command): void {
             sse: opts.sse,
             normka: opts.normka as boolean,
             sandbox: opts.sandbox as boolean,
+            globalPrompt: effectiveGlobalPrompt,
           });
         }
 

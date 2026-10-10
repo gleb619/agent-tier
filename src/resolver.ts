@@ -43,6 +43,7 @@ export interface RunOptions {
   verify?: string;
   normka?: boolean;
   sandbox?: boolean;
+  globalPrompt?: string;
 }
 
 interface ArgvOptions {
@@ -61,10 +62,11 @@ interface ArgvOptions {
   timeout?: string | number;
   callback?: string;
   sse?: boolean | string;
-  ssePort?: string | number;
-  verify?: string;
-  normka?: boolean;
-  sandbox?: boolean;
+    ssePort?: string | number;
+    verify?: string;
+    normka?: boolean;
+    sandbox?: boolean;
+    globalPrompt?: string;
 }
 
 export interface ParsedJson {
@@ -157,6 +159,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     verify: argv.verify?.trim() || undefined,
     normka: argv.normka === true,
     sandbox: argv.sandbox === true ? true : undefined,
+    globalPrompt: argv.globalPrompt?.trim() || undefined,
   };
 }
 
@@ -240,5 +243,6 @@ export function parseJsonInput(raw: string): ParsedJson {
     promptFileContent,
     normka: parsed.normka === true,
     sandbox: parsed.sandbox === true ? true : undefined,
+    globalPrompt: (parsed.globalPrompt as string | undefined)?.trim() || undefined,
   };
 }
