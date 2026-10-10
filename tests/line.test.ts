@@ -55,6 +55,16 @@ describe('getLineAgents', () => {
     warnSpy.mockRestore();
   });
 
+  it('quiet suppresses unknown-agent warn', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const agents = [makeAgent('a', 2), makeAgent('b', 3)];
+    const config: AtConfig = { line: ['a', 'nope', 'b'] };
+    const result = getLineAgents(agents, config, { quiet: true });
+    expect(result.map((ag) => ag.name)).toEqual(['a', 'b']);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
   it('deduplicates config.line entries (keeps first occurrence)', () => {
     const agents = [makeAgent('a', 1), makeAgent('b', 2), makeAgent('c', 3)];
     const config: AtConfig = { line: ['a', 'b', 'a', 'c', 'b'] };

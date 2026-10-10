@@ -52,7 +52,7 @@ export function signConfig(): void {
   console.log(`[at] config signed: ${HMAC_FILE}`);
 }
 
-export function loadConfig(): AtConfig | null {
+export function loadConfig(opts?: { quiet?: boolean }): AtConfig | null {
   let data: string;
   try {
     data = readFileSync(CONFIG_FILE, 'utf8');
@@ -64,23 +64,24 @@ export function loadConfig(): AtConfig | null {
   try {
     storedHmac = readFileSync(HMAC_FILE, 'utf8').trim();
   } catch {
-    console.warn('[at] ~/.at/config.json found but no HMAC — ignoring. Run: at config sign');
+    if (!opts?.quiet)
+      console.warn('[at] ~/.at/config.json found but no HMAC — ignoring. Run: at config sign');
     return null;
   }
 
   if (storedHmac !== computeHmac(data)) {
-    console.error('[at] config HMAC mismatch — config may be tampered. Run: at config sign');
+    if (!opts?.quiet) console.error('[at] config HMAC mismatch — config may be tampered. Run: at config sign');
     return null;
   }
 
   if (!process.env.AT_HMAC_SECRET) {
-    console.warn('[at] warning: AT_HMAC_SECRET not set — config HMAC uses default secret. Set AT_HMAC_SECRET for real integrity protection.');
+    if (!opts?.quiet) console.warn('[at] warning: AT_HMAC_SECRET not set — config HMAC uses default secret. Set AT_HMAC_SECRET for real integrity protection.');
   }
 
   try {
     return JSON.parse(data) as AtConfig;
   } catch {
-    console.error('[at] ~/.at/config.json is not valid JSON');
+    if (!opts?.quiet) console.error('[at] ~/.at/config.json is not valid JSON');
     return null;
   }
 }
@@ -102,7 +103,7 @@ export function applyTierOverrides(agents: AgentDef[], config: AtConfig | null):
  *
  * Empty result (all names unknown / only mocks) throws.
  */
-export function getLineAgents(agents: AgentDef[], config: AtConfig | null): AgentDef[] {
+export function getLineAgents(agents: AgentDef[], config: AtConfig | null, opts?: { quiet?: boolean }): AgentDef[] {
   const byName = new Map(agents.map((a) => [a.name, a]));
 
   if (config?.line) {
@@ -112,7 +113,7 @@ export function getLineAgents(agents: AgentDef[], config: AtConfig | null): Agen
       if (seen.has(name)) continue;
       const a = byName.get(name);
       if (!a) {
-        console.warn(`[at] line: unknown agent "${name}" skipped`);
+        if (!opts?.quiet) console.warn(`[at] line: unknown agent "${name}" skipped`);
         continue;
       }
       seen.add(name);

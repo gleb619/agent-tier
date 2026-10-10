@@ -89,7 +89,7 @@ function DashboardView(props: DashboardProps): JSX.Element {
         <text content="" />
         <text
           fg="#8b949e"
-          content={props.stateReport.maxEntries !== undefined
+          content={props.stateReport.maxEntries != null
             ? `  Config: max runs: ${props.stateReport.maxEntries}`
             : '  Config: (none)'}
         />

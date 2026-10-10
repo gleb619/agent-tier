@@ -17,20 +17,20 @@ export interface StatusReport {
 export interface SchedulerEntry {
   key: string;
   index: number;
-  agentName: string | undefined;
+  agentName: string | null;
 }
 
 export interface AgentHealthEntry {
   name: string;
   deactivated: boolean;
   failures: number;
-  lastFailure: string | undefined;
-  disabledTo: string | undefined;
+  lastFailure: string | null;
+  disabledTo: string | null;
 }
 
 export interface StateReport {
   scheduler: SchedulerEntry[];
-  maxEntries: number | undefined;
+  maxEntries: number | null;
   agents: AgentHealthEntry[];
 }
 
@@ -40,26 +40,26 @@ export function buildStatusReport(runs: RunRecord[], state?: StateReport): Statu
   return state ? { total: runs.length, runs, state } : { total: runs.length, runs };
 }
 
-export function buildStateReport(stateDir: string): StateReport {
+export function buildStateReport(stateDir: string, opts?: { quiet?: boolean }): StateReport {
   const stateFilePath = getStateFilePath(stateDir);
   const state = loadStateFile(stateFilePath);
   const scheduler: SchedulerEntry[] = [];
 
   if (state.scheduler && Object.keys(state.scheduler).length > 0) {
     const allAgents = [...AGENTS, ...loadGenericAgents()];
-    const config = loadConfig();
-    const lineAgents = getLineAgents(allAgents, config);
+    const config = loadConfig(opts);
+    const lineAgents = getLineAgents(allAgents, config, opts);
     for (const [key, sched] of Object.entries(state.scheduler)) {
-      let agentName: string | undefined;
+      let agentName: string | null = null;
       if (key === 'line') {
-        agentName = lineAgents[sched.index]?.name;
+        agentName = lineAgents[sched.index]?.name ?? null;
       } else {
         const tierMatch = key.match(/^tier-([1-4])$/) || key.match(/^([1-4])$/);
         if (tierMatch) {
           const tier = Number(tierMatch[1]) as 1 | 2 | 3 | 4;
-          agentName = getAgentsByTier(tier)[sched.index]?.name;
+          agentName = getAgentsByTier(tier)[sched.index]?.name ?? null;
         } else {
-          agentName = AGENTS[sched.index]?.name;
+          agentName = AGENTS[sched.index]?.name ?? null;
         }
       }
       scheduler.push({ key, index: sched.index, agentName });
@@ -71,7 +71,7 @@ export function buildStateReport(stateDir: string): StateReport {
     ([name, h]) => buildAgentHealthEntry(name, h),
   );
 
-  return { scheduler, maxEntries: state.runs?.maxEntries, agents };
+  return { scheduler, maxEntries: state.runs?.maxEntries ?? null, agents };
 }
 
 function formatIsoRelative(iso: string): string {
@@ -94,13 +94,13 @@ function formatIsoRelative(iso: string): string {
 
 function buildAgentHealthEntry(name: string, h: AgentHealth): AgentHealthEntry {
   const sorted = [...h.failureTimes].sort();
-  const lastFailure = sorted.length > 0 ? sorted[sorted.length - 1] : undefined;
+  const lastFailure = sorted.length > 0 ? sorted[sorted.length - 1] ?? null : null;
   return {
     name,
     deactivated: h.deactivated === true,
     failures: h.failureTimes.length,
     lastFailure,
-    disabledTo: h.disabledTo ?? undefined,
+    disabledTo: h.disabledTo ?? null,
   };
 }
 
@@ -223,7 +223,7 @@ export function formatStateReport(stateDir: string): string {
 
   lines.push('');
   lines.push('**Config:**');
-  if (report.maxEntries !== undefined) {
+  if (report.maxEntries != null) {
     lines.push(`- max runs: ${report.maxEntries}`);
   } else {
     lines.push('- (none)');
@@ -256,7 +256,7 @@ export async function runStatus(stateDir: string, opts?: { json?: boolean }): Pr
   const runs = await refreshRuns(stateDir);
 
   if (opts?.json) {
-    process.stdout.write(formatStatusJson(runs, buildStateReport(stateDir)) + '\n');
+    process.stdout.write(formatStatusJson(runs, buildStateReport(stateDir, { quiet: true })) + '\n');
     return;
   }
 

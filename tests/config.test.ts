@@ -81,6 +81,44 @@ describe('loadConfig', () => {
     expect(console.error).not.toHaveBeenCalled();
     delete process.env.AT_HMAC_SECRET;
   });
+
+  it('quiet suppresses warn when HMAC file is missing', () => {
+    const configData = JSON.stringify({ tierOverrides: { pi: 2 } });
+    mockReadFileSync.mockImplementation((p) => {
+      if (p === CONFIG_FILE) return configData;
+      if (p === HMAC_FILE) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      throw new Error('unexpected');
+    });
+    expect(loadConfig({ quiet: true })).toBeNull();
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it('quiet suppresses error when HMAC does not match', () => {
+    const configData = JSON.stringify({ tierOverrides: { pi: 2 } });
+    mockReadFileSync.mockImplementation((p) => {
+      if (p === CONFIG_FILE) return configData;
+      if (p === HMAC_FILE) return 'deadbeef';
+      throw new Error('unexpected');
+    });
+    expect(loadConfig({ quiet: true })).toBeNull();
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it('quiet suppresses default-secret warn on valid config', () => {
+    delete process.env.AT_HMAC_SECRET;
+    const configData = JSON.stringify({ line: ['mock'] });
+    const hmac = computeHmac(configData);
+    mockReadFileSync.mockImplementation((p) => {
+      if (p === CONFIG_FILE) return configData;
+      if (p === HMAC_FILE) return hmac;
+      throw new Error('unexpected');
+    });
+    expect(loadConfig({ quiet: true })).toEqual({ line: ['mock'] });
+    expect(console.warn).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+  });
 });
 
 describe('applyTierOverrides', () => {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { formatStatusTable, formatStatusJson, formatStateReport, buildStateReport, AgentHealthEntry } from '../src/status';
+import * as configModule from '../src/config';
 import { RunRecord } from '../src/run-store';
 import { writeFileSync, mkdirSync, rmSync } from 'fs';
 import path from 'path';
@@ -110,12 +111,26 @@ describe('formatStatusJson', () => {
   });
 
   it('includes state when provided, omits it otherwise (text/JSON parity)', () => {
-    const state = { scheduler: [], maxEntries: undefined, agents: [] };
+    const state = { scheduler: [], maxEntries: null, agents: [] };
     const withState = JSON.parse(formatStatusJson([baseRun], state));
     expect(withState.state).toEqual(state);
     expect(withState.total).toBe(1);
     const withoutState = JSON.parse(formatStatusJson([baseRun]));
     expect('state' in withoutState).toBe(false);
+  });
+
+  it('round-trips null-typed optional fields losslessly', () => {
+    const state = {
+      scheduler: [{ key: 'tier-2', index: 99, agentName: null }],
+      maxEntries: null,
+      agents: [{ name: 'qwen', deactivated: false, failures: 0, lastFailure: null, disabledTo: null }],
+    };
+    const parsed = JSON.parse(formatStatusJson([baseRun], state));
+    expect(parsed.state).toEqual(state);
+    expect('agentName' in parsed.state.scheduler[0]).toBe(true);
+    expect('lastFailure' in parsed.state.agents[0]).toBe(true);
+    expect('disabledTo' in parsed.state.agents[0]).toBe(true);
+    expect('maxEntries' in parsed.state).toBe(true);
   });
 });
 
@@ -136,6 +151,16 @@ function writeTestStateFile(agentlyHealth: Record<string, unknown>, scheduler?: 
 afterAll(() => {
   rmSync(tmpDir, { recursive: true, force: true });
 });
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+// buildStateReport resolves `line` scheduler keys via loadConfig().
+// Mock it so tests don't depend on the developer's real ~/.at/config.json.
+function mockLineConfig(line: string[]): void {
+  vi.spyOn(configModule, 'loadConfig').mockReturnValue({ line });
+}
 
 describe('buildStateReport', () => {
   it('includes agents array in report', () => {
@@ -199,6 +224,7 @@ describe('buildStateReport', () => {
   });
 
   it('handles line scheduler key (uses line mode agents)', () => {
+    mockLineConfig(['kilo', 'agy', 'mm-code', 'glm-code', 'mock']);
     writeTestStateFile(
       {
         agy: { failureTimes: [], disabledTo: null, deactivated: false },
@@ -216,6 +242,41 @@ describe('buildStateReport', () => {
     expect(report.scheduler[0]?.key).toBe('line');
     expect(report.scheduler[0]?.agentName).toBe('agy');
     expect(report.scheduler[0]?.index).toBe(1);
+  });
+
+  it('emits null (not undefined) for absent optional fields — stable JSON keys', () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      path.join(tmpDir, 'state.json'),
+      JSON.stringify({ scheduler: { 'tier-2': { index: 999 } }, agents: { qwen: { failureTimes: [], disabledTo: null } } }),
+    );
+
+    const report = buildStateReport(tmpDir);
+    expect('maxEntries' in report).toBe(true);
+    expect(report.maxEntries).toBeNull();
+    expect(report.scheduler[0]?.agentName).toBeNull();
+    expect('agentName' in (report.scheduler[0] ?? {})).toBe(true);
+    const qwen = report.agents.find((a) => a.name === 'qwen');
+    expect(qwen?.lastFailure).toBeNull();
+    expect(qwen?.disabledTo).toBeNull();
+    // JSON round-trip is lossless: no keys vanish via undefined-drop
+    expect(JSON.parse(JSON.stringify(report))).toEqual(report);
+  });
+
+  it('quiet mode emits no console.warn/console.error', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(
+      path.join(tmpDir, 'state.json'),
+      JSON.stringify({ scheduler: { 'tier-2': { index: 0 } } }),
+    );
+    delete process.env.AT_HMAC_SECRET;
+    buildStateReport(tmpDir, { quiet: true });
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+    errSpy.mockRestore();
   });
 });
 
@@ -265,6 +326,7 @@ describe('formatStateReport', () => {
   });
 
   it('formats line scheduler key in state report', () => {
+    mockLineConfig(['kilo', 'agy', 'mm-code', 'glm-code', 'mock']);
     writeTestStateFile(
       {
         agy: { failureTimes: [], disabledTo: null, deactivated: false },
