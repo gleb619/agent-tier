@@ -2,9 +2,9 @@
 import { Command } from 'commander';
 import { config } from 'dotenv';
 import { readFileSync } from 'fs';
-import { spawnSync } from 'child_process';
 import path from 'path';
 import { registerCommands } from './commands';
+import { resolveTuiEntry, spawnTui } from './tui-entry';
 
 config();
 
@@ -32,12 +32,9 @@ registerCommands(program);
 program.enablePositionalOptions();
 
 // No-arg invocation → launch interactive TUI via Bun
+// (AT_EXPERIMENTAL_TUI=1 selects the experimental tui2 entry)
 if (process.argv.length === 2 && process.stdin.isTTY) {
-  const tuiEntry = path.join(__dirname, '..', 'src', 'tui', 'index.tsx');
-  const result = spawnSync('bun', ['--preload', '@opentui/solid/preload', tuiEntry], {
-    stdio: 'inherit',
-    timeout: 1800000,
-  });
+  const result = spawnTui(resolveTuiEntry());
   if ((result.error as NodeJS.ErrnoException)?.code === 'ENOENT') {
     console.error('[at] TUI requires Bun (https://bun.sh). Install Bun or use flags to run without TUI.');
     process.exit(1);

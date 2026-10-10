@@ -1,0 +1,103 @@
+import type { RunRecord } from '../run-store';
+
+export function statusIcon(status: RunRecord['status']): string {
+  switch (status) {
+    case 'running':
+      return '●';
+    case 'done':
+      return '✓';
+    case 'failed':
+      return '✗';
+    case 'stuck':
+      return '⚠';
+  }
+}
+
+export function statusColor(status: RunRecord['status']): string {
+  switch (status) {
+    case 'running':
+      return '#3fb950';
+    case 'done':
+      return '#388bfd';
+    case 'failed':
+      return '#f85149';
+    case 'stuck':
+      return '#d29922';
+  }
+}
+
+/** Wall-clock run length in ms; running rounds report as long as they have been alive. */
+export function durationMs(r: RunRecord): number {
+  const start = new Date(r.startedAt).getTime();
+  const end = r.finishedAt ? new Date(r.finishedAt).getTime() : Date.now();
+  return Math.max(0, end - start);
+}
+
+/** "3m 05s" / "42s" — elapsed between startedAt and finishedAt (or now). */
+export function formatDuration(r: RunRecord): string {
+  const diff = Math.floor(durationMs(r) / 1000);
+  const mins = Math.floor(diff / 60);
+  const secs = diff % 60;
+  if (mins > 0) {
+    return `${mins}m ${String(secs).padStart(2, '0')}s`;
+  }
+  return `${secs}s`;
+}
+
+/** Human ms for aggregate stats ("1.2s", "4m 30s", "1h 02m"). */
+export function formatMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ${String(secs % 60).padStart(2, '0')}s`;
+  return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m`;
+}
+
+export function isToday(startedAt: string): boolean {
+  const date = new Date(startedAt);
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  );
+}
+
+/** Compact "1:22:04 PM" clock for header/footer lines. */
+export function formatClock(time: string | null): string {
+  if (!time) return '-';
+  return new Date(time).toLocaleTimeString();
+}
+
+export function truncate(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen - 1) + '…';
+}
+
+/** Log-line tint, same palette as the classic TUI. */
+export function lineColor(line: string): string {
+  if (/\[ERROR\]|\[FAIL\]|error|Error/.test(line)) return '#f85149';
+  if (/\[WARN\]|warn|Warning/.test(line)) return '#d29922';
+  if (/\[INFO\]|info/.test(line)) return '#8b949e';
+  if (/\[DEBUG\]|debug/.test(line)) return '#484f58';
+  if (/✓|success|done|complete/.test(line)) return '#3fb950';
+  return '#c9d1d9';
+}
+
+/** Date bucket ("Today" / "Yesterday" / "12 Mar") for sidebar grouping. */
+export function dateBucket(startedAt: string): string {
+  const date = new Date(startedAt);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const sameDay = (a: Date, b: Date): boolean =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  if (sameDay(date, today)) return 'Today';
+  if (sameDay(date, yesterday)) return 'Yesterday';
+
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${date.getDate()} ${months[date.getMonth()]}`;
+}

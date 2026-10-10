@@ -76,6 +76,7 @@ git worktree prune
 | Init wrappers | Create wrapper scripts for built-in agents (`at init`) | `src/init/index.ts`, `src/commands/init.ts` |
 | MCP server | stdio server: `run_prompt`, `list_agents`, `get_status` tools | `src/mcp/server.ts`, `src/mcp/tools.ts` |
 | TUI | No-arg `at` on TTY → interactive dashboard (opentui/solid, needs Bun) | `src/tui/`, `src/cli.ts` |
+| Experimental TUI v2 | Two-column menu TUI (Dashboard / New Task / Run Details / Settings) chosen by `AT_EXPERIMENTAL_TUI=1`; reuses the classic stores | `src/tui2/`, `src/tui-entry.ts` |
 | Compose | Multi-agent goal pipeline: arch → dev → test → review stages | `src/compose/` |
 | CodeGraph index | Wrap `codegraph` CLI for semantic code graph (`at index`) | `src/commands/codegraph.ts` |
 | Kanban board | Markdown task board mutated only via `at kanban` (AST, not regex): `list`/`next`/`show`/`add`/`status`/`remove`/`clean`/`lint`/`guard`/`init` | `src/kanban/`, `src/commands/kanban.ts`, `docs/kanban.md` |

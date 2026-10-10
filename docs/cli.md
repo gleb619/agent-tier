@@ -200,3 +200,35 @@ In CI, check out with `fetch-depth: 0` and run it on `pull_request` before any b
 Safe under the single-writer assumption of a serial loop; parallel agents need `flock` or one board
 per worktree.
 
+## Experimental TUI v2 (`AT_EXPERIMENTAL_TUI`)
+
+`at` with no arguments on a TTY starts the interactive TUI (requires Bun). The classic single-log
+layout in `src/tui/` is the default and stays that way; `AT_EXPERIMENTAL_TUI=1` opts into the
+experimental rewrite in `src/tui2/` — a menu-driven two-column layout (sidebar + one active view):
+
+```bash
+AT_EXPERIMENTAL_TUI=1 at          # experimental two-column TUI
+at                                # classic TUI (default)
+```
+
+Views: **Dashboard** (run counters, active runs, recent completions, agent health), **New Task**
+(prompt textarea + tier/agent/mode/retries selectors), **Run Details** (session metadata, log
+viewer, submitted-prompt toggle), **Settings** (default tier/agent/mode/retries, auto-refresh).
+
+| Key | Action |
+|-----|--------|
+| `1`–`4` | Dashboard / New Task / Run Details / Settings |
+| `Tab` / `Shift+Tab` | cycle focus between filter, run list, and the active view |
+| `j` / `k`, `↑` / `↓` | next/previous run (run list) or scroll (log pane) |
+| `J` / `K` | next/previous run while the log pane is focused |
+| `Enter` | open the selected run; submit the prompt while editing it |
+| `p` / `Ctrl+P` | toggle the run's original prompt |
+| `Ctrl+T` `Ctrl+A` `Ctrl+O` `Ctrl+N` | cycle tier / agent / mode / retries |
+| `Ctrl+K` / `r` | kill / retry the selected run |
+| `Ctrl+R` | refresh runs and log |
+| `Ctrl+Q` / `q` | quit (`Esc` only leaves a text field) |
+
+tui2 reads the same stores as the classic TUI (`src/tui/store/{sessions,log,settings}.ts`) and
+submits through `src/tui/launch.ts`; the entry switch itself lives in `src/tui-entry.ts`. It is a
+drop-in experiment: run both, compare, and nothing in `src/tui/` changes.
+
