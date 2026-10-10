@@ -2,7 +2,7 @@ import { run, Spawner, defaultSpawner, AgentError } from '../src/runner';
 import { RunOptions } from '../src/resolver';
 import { AgentDef } from '../src/agents/registry';
 import { spawnRunWatch } from '../src/run-watch';
-import { existsSync, readFileSync, readdirSync, unlinkSync, rmdirSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, unlinkSync, rmdirSync, mkdirSync, mkdtempSync, rmSync } from 'fs';
 import path from 'path';
 import * as scheduler from '../src/scheduler';
 import * as health from '../src/health';
@@ -730,6 +730,29 @@ describe('run — line mode (tier undefined)', () => {
     const opts: RunOptions = { ...baseOptions, sandbox: true, retries: 0 };
     delete (opts as { tier?: number }).tier;
     await expect(run(opts, lineAgents, spawner)).rejects.toThrow(/sandbox/);
+  });
+});
+
+describe('launchAgent — run record prompt', () => {
+  it('persists full prompt (no 200-char truncation)', async () => {
+    const { launchAgent, killActiveChildren } = await import('../src/runner');
+    const { loadRuns } = await import('../src/run-store');
+    const stateDir = mkdtempSync(path.join(os.tmpdir(), 'at-launch-prompt-state-'));
+    const logDir = mkdtempSync(path.join(os.tmpdir(), 'at-launch-prompt-logs-'));
+    const longPrompt = 'x'.repeat(300);
+    const agent = makeAgent('prompt-agent');
+    try {
+      const opts: RunOptions = { ...baseOptions, prompt: longPrompt, stateDir, logDir };
+      await launchAgent(agent, opts);
+      const runs = loadRuns(stateDir);
+      expect(runs).toHaveLength(1);
+      expect(runs[0].prompt).toBe(longPrompt);
+      expect(runs[0].prompt).toHaveLength(300);
+    } finally {
+      killActiveChildren();
+      rmSync(stateDir, { recursive: true, force: true });
+      rmSync(logDir, { recursive: true, force: true });
+    }
   });
 });
 

@@ -223,7 +223,7 @@ export async function launchAgent(agent: AgentDef, options: RunOptions, extras?:
     agent: agent.name,
     tier: agent.tier,
     pid: child.pid,
-    prompt: options.prompt.slice(0, 200),
+    prompt: options.prompt,
     logFile,
     startedAt: new Date().toISOString(),
     finishedAt: null,
