@@ -4,7 +4,8 @@ import type { RunRecord } from '../../run-store';
 import { sessions } from '../../tui/store/sessions';
 import { goToTail, isLoading, logLines, scrollOffset, VISIBLE_LINES } from '../../tui/store/log';
 import { setShowPromptOverlay } from '../store/ui';
-import { formatClock, formatDuration, lineColor, statusColor, statusIcon, truncate } from '../format';
+import { lineColor, statusColor, truncate } from '../format';
+import { RunMeta } from './RunMeta';
 
 export interface RunDetailsProps {
   /** Run to render; null when nothing is selected. */
@@ -15,50 +16,10 @@ export interface RunDetailsProps {
   showPrompt: boolean;
 }
 
-export interface MetaField {
-  label: string;
-  value: string;
-  color?: string;
-}
-
-/** run/name/agent/tier/pid on the first row, the rest below. */
-const ROW_LIMIT = 5;
-
-/** Session metadata header, split across two compact rows. Pure. */
-export function metadataFields(session: RunRecord): MetaField[] {
-  return [
-    { label: 'run', value: session.runId },
-    { label: 'name', value: session.name },
-    { label: 'agent', value: session.agent },
-    { label: 'tier', value: `t${session.tier}` },
-    { label: 'pid', value: String(session.pid) },
-    { label: 'status', value: `${statusIcon(session.status)} ${session.status}`, color: statusColor(session.status) },
-    { label: 'code', value: String(session.exitCode ?? '-') },
-    { label: 'duration', value: formatDuration(session) },
-    { label: 'started', value: formatClock(session.startedAt) },
-    { label: 'finished', value: formatClock(session.finishedAt) },
-  ];
-}
-
-export function splitFields(fields: MetaField[]): MetaField[][] {
-  return [fields.slice(0, ROW_LIMIT), fields.slice(ROW_LIMIT)];
-}
-
-function Meta(props: MetaField): JSX.Element {
-  return (
-    <box flexDirection="row" gap={1}>
-      <text fg="#484f58" content={`${props.label}:`} />
-      <text fg={props.color ?? '#c9d1d9'} content={truncate(props.value, 28)} />
-    </box>
-  );
-}
-
 export function RunDetails(props: RunDetailsProps): JSX.Element {
   const session = createMemo(
     (): RunRecord | null => (props.runId ? sessions().find((s) => s.runId === props.runId) ?? null : null),
   );
-
-  const rows = createMemo(() => (session() ? splitFields(metadataFields(session()!)) : []));
 
   const visible = createMemo((): [number, string][] => {
     const from = scrollOffset();
@@ -94,15 +55,7 @@ export function RunDetails(props: RunDetailsProps): JSX.Element {
           />
         }
       >
-        <box flexDirection="column" paddingBottom={1}>
-          <For each={rows()}>
-            {(row) => (
-              <box flexDirection="row" gap={3}>
-                <For each={row}>{(field) => <Meta {...field} />}</For>
-              </box>
-            )}
-          </For>
-        </box>
+        <RunMeta session={session()!} />
 
         <Show when={props.showPrompt}>
           <box

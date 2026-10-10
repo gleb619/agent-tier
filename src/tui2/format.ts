@@ -70,6 +70,17 @@ export function formatClock(time: string | null): string {
   return new Date(time).toLocaleTimeString();
 }
 
+/** Placeholder for an exit code the run never reported. */
+export function formatExitCode(exitCode: number | null): string {
+  return exitCode === null ? '-' : String(exitCode);
+}
+
+/** "10:00 AM → 10:01 AM", or "10:00 AM → running" while the run is alive. */
+export function formatClockRange(startedAt: string, finishedAt: string | null): string {
+  const start = formatClock(startedAt);
+  return finishedAt ? `${start} → ${formatClock(finishedAt)}` : `${start} → running`;
+}
+
 export function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   return text.slice(0, maxLen - 1) + '…';

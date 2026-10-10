@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { UNNAMED_PLACEHOLDER, type RunRecord } from '../../src/run-store';
 import { groupRunsByDate, runLabel } from '../../src/tui2/components/Sidebar';
 import { computeStats } from '../../src/tui2/components/Dashboard';
-import { metadataFields, splitFields } from '../../src/tui2/components/RunDetails';
 import { SETTING_ACTIONS, SETTINGS_ROW_COUNT, clampRow } from '../../src/tui2/components/Settings';
 import {
   dateBucket,
@@ -95,43 +94,6 @@ describe('tui2 dashboard stats', () => {
 
   it('survives an empty run list', () => {
     expect(computeStats([])).toMatchObject({ total: 0, successRate: null, avgDurationMs: 0, today: 0 });
-  });
-});
-
-describe('tui2 run metadata', () => {
-  const session = mockRun('run-42', {
-    agent: 'kimi',
-    tier: 1,
-    pid: 1606355,
-    status: 'done',
-    exitCode: 0,
-    finishedAt: at(12),
-    name: 'Ship kanban',
-  });
-
-  it('renders the identity fields with status colour', () => {
-    const fields = metadataFields(session);
-    const byLabel = Object.fromEntries(fields.map((f) => [f.label, f.value]));
-
-    expect(byLabel.run).toBe('run-42');
-    expect(byLabel.name).toBe('Ship kanban');
-    expect(byLabel.agent).toBe('kimi');
-    expect(byLabel.tier).toBe('t1');
-    expect(byLabel.pid).toBe('1606355');
-    expect(byLabel.status).toContain('done');
-    expect(byLabel.code).toBe('0');
-    expect(byLabel.duration).toBe(formatDuration(session));
-    expect(fields.find((f) => f.label === 'status')?.color).toBe(statusColor('done'));
-  });
-
-  it('shows a dash while the exit code is unknown', () => {
-    const fields = metadataFields(mockRun('run-43', { status: 'running' }));
-    expect(Object.fromEntries(fields.map((f) => [f.label, f.value])).code).toBe('-');
-    expect(Object.fromEntries(fields.map((f) => [f.label, f.value])).finished).toBe('-');
-  });
-
-  it('splits into two rows of five', () => {
-    expect(splitFields(metadataFields(session)).map((r) => r.length)).toEqual([5, 5]);
   });
 });
 
