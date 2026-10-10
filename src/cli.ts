@@ -20,6 +20,17 @@ program
 
 registerCommands(program);
 
+// Make subcommand options win over root options when both define the same flag.
+// Without this, `at status --json` is consumed by the root's --json (stdin JSON
+// mode) and the status subcommand's --json is left at its default (false),
+// so `at status --json` prints markdown instead of JSON. Likewise for
+// `at status --no-chop <runId>` — the root's --no-chop and the status
+// subcommand's --no-chop both exist; positional resolution lets the
+// subcommand's flag apply to its own command. Root-level `--json` for stdin
+// mode and `--no-chop` for stream mode still work because they appear before
+// any positional (subcommand) argument.
+program.enablePositionalOptions();
+
 // No-arg invocation → launch interactive TUI via Bun
 if (process.argv.length === 2 && process.stdin.isTTY) {
   const tuiEntry = path.join(__dirname, '..', 'src', 'tui', 'index.tsx');
