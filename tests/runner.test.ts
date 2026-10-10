@@ -769,3 +769,48 @@ describe('run — line mode error messages', () => {
     await expect(run(opts, lineAgents, spawner)).rejects.toThrow(/line/i);
   });
 });
+
+describe('writeHostChannelShim', () => {
+  let tmpDir: string;
+  beforeEach(() => {
+    tmpDir = path.join(os.tmpdir(), `at-shim-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(tmpDir, { recursive: true });
+  });
+  afterEach(() => {
+    try { unlinkSync(path.join(tmpDir, '.at-host-channel.sh')); } catch {}
+    try { rmdirSync(tmpDir); } catch {}
+  });
+
+  it('writes an executable shim that exports the right env and execs at', async () => {
+    const { writeHostChannelShim } = await import('../src/runner');
+    const shim = writeHostChannelShim({
+      cwd: tmpDir,
+      atBin: "'/bin/node' '/repo/dist/cli.js'",
+      stateDir: '/tmp/sb-XXX/state',
+      runId: 'red-fox-1',
+    });
+    expect(shim).toBe(path.join(tmpDir, '.at-host-channel.sh'));
+    expect(existsSync(shim)).toBe(true);
+    const body = readFileSync(shim, 'utf8');
+    expect(body).toContain('AT_STATE_DIR=/tmp/sb-XXX/state');
+    expect(body).toContain('AT_RUN_ID=red-fox-1');
+    // AT_BIN value is shell-quoted because it has spaces — single-quote
+    // escaped form may appear, but the inner `node /path/cli.js` text must.
+    expect(body).toContain("'/bin/node'");
+    expect(body).toContain("'/repo/dist/cli.js'");
+    expect(body).toContain('exec');
+    expect(body).toContain('"$@"');
+    // Executable bit set so the LLM can run it directly.
+    expect((require('fs') as typeof import('fs')).statSync(shim).mode & 0o111).not.toBe(0);
+  });
+
+  it('returns empty string when no cwd is provided', async () => {
+    const { writeHostChannelShim } = await import('../src/runner');
+    const shim = writeHostChannelShim({
+      atBin: 'at',
+      stateDir: '/tmp/sb',
+      runId: 'r1',
+    });
+    expect(shim).toBe('');
+  });
+});

@@ -113,13 +113,40 @@ export const AGENTS: AgentDef[] = [
     name: 'cline',
     tier: 2,
     bin: () => process.env.CLINE_BIN ?? `${NODE_BIN}/cline`,
-    buildArgs: (prompt, _model, cwd) => [
-      '--auto-approve', 'true',
-      '--json',
-      '--cwd', cwd ?? process.cwd(),
-      '--timeout', '600',
-      prompt,
-    ],
+    buildArgs: (prompt, _model, cwd) => {
+      // Per-run isolated cline data dir: the cline v3 hub daemon
+      // (`--cline-hub-daemon`) keeps long-lived state in `~/.cline/data` by
+      // default, so back-to-back runs share a hub and the LLM keeps
+      // exploring leftover context instead of following the prompt suffix.
+      // A fresh, run-scoped data dir forces cline to spin up a clean
+      // hub (or skip the persistent one) and behave as if first-time.
+      const dataDir = process.env.CLINE_DATA_DIR ?? `/tmp/cline-data-${process.pid}-${Date.now()}`;
+      const args: string[] = [
+        '-y',                              // yolo: auto-approve + exit when task is done (unsupervised)
+        '--json',                          // structured output for the SSE adapter
+        '--cwd', cwd ?? process.cwd(),
+        '--data-dir', dataDir,
+        // Hard cap under the 150s sandbox timeout: leaves 30s headroom for
+        // runner cleanup before run-watch marks the run failed.
+        '--timeout', '120',
+        // Clamp consecutive tool-error retries so a single stuck command does
+        // not eat the whole timeout budget.
+        '--retries', '2',
+        // Keep the model on a short reasoning leash — sandbox E2E was
+        // failing because cline spent its budget reading the runner's source
+        // and polling the discuss thread instead of just running the one
+        // command the suffix specifies.
+        '--thinking', 'none',
+      ];
+      // Pin the model when CLINE_MODEL is set (or the default `cline-free`
+      // free-tier model). Without this, cline v3 sometimes auto-selects a
+      // non-free-tier model via the same provider, which then 401s on the
+      // user's free-tier account and the run dies before doing anything.
+      const model = process.env.CLINE_MODEL ?? 'cline-free/step-5-preview';
+      args.push('-m', model);
+      args.push(prompt);
+      return args;
+    },
   },
 
   // Mock: dry-run / test agent

@@ -14,10 +14,59 @@ function loadFixture(name: string): string[] {
 describe('cline adapter', () => {
   const adapter = makeClineAdapter();
 
-  it('promptSuffix returns discuss instruction', () => {
+  it('promptSuffix carries the cline-specific host-channel block', () => {
     const suffix = adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' }) ?? '';
+    // Cline's suffix uses the imperative form with an inlined command, not
+    // the shared `Host channel:` prose — so check for the cline-specific
+    // shape.
     expect(suffix).toContain('discuss ask');
-    expect(suffix).toContain('discuss note');
+    expect(suffix).toContain('-R r1');
+    expect(suffix).toContain('color.txt');
+  });
+
+  it('promptSuffix inlines absolute AT_BIN + stateDir + runId when no shim', () => {
+    const suffix =
+      adapter.promptSuffix?.({
+        runId: 'abc-123',
+        eventFile: '/tmp/x',
+        atBin: "'/usr/bin/node' '/repo/dist/cli.js'",
+        stateDir: '/tmp/sb/state',
+      }) ?? '';
+    // No shim: the suffix falls back to the absolute `at` form with the
+    // state dir + run id inlined.
+    expect(suffix).toContain("'/usr/bin/node' '/repo/dist/cli.js' discuss ask");
+    expect(suffix).toContain('-R abc-123');
+    expect(suffix).toContain('--state-dir /tmp/sb/state');
+  });
+
+  it('promptSuffix falls back to inline $AT_BIN form when no shim is provided', () => {
+    const suffix = adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' }) ?? '';
+    // Non-SSE / pre-shim path: the suffix still inlines the absolute `at`
+    // path and -R, so the LLM has the flags it needs.
+    expect(suffix).toContain('$AT_BIN discuss ask');
+    expect(suffix).toContain('-R r1');
+  });
+
+  it('promptSuffix uses the per-run shim path when provided', () => {
+    const suffix =
+      adapter.promptSuffix?.({
+        runId: 'r1',
+        eventFile: '/tmp/x',
+        hostChannelShim: '/tmp/sb/.at-host-channel.sh',
+      }) ?? '';
+    // The shim is the only way the LLM can reach the host channel when
+    // cline's hub daemon has a stale AT_STATE_DIR / AT_RUN_ID — its path
+    // is the LITERAL command the LLM is told to run.
+    expect(suffix).toContain('/tmp/sb/.at-host-channel.sh discuss ask');
+    expect(suffix).toContain('-R r1');
+    // The shim form does NOT inline --state-dir — the shim sets it via env.
+    expect(suffix).not.toContain('--state-dir');
+  });
+
+  it('promptSuffix carries the stop-after-color.txt rule', () => {
+    const suffix = adapter.promptSuffix?.({ runId: 'r1', eventFile: '/tmp/x' }) ?? '';
+    expect(suffix).toContain('color.txt');
+    expect(suffix).toMatch(/do not poll|no follow-up|improvise/i);
   });
 
   it('agent_event iteration_start maps to progress', () => {

@@ -70,8 +70,33 @@ export interface NotifyAdapterContext {
   runId: string;
   port?: number;
   eventFile: string;
-  stateDir?: string;
+  /**
+   * Shell-quoted `node /abs/path/to/cli.js` — exposed to agents so the
+   * prompt suffix can inline the absolute path (some agents run their tool
+   * subprocesses inside a daemon that strips `AT_BIN` from the env). Only
+   * populated by the SSE path; non-SSE callers pass undefined.
+   */
   atBin?: string;
+  /**
+   * The `at` state directory for this run, exposed so adapters can inline
+   * `--state-dir <dir>` in prompt instructions. The runner sets
+   * `AT_STATE_DIR` for the child, but subprocesses inside the agent's
+   * daemon (cline v3 hub, ...) may not inherit it. Only set on SSE path.
+   */
+  stateDir?: string;
+  /**
+   * The agent's working directory for this run, exposed so adapters can
+   * point the LLM at a per-run helper script (e.g. cline's host-channel
+   * shim that sets the right env regardless of the daemon's stale one).
+   */
+  cwd?: string;
+  /**
+   * Absolute path of a per-run helper script the runner drops in `cwd`
+   * for the agent. The cline adapter inlines this into the prompt suffix
+   * so the LLM has a single, deterministic way to reach the host
+   * channel without trusting the agent-daemon's env.
+   */
+  hostChannelShim?: string;
 }
 
 export interface NotifyAdapter {

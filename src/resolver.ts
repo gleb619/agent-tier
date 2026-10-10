@@ -144,7 +144,10 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     tier,
     prompt,
     model: argv.model,
-    cwd: argv.cwd,
+    // Default cwd to the CLI's cwd when the caller didn't pass --cwd —
+    // adapters (e.g. cline) need a real directory to drop a host-channel
+    // shim into.
+    cwd: argv.cwd ?? process.cwd(),
     env: argv.env,
     stream: argv.stream ?? false,
     wait: argv.wait ?? false,

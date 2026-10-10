@@ -35,9 +35,11 @@ describe('AgentRegistry', () => {
     expect(getAgentByName('cline')?.name).toBe('cline');
   });
 
-  it('cline buildArgs includes auto-approve and json', () => {
+  it('cline buildArgs includes yolo + json and the prompt', () => {
     const args = getAgentByName('cline')!.buildArgs('hello world');
-    expect(args).toContain('--auto-approve');
+    // `-y` is the yolo (unsupervised) flag — replaces the old explicit
+    // --auto-approve true; the LLM exits as soon as the task is done.
+    expect(args).toContain('-y');
     expect(args).toContain('--json');
     expect(args).toContain('hello world');
   });
@@ -89,6 +91,30 @@ describe('AgentRegistry', () => {
   it('cline passes run cwd via --cwd', () => {
     const args = getAgentByName('cline')!.buildArgs('hi', undefined, '/tmp/sbx');
     expect(args).toEqual(expect.arrayContaining(['--cwd', '/tmp/sbx']));
+  });
+
+  it('cline buildArgs uses -y (yolo) so it exits when task is done', () => {
+    const args = getAgentByName('cline')!.buildArgs('hi');
+    expect(args).toContain('-y');
+  });
+
+  it('cline buildArgs keeps a tight --timeout and --retries so it does not linger', () => {
+    const args = getAgentByName('cline')!.buildArgs('hi');
+    const tIdx = args.indexOf('--timeout');
+    expect(tIdx).toBeGreaterThan(-1);
+    const t = Number(args[tIdx + 1]);
+    expect(Number.isFinite(t)).toBe(true);
+    // Under the 150s sandbox timeout — 30s headroom for runner cleanup.
+    expect(t).toBeLessThanOrEqual(150);
+    const rIdx = args.indexOf('--retries');
+    expect(rIdx).toBeGreaterThan(-1);
+    expect(Number(args[rIdx + 1])).toBeLessThanOrEqual(3);
+  });
+
+  it('cline buildArgs keeps --json and the prompt', () => {
+    const args = getAgentByName('cline')!.buildArgs('hello world');
+    expect(args).toContain('--json');
+    expect(args[args.length - 1]).toBe('hello world');
   });
 
   it('finds devin agent by name', () => {
