@@ -165,3 +165,26 @@ describe('getAgentByName', () => {
     expect(getAgentByName('nonexistent')).toBeUndefined();
   });
 });
+
+import { applyNormkaFlag } from '../src/agents/normka-flag';
+
+describe('normka flag wiring (registry side)', () => {
+  it('mock agent is tier 4', () => {
+    expect(getAgentByName('mock')?.tier).toBe(4);
+  });
+  it('mock-long agent is tier 4', () => {
+    expect(getAgentByName('mock-long')?.tier).toBe(4);
+  });
+  it('appending --normka works on tier 4 mock via applyNormkaFlag', () => {
+    const a = getAgentByName('mock')!;
+    const baseArgs = a.buildArgs('hello');
+    const args = applyNormkaFlag(a, baseArgs, 'hello', { normka: true });
+    expect(args).toEqual(['hello', '--normka']);
+  });
+  it('mm-code agent does not get --normka even when caller opts in', () => {
+    const a = getAgentByName('mm-code')!;
+    const baseArgs = a.buildArgs('hello');
+    const args = applyNormkaFlag(a, baseArgs, 'hello', { normka: true });
+    expect(args).not.toContain('--normka');
+  });
+});

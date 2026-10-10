@@ -37,6 +37,7 @@ export interface RunOptions {
    * and the --callback fires with AT_STATUS='failed'.
    */
   verify?: string;
+  normka?: boolean;
 }
 
 interface ArgvOptions {
@@ -57,6 +58,7 @@ interface ArgvOptions {
   sse?: boolean | string;
   ssePort?: string | number;
   verify?: string;
+  normka?: boolean;
 }
 
 export interface ParsedJson {
@@ -75,6 +77,7 @@ export interface ParsedJson {
    * be derived purely from a file path passed via JSON.
    */
   promptFileContent?: string;
+  normka?: boolean;
 }
 
 export function resolveFromArgs(argv: ArgvOptions): RunOptions {
@@ -135,6 +138,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     sse,
     ssePort,
     verify: argv.verify?.trim() || undefined,
+    normka: argv.normka === true,
   };
 }
 
@@ -199,5 +203,6 @@ export function parseJsonInput(raw: string): ParsedJson {
     ssePort,
     verify: (parsed.verify as string | undefined)?.trim() || undefined,
     promptFileContent,
+    normka: parsed.normka === true,
   };
 }

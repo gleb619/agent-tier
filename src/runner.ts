@@ -3,6 +3,7 @@ import { mkdirSync, openSync, closeSync, writeSync, appendFileSync, existsSync }
 import path from 'path';
 
 import { AgentDef } from './agents/registry';
+import { applyNormkaFlag } from './agents/normka-flag';
 import { RunOptions } from './resolver';
 import { pickAgent, getStateFile } from './scheduler';
 import { filterHealthy, recordResult, isDeactivated, loadHealth } from './health';
@@ -170,7 +171,12 @@ function shellQuote(s: string): string {
 export async function launchAgent(agent: AgentDef, options: RunOptions, extras?: LaunchExtras): Promise<LaunchResult> {
   const runId = extras?.runId ?? generateRunId();
   const promptText = options.prompt + (extras?.extraPrompt ?? '');
-  const baseArgs = agent.buildArgs(promptText, options.model, options.cwd);
+  const baseArgs = applyNormkaFlag(
+    agent,
+    agent.buildArgs(promptText, options.model, options.cwd),
+    promptText,
+    { normka: options.normka },
+  );
   let args: string[];
   if (extras?.overrideArgs) {
     args = extras.overrideArgs;
@@ -675,7 +681,12 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
    // Compute argv: if adapter provides transformArgs, give it the full base
    // args (with prompt already appended) so structured flags can be inserted
    // before the prompt. Otherwise, append adapter.args() after the prompt.
-   const baseArgs = agent.buildArgs(promptText, options.model, options.cwd);
+   const baseArgs = applyNormkaFlag(
+     agent,
+     agent.buildArgs(promptText, options.model, options.cwd),
+     promptText,
+     { normka: options.normka },
+   );
    const finalArgs = adapter.transformArgs
 ? adapter.transformArgs(ctx, baseArgs)
       : (() => {

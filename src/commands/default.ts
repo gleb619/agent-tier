@@ -44,6 +44,11 @@ export function registerDefaultCommand(program: Command): void {
     )
     .option('--sse [port]', 'Enable SSE live-progress hub (default port 7777, 0=random)')
     .option(
+      '--normka',
+      'Forward --normka flag to tier-4 agents (mock / mock-long) so they parse the prompt as a JSON normka spec. Auto-applied when the prompt itself starts with `#NORMKA` or contains a `// normka:on` block.',
+      false,
+    )
+    .option(
       '--json',
       'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0}',
       false,
@@ -80,6 +85,7 @@ export function registerDefaultCommand(program: Command): void {
             verify: parsed.verify ?? opts.verify,
             sse: parsed.sse,
             ssePort: parsed.ssePort,
+            normka: parsed.normka ?? (opts.normka as boolean | undefined),
           });
         } else {
           const stdinData = !opts.prompt && !opts.promptFile && !process.stdin.isTTY ? await readStdin() : '';
@@ -99,6 +105,7 @@ export function registerDefaultCommand(program: Command): void {
             callback: opts.callback,
             verify: opts.verify as string | undefined,
             sse: opts.sse,
+            normka: opts.normka as boolean,
           });
         }
 
