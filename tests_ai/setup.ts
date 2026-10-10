@@ -2,6 +2,8 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { isDeactivated } from '../src/health';
+import { resolveStateDir, getStateFilePath } from '../src/state-dir';
 
 export const DEFAULT_TIMEOUT = 120000;
 
@@ -59,13 +61,10 @@ export function agentBinExists(agent: string): boolean {
 
 export function isAgentEnabled(agent: string): boolean {
   try {
-    const statePath = path.join(os.homedir(), '.at', 'state.json');
-    if (!fs.existsSync(statePath)) return true;
-    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-    const agentState = state.agents?.[agent];
-    if (agentState?.deactivated) return false;
-    if (agentState?.disabledTo && new Date(agentState.disabledTo) > new Date()) return false;
-    return true;
+    // Same resolution as the CLI (src/state-dir.ts): project .at/ wins over
+    // ~/.at/, AT_STATE_DIR env override applies. Plus TTL auto-reactivate
+    // via src/health.ts isDeactivated — single source of truth.
+    return !isDeactivated(getStateFilePath(resolveStateDir()), agent);
   } catch {
     return true;
   }
