@@ -15,6 +15,8 @@ export interface AtConfig {
   line?: string[];
   /** Optional sandbox-test settings. Opt-in via `--sandbox` or `enabled: true`. */
   sandbox?: { enabled?: boolean; prompt?: string; timeoutMs?: number };
+  /** Optional global prompt prepended to every agent run's prompt. Stored in config JSON. */
+  globalPrompt?: string;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.at');

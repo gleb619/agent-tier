@@ -49,9 +49,10 @@ export function registerDefaultCommand(program: Command): void {
       'Forward --normka flag to tier-4 agents (mock / mock-long) so they parse the prompt as a JSON normka spec. Auto-applied when the prompt itself starts with `#NORMKA` or contains a `// normka:on` block.',
       false,
     )
+    .option('--global-prompt <text>', 'Global prompt text to prepend to every run\'s prompt')
     .option(
       '--json',
-      'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0}',
+      'Read JSON from stdin: {"agent":"...","prompt":"...","globalPrompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0}. globalPrompt is prepended to prompt.',
       false,
     )
     .action(async (opts) => {
@@ -63,11 +64,20 @@ export function registerDefaultCommand(program: Command): void {
           filePrompt = readPromptFile(opts.promptFile as string);
         }
 
+        const config = loadConfig();
+        const cliGlobalPrompt = (opts.globalPrompt as string | undefined)?.trim();
+        const configGlobalPrompt = config?.globalPrompt || '';
 
         if (opts.json) {
           const stdinData = await readStdin();
           const parsed = parseJsonInput(stdinData);
-          const finalPrompt = (parsed.prompt || parsed.promptFileContent || filePrompt || opts.prompt || '').trim();
+          let userPrompt = (parsed.prompt || parsed.promptFileContent || filePrompt || opts.prompt || '').trim();
+          
+          // Precedence: CLI --global-prompt > JSON globalPrompt > config globalPrompt
+          const jsonGlobalPrompt = (parsed.globalPrompt as string | undefined)?.trim();
+          const effectiveGlobalPrompt = cliGlobalPrompt || jsonGlobalPrompt || configGlobalPrompt;
+          
+          const finalPrompt = effectiveGlobalPrompt ? (effectiveGlobalPrompt + '\n\n' + userPrompt).trim() : userPrompt;
           runOptions = resolveFromArgs({
             agent: parsed.agent,
             tier: opts.tier,
@@ -91,7 +101,9 @@ export function registerDefaultCommand(program: Command): void {
           });
         } else {
           const stdinData = !opts.prompt && !opts.promptFile && !process.stdin.isTTY ? await readStdin() : '';
-          const finalPrompt = (stdinData || filePrompt || (opts.prompt as string | undefined) || '').trim();
+          let userPrompt = (stdinData || filePrompt || (opts.prompt as string | undefined) || '').trim();
+          const effectiveGlobalPrompt = cliGlobalPrompt || configGlobalPrompt;
+          const finalPrompt = effectiveGlobalPrompt ? (effectiveGlobalPrompt + '\n\n' + userPrompt).trim() : userPrompt;
           runOptions = resolveFromArgs({
             agent: opts.agent,
             tier: opts.tier,

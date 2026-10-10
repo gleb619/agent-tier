@@ -49,6 +49,16 @@ When an agent exits non-zero, `at` automatically picks the next agent in the sam
 | `--no-chop` | Disable chop output-log compression in stream mode (default: enabled when chop is available) |
 | `--state-dir <path>` | Override the state directory (default: `.at/` in CWD if it exists, else `~/.at/`) |
 | `--sse [port]` | Live-progress SSE hub, default port 7777, `0` = random (see [progress.md](progress.md)) |
+| `--global-prompt <text>` | Global prompt text prepended to every run's prompt |
+
+## Global prompt
+
+Set a reusable global prompt in `~/.at/config.json` as `"globalPrompt": "your instructions here"`. It is
+prepended (with a blank line) to every run's prompt before sending it to the agent. Override it per-run with
+`--global-prompt`.
+
+In JSON mode (`--json`), the JSON `globalPrompt` field and `--global-prompt` also work, with precedence:
+CLI `--global-prompt` > JSON `globalPrompt` > config `globalPrompt`.
 
 ## Post-run verification hook
 

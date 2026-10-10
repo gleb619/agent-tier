@@ -48,6 +48,8 @@ export interface RunOptions {
    * Failure throws `AgentError` and counts as a retry-able attempt.
    */
   sandbox?: boolean;
+  /** Optional global prompt from config; prepended to the run prompt. */
+  globalPrompt?: string;
 }
 
 interface ArgvOptions {
@@ -70,6 +72,7 @@ interface ArgvOptions {
   verify?: string;
   normka?: boolean;
   sandbox?: boolean;
+  globalPrompt?: string;
 }
 
 export interface ParsedJson {
@@ -91,6 +94,7 @@ export interface ParsedJson {
   promptFileContent?: string;
   normka?: boolean;
   sandbox?: boolean;
+  globalPrompt?: string;
 }
 
 function parseTier(raw: unknown, source: 'argv' | 'json'): 1 | 2 | 3 | 4 {
@@ -161,6 +165,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     verify: argv.verify?.trim() || undefined,
     normka: argv.normka === true,
     sandbox: argv.sandbox === true ? true : undefined,
+    globalPrompt: argv.globalPrompt?.trim() || undefined,
   };
 }
 
@@ -231,5 +236,6 @@ export function parseJsonInput(raw: string): ParsedJson {
     promptFileContent,
     normka: parsed.normka === true,
     sandbox: parsed.sandbox === true ? true : undefined,
+    globalPrompt: (parsed.globalPrompt as string | undefined)?.trim() || undefined,
   };
 }
