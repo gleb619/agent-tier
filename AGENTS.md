@@ -7,6 +7,7 @@ This file provides guidance to work with this repo.
 Invoke before any work:
 
 - `caveman` — compressed communication throughout all sessions
+- `i-have-adhd` — shape output for minimal token consumption
 - `codegraph` — codebase exploration; never grep when `codegraph_*` tools are available
 - `delegate-with-at` — delegate code writing to subagents via the `at` CLI
 
@@ -33,7 +34,7 @@ git add -A
 git commit -m "feat(<scope>): <what>"
 
 # 5. Fast-forward merge to main (no merge commit, no extra history)
-cd /media/boris/data_nvme1n1/WORKSPACES/WORKSPACE/agent-tier
+cd <agent-tier absolute path>
 git checkout main
 git merge --ff-only feat/<short-name>
 
@@ -51,9 +52,9 @@ git worktree prune
 - Never `git stash` / `git reset` — preserve all working-tree state.
 - Working tree at end of session: clean on `main`, no stale worktrees, no stale local branches (the merged feature branch is deleted in step 6).
 
-## Session namer
+## Features
 
-Namer sources live in `~/.at/namer.json` (provider config) and `~/.at/secrets.json` (API keys, mode 0o600). See `docs/namer.md` for the full schema, secret resolution order, and provider types (`ollama`, `openrouter`, `ollama-ssh-tunnel`).
+//TODO add here a table with features name, description, and location in codebase
 
 ## Commands
 

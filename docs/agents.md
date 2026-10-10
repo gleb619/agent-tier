@@ -8,17 +8,15 @@ Detail doc for [README.md](../README.md).
 |---------------|--------------------------------|----------------------------|
 | 1             | glm-code, codex, kimi          | Architect / review         |
 | 2 *(default)* | mm-code, opencode, qwen, pi, cline | Dev / QA                   |
-| 3             | kilo, agy, kiro, cursor | Experimental / boilerplate |
+| 3             | kilo, agy, kiro, devin | Experimental / boilerplate |
 | 4             | mock, mock-long   | Dry-run / test agents      |
 
-Round-robin state is stored in `/tmp/at-<tier>-state.json`. Pass `--global-state` to use a single counter across all tiers.
+Round-robin state is stored per tier in the `scheduler` section of `<stateDir>/state.json`
+(project `.at/` when present, else `~/.at/`).
 
 ## Available agents
 
-`at` ships with **11 built-in agents** across 3 tiers, plus a generic plugin system for custom agents.
-
-> Note: agent list updated after the blackbox/goose/aider removal. Tier 2: mm-code, opencode, qwen, pi, cline.
-> Tier 3: kilo, agy, cursor.
+`at` ships with **14 built-in agents** across 4 tiers, plus a generic plugin system for custom agents.
 
 ### Tier 1 — Architect / Review
 
@@ -27,7 +25,7 @@ Agents optimized for complex multi-file refactors, architecture review, and hard
 | Agent      | Binary (env override)                    | Command pattern                                       |
 |------------|------------------------------------------|-------------------------------------------------------|
 | `glm-code` | `GLM_CODE_BIN` → `~/.local/bin/glm-code` | `glm-code -p "prompt" --dangerously-skip-permissions` |
-| `codex`    | `CODEX_BIN` → `~/.nvm/.../bin/codex`     | `codex exec "prompt"`                                 |
+| `codex`    | `CODEX_BIN` → `~/.nvm/.../bin/codex`     | `codex exec --yolo --skip-git-repo-check "prompt"`    |
 | `kimi`     | `KIMI_BIN` → `~/.nvm/.../bin/kimi`       | `kimi -y -p "prompt"`                                 |
 
 Round-robin order: glm-code → codex → kimi → glm-code → …
@@ -41,39 +39,39 @@ Everyday feature work, bug fixes, tests, and refactors.
 | `mm-code`  | `MM_CODE_BIN` → `~/.local/bin/mm-code`     | `mm-code -p "prompt" --dangerously-skip-permissions`   |
 | `opencode` | `OPENCODE_BIN` → `~/.nvm/.../bin/opencode` | `opencode run --dangerously-skip-permissions "prompt"` |
 | `qwen`     | `QWEN_BIN` → `~/.nvm/.../bin/qwen`         | `qwen -y "prompt"`                                     |
-| `pi`       | `PI_BIN` → `~/.nvm/.../bin/pi`             | `pi -p --provider ollama --model ... "prompt" --no-session` |
-| `cline`    | `CLINE_BIN` → `~/.nvm/.../bin/cline`       | `cline --auto-approve true --json --timeout 600 "prompt"` |
+| `pi`       | `PI_BIN` → `~/.nvm/.../bin/pi`             | `pi -p "prompt"` (`-m` adds `--model <name>`)          |
+| `cline`    | `CLINE_BIN` → `~/.nvm/.../bin/cline`       | `cline --auto-approve true --json --cwd <cwd> --timeout 600 "prompt"` |
 
 Round-robin order: mm-code → opencode → qwen → pi → cline → mm-code → …
 
 ### Tier 3 — Experimental / Boilerplate
 
-Scaffolding, simple scripts, and throwaway generation. Three of these agents use **Ollama** with local models.
+Scaffolding, simple scripts, and throwaway generation.
 
 | Agent    | Type   | Binary (env override)                  | Command pattern                                                            |
 |----------|--------|----------------------------------------|----------------------------------------------------------------------------|
 | `kilo`   | Cloud  | `KILO_BIN` → `~/.nvm/.../bin/kilo`     | `kilo run --auto "prompt"`                                                 |
-| `agy`    | Cloud  | `AGY_BIN` → `~/.nvm/.../bin/agy`       | `echo "prompt" \| agy --yolo --skip-trust`                                  |
-| `cursor` | Cloud  | `CURSOR_BIN` → `~/.local/bin/cursor-agent` | `cursor-agent -p "prompt" --yolo --trust`                               |
+| `agy`    | Cloud  | `AGY_BIN` → `findBin('agy')`           | `agy --dangerously-skip-permissions -p "prompt"`                            |
+| `kiro`   | Cloud  | `KIRO_BIN` → `findBin('kiro-cli')`     | `kiro-cli chat --no-interactive --trust-all-tools "prompt"`                 |
+| `devin`  | Cloud  | `DEVIN_BIN` → `~/.local/bin/devin` → devin-desktop path | `devin --permission-mode bypass --respect-workspace-trust false -p "prompt"` |
 
-Round-robin order: kilo → agy → cursor → kilo → …
+Round-robin order: kilo → agy → kiro → devin → kilo → …
 
-### Ollama agents
+### Tier 4 — Dry-run / Test
 
-The single Ollama-based agent (`pi`) shares common configuration:
+Deterministic stand-ins used by the test-suite and for smoke runs.
 
-- **Host:** `OLLAMA_HOST` (default: `http://127.0.0.1:11434`)
-- **Model:** `OLLAMA_MODEL` (default: `minimax-m3:cloud`)
-- **Per-run model override:** set env var `OLLAMA_AGENT_MODEL` before calling `at`
+| Agent        | Binary (env override)                          | Command pattern |
+|--------------|------------------------------------------------|-----------------|
+| `mock`       | `MOCK_BIN` → `~/.local/bin/mock-agent`         | exits 0 immediately |
+| `mock-long`  | `MOCK_LONG_BIN` → `~/.local/bin/mock-long-agent` | sleeps `MOCK_LONG_DURATION` ms (default 30000), then exits 0 |
 
-Note: `pi` requires an Ollama provider entry in `~/.pi/agent/models.json`.
+### Model override
 
-### Prompt mode
-
-Most agents receive their prompt as a CLI argument (`promptMode: 'arg'`). One exception:
-
-- **`agy`**: uses `promptMode: 'stdin'` — the prompt is piped to the agent's stdin rather than passed as an argument.
-  `at` handles this internally; no special flags needed.
+Pass `-m, --model <name>` to forward a model to agents that support it: `pi`
+(adds `--model <name>`) and `opencode` (adds `-m <name>` and sets
+`OPENCODE_MODEL`). Other agents ignore the flag. Generic plugin agents can
+consume it via `buildArgs(prompt, model)` / `buildEnv(model)`.
 
 ## Generic agents (plugins)
 

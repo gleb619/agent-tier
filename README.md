@@ -28,6 +28,9 @@ at -a opencode -p "write tests for the parser"
 
 # Use a specific tier
 at -t 1 -p "review this PR diff"
+
+# Read the prompt from a file (.md raw text, .json `prompt` field)
+at -f prompts/refactor-auth.md
 ```
 
 ## CLI reference
@@ -36,20 +39,25 @@ at -t 1 -p "review this PR diff"
 at [options] [command]
 
 Options:
-  -p, --prompt <text>     Prompt text (or pipe via stdin)
-  -a, --agent <name>      Agent name, or "auto" (default: auto)
-  -t, --tier <number>     Tier: 1=architect, 2=dev (default), 3=experimental
-  -s, --stream            Stream output to terminal (default: detached + log file)
-  --wait                  Block until the agent exits (timeout, retry, real exit code)
-  --retries <number>      Max retry attempts on non-zero exit, --wait/-s only (default: 2)
-  --callback <command>    Shell command to run after the agent job finishes
-  --verify <command>      Post-run verification hook; non-zero exit fails the run (details in docs/cli.md)
-  --global-state          Single round-robin counter shared across all tiers
-  --log-dir <path>        Log directory for detached and stream mode (default: /tmp/at-logs)
-  --json                  Read JSON from stdin (see docs/cli.md#json-mode)
+  -p, --prompt <text>      Prompt text (or pipe via stdin, or use -f)
+  -f, --prompt-file <path> Read prompt from a file (.md raw text; .json uses its `prompt` field, raw contents otherwise)
+  -a, --agent <name>       Agent name, or "auto" (default: auto)
+  -t, --tier <number>      Tier: 1=architect, 2=dev (default), 3=experimental
+  -m, --model <name>       Model name to pass to the agent
+  -s, --stream             Stream output to terminal (default: detached + log file)
+  --wait                   Block until the agent exits (enables timeout, retry, real exit code)
+  --no-chop                Disable chop output-log compression in stream mode (default: enabled when chop is available)
+  -r, --retries <number>   Max extra retry attempts with next agent in tier (default: 0). Named agents never retry
+  --timeout <ms>           Force-kill agent after N milliseconds (default: 3600000 = 1h)
+  --state-dir <path>       State directory (default: .at/ in CWD if it exists, else ~/.at/)
+  --log-dir <path>         Log file directory for detached mode (default: /tmp/at-logs)
+  --callback <command>     Shell command to run after the agent job finishes (AT_* env vars)
+  --verify <command>       Post-run verification hook; non-zero exit fails the run (details in docs/cli.md)
+  --sse [port]             SSE live-progress hub (default port 7777, 0=random); see docs/progress.md
+  --json                   Read JSON from stdin (see docs/cli.md#json-mode)
 
 Commands:
-  config sign             HMAC-sign ~/.at/config.json
+  status, stop, enable, disable, config sign, feedback, discuss, events, serve, mcp, index
 ```
 
 ## Documentation

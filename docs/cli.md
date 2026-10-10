@@ -4,7 +4,7 @@ Detail doc for the flags in [README.md](../README.md).
 
 ## Sending prompts
 
-Three ways to pass a prompt:
+Four ways to pass a prompt:
 
 ```bash
 # Flag
@@ -13,9 +13,17 @@ at -p "fix the login bug"
 # Stdin pipe
 echo "fix the login bug" | at
 
+# Prompt file (-f): .md is read as raw text; .json uses its top-level `prompt`
+# string field, falling back to the raw file contents
+at -f prompts/fix-login.md
+
 # JSON mode
 echo '{"agent":"opencode","prompt":"fix the login bug"}' | at --json
 ```
+
+Precedence when several are given: an explicit source always wins over a
+missing one — stdin pipe > `-f` file > `-p` text (non-JSON mode). In JSON mode:
+JSON `prompt` > JSON `promptFile` > `-f` file > `-p` text.
 
 ## Output modes
 
@@ -30,6 +38,17 @@ echo '{"agent":"opencode","prompt":"fix the login bug"}' | at --json
 
 When an agent exits non-zero, `at` automatically picks the next agent in the same tier and retries, up to
 `min(retries, candidates.length - 1)` additional attempts. Named agents (`-a <name>`) never retry.
+
+## Other flags
+
+| Flag | Behavior |
+|------|----------|
+| `-f, --prompt-file <path>` | Read the prompt from a file — `.md` raw text, `.json` uses its `prompt` field |
+| `-m, --model <name>` | Pass a model name to the agent (agent-specific: arg and/or env) |
+| `--timeout <ms>` | Force-kill the agent after N ms (default: 3600000 = 1h) |
+| `--no-chop` | Disable chop output-log compression in stream mode (default: enabled when chop is available) |
+| `--state-dir <path>` | Override the state directory (default: `.at/` in CWD if it exists, else `~/.at/`) |
+| `--sse [port]` | Live-progress SSE hub, default port 7777, `0` = random (see [progress.md](progress.md)) |
 
 ## Post-run verification hook
 
@@ -67,4 +86,6 @@ Accepts a JSON object from stdin, compatible with the `coding-agent` protocol:
 }
 ```
 
-All fields except `prompt` are optional.
+All fields except `prompt` are optional. Extra fields: `promptFile` (path, used
+when `prompt` is absent), `callback` and `verify` (shell commands, same contract
+as the flags), `sse` (boolean) and `ssePort` (number, `0` = random).

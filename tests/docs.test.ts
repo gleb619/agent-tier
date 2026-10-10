@@ -57,7 +57,7 @@ describe('documentation layout', () => {
       ],
       [
         'docs/agents.md',
-        ['## Tiers', '## Available agents', 'Round-robin order: mm-code', 'OLLAMA_HOST', 'promptMode',
+        ['## Tiers', '## Available agents', 'Round-robin order: mm-code', '## Model override', 'promptMode',
           '## Generic agents (plugins)', 'AT_GENERIC_DIR', '## Binary resolution', '## Configuration',
           'tierOverrides', 'at config sign'],
       ],
