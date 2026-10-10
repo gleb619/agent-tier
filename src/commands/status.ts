@@ -61,7 +61,7 @@ export function registerStatusCommand(program: Command): void {
     .option('-f, --follow', 'Stream new log lines as they arrive (requires runId)')
     .option('--no-chop', 'Disable log filtering (ANSI, spinners, repeated lines)')
     .option('--json', 'Output as JSON without text trimming', false)
-    .action((runId: string | undefined, opts: Record<string, unknown>) => {
+    .action((runId: string | undefined, opts: Record<string, unknown>, cmd: Command) => {
       try {
         const stateDir = resolveStateDir();
         if (runId) {
@@ -73,7 +73,12 @@ export function registerStatusCommand(program: Command): void {
             noChop: (opts.noChop as boolean) ?? false,
           });
         } else {
-          runStatus(stateDir, { json: opts.json as boolean });
+          // `registerDefaultCommand` also defines `--json` at the program
+          // root, so commander populates it as a global option rather than
+          // on this subcommand's `opts`. Use optsWithGlobals so `--json`
+          // is honoured regardless of registration order.
+          const json = (cmd.optsWithGlobals().json as boolean | undefined) ?? false;
+          runStatus(stateDir, { json });
         }
       } catch (err) {
         console.error(`[at] error: ${(err as Error).message}`);
