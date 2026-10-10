@@ -63,8 +63,28 @@ Deterministic stand-ins used by the test-suite and for smoke runs.
 
 | Agent        | Binary (env override)                          | Command pattern |
 |--------------|------------------------------------------------|-----------------|
-| `mock`       | `MOCK_BIN` → `~/.local/bin/mock-agent`         | exits 0 immediately |
-| `mock-long`  | `MOCK_LONG_BIN` → `~/.local/bin/mock-long-agent` | sleeps `MOCK_LONG_DURATION` ms (default 30000), then exits 0 |
+| `mock`       | `MOCK_BIN` → `~/.local/bin/mock-agent`         | echoes prompt, exits 0; normka mode when triggered |
+| `mock-long`  | `MOCK_LONG_BIN` → `~/.local/bin/mock-long-agent` | streams mock output for `MOCK_LONG_DURATION` ms (default 30000); normka mode when triggered |
+
+Both are Go binaries built from `mock-agent/` (`npm run build:mock`). Without a trigger they mimic the legacy shell mocks.
+
+**Normka mode** activates when any of these is present (OR):
+
+1. `--normka` flag (added by `at --normka <prompt>`, or auto-detected from the prompt)
+2. First non-blank prompt line is `#NORMKA` (case-insensitive)
+3. First ```` ```json ```` fenced block contains `// normka:on`
+
+The trigger envelope is stripped and the remaining text is parsed as a versioned JSON spec (`version: 1`) with typed `steps`:
+
+| Step kind  | Behaviour                                                        |
+|------------|------------------------------------------------------------------|
+| `lorem`    | Emit N paragraphs of lorem ipsum                                 |
+| `file`     | Write `content` to `path` (creates parent dirs)                  |
+| `http`     | Request `url`, assert status in `expect` (default 2xx)           |
+| `sse`      | Tail SSE stream until `events` count or `timeout_ms`             |
+| `discuss`  | POST `{ask, question}` to `AT_DISCUSS_URL` (default `http://127.0.0.1:8787/ask`), poll for answer |
+
+Each step emits JSON lines (`{"step":1,"kind":"http","status":"start"|"end","ok":true,...}`) on stdout. Exit codes: 0 ok, 2 bad spec, 3 step failed, 4 discuss timeout. Full spec: `docs/superpowers/specs/2026-10-10-normka-mock-agents-design.md`.
 
 ### Model override
 

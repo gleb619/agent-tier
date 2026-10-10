@@ -12,7 +12,9 @@
     "test:watch": "[ -f env.local.sh ] && . ./env.local.sh; vitest",
     "test:agents": "[ -f env.local.sh ] && . ./env.local.sh; vitest run tests_ai/",
     "test:coverage": "vitest run --coverage",
-    "test:gaps": "npx ts-node --project scripts/tsconfig.json scripts/coverage-gaps.ts"
+    "test:gaps": "npx ts-node --project scripts/tsconfig.json scripts/coverage-gaps.ts",
+    "build:mock": "make build",
+    "test:go": "make test-go"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.78.1",
