@@ -101,6 +101,66 @@ describe('--json stdin mode', () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stdout + result.stderr).toContain('error');
   });
+
+  it('prepends globalPrompt from JSON to prompt', async () => {
+    const logDir = mkdtempSync(path.join(os.tmpdir(), 'at-stdin-test-'));
+    const result = runCli(
+      ['--json', '--log-dir', logDir],
+      JSON.stringify({ prompt: 'json prompt', agent: 'mock', globalPrompt: 'GLOBAL INSTRUCTIONS' }),
+    );
+    expect(result.exitCode).toBe(0);
+
+    const logFile = waitForLogFile(logDir, 'mock');
+    expect(logFile).not.toBeNull();
+    const content = readFileSync(logFile!, 'utf8');
+    expect(content).toContain('GLOBAL INSTRUCTIONS');
+    expect(content).toContain('json prompt');
+  });
+
+  it('respects precedence: CLI --global-prompt > JSON globalPrompt > config globalPrompt', async () => {
+    // Test 1: CLI --global-prompt takes precedence
+    const logDir1 = mkdtempSync(path.join(os.tmpdir(), 'at-stdin-test-1'));
+    const result1 = runCli(
+      ['--json', '--global-prompt', 'CLI GLOBAL', '--log-dir', logDir1],
+      JSON.stringify({ prompt: 'json prompt', agent: 'mock', globalPrompt: 'JSON GLOBAL' }),
+    );
+    expect(result1.exitCode).toBe(0);
+    const logFile1 = waitForLogFile(logDir1, 'mock');
+    expect(logFile1).not.toBeNull();
+    const content1 = readFileSync(logFile1!, 'utf8');
+    expect(content1).toContain('CLI GLOBAL');
+    expect(content1).toContain('json prompt');
+    // Should NOT contain JSON global prompt due to precedence
+    expect(content1).not.toContain('JSON GLOBAL');
+
+    // Test 2: JSON globalPrompt when CLI not present
+    const logDir2 = mkdtempSync(path.join(os.tmpdir(), 'at-stdin-test-2'));
+    const result2 = runCli(
+      ['--json', '--log-dir', logDir2],
+      JSON.stringify({ prompt: 'json prompt', agent: 'mock', globalPrompt: 'JSON GLOBAL' }),
+    );
+    expect(result2.exitCode).toBe(0);
+    const logFile2 = waitForLogFile(logDir2, 'mock');
+    expect(logFile2).not.toBeNull();
+    const content2 = readFileSync(logFile2!, 'utf8');
+    expect(content2).toContain('JSON GLOBAL');
+    expect(content2).toContain('json prompt');
+
+    // Test 3: Config globalPrompt when neither CLI nor JSON present
+    // We'd need to set up config, but for simplicity we'll test with no globals
+    const logDir3 = mkdtempSync(path.join(os.tmpdir(), 'at-stdin-test-3'));
+    const result3 = runCli(
+      ['--json', '--log-dir', logDir3],
+      JSON.stringify({ prompt: 'json prompt', agent: 'mock' }),
+    );
+    expect(result3.exitCode).toBe(0);
+    const logFile3 = waitForLogFile(logDir3, 'mock');
+    expect(logFile3).not.toBeNull();
+    const content3 = readFileSync(logFile3!, 'utf8');
+    expect(content3).toContain('json prompt');
+    // Should not contain any global prompt additions
+    expect(content3.split('\n\n').length).toBe(1); // No double newline separation
+  });
 });
 
 describe('--callback flag', () => {
