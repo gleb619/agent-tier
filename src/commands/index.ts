@@ -6,7 +6,7 @@ import { registerStatusCommand } from './status';
 import { registerStopCommand } from './stop';
 import { registerHealthCommands } from './health';
 import { registerCodegraphCommand } from './codegraph';
-import { registerComposeCommand } from '../compose/delivery/cli';
+import { registerComposeCommand } from '../compose/cli';
 import { registerMcpCommand } from './mcp';
 import { registerFeedbackCommand } from './feedback';
 import { registerNotifyCommand } from './notify';

@@ -57,14 +57,14 @@ Options:
   --json                   Read JSON from stdin (see docs/cli.md#json-mode)
 
 Commands:
-  status, stop, enable, disable, config sign, feedback, discuss, events, serve, mcp, index
+  status, stop, enable, disable, config sign, feedback, discuss, events, serve, mcp, index, compose
 ```
 
 ## Documentation
 
 Long-form docs live in [`docs/`](docs/):
 
-- [docs/cli.md](docs/cli.md) — sending prompts, output modes, retry, `--verify` hook, JSON mode
+- [docs/cli.md](docs/cli.md) — sending prompts, output modes, retry, `--verify` hook, JSON mode, `at compose`
 - [docs/progress.md](docs/progress.md) — live progress (SSE), event schema, adapters, discuss channel
 - [docs/agents.md](docs/agents.md) — tiers, agent tables, binary resolution, plugins, configuration
 - [docs/architecture.md](docs/architecture.md) — source map, design points, state locking, adding agents

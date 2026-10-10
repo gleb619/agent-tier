@@ -89,3 +89,27 @@ Accepts a JSON object from stdin, compatible with the `coding-agent` protocol:
 All fields except `prompt` are optional. Extra fields: `promptFile` (path, used
 when `prompt` is absent), `callback` and `verify` (shell commands, same contract
 as the flags), `sse` (boolean) and `ssePort` (number, `0` = random).
+
+## Compose (plan → implement → check)
+
+`at compose` runs one goal through a fixed state machine instead of a single agent call.
+Tier 1 plans and judges; tier 2 only implements.
+
+```bash
+at compose -p "add retry to the resolver" --test-cmd 'npm test'
+at compose --goal "..." --max-rounds 5 --max-nodes 40
+at compose -p "..." --resume <goalId>     # continue a saved run
+```
+
+States: `INVESTIGATE` (`at index init` when `.codegraph` is missing, then `at index sync`, codegraph
+context → `context.md`) → `PLAN` (tier 1 writes `plan.md`: requirements, design notes, `- [ ] N. task`
+checklist) → `IMPLEMENT` (tier 2 per unchecked task, ticked on exit 0, first failure stops the run) →
+`CHECK` (runs `--test-cmd` locally, then tier 1 reads the plan, `git diff` and the test tail and writes
+`verdict.md`). `PASS` → `DONE` (exit 0). `FAIL` re-plans with the verdict findings appended as new
+unchecked tasks; after `--max-rounds` (default 3) the run ends `FAILED` (exit 1). A verdict whose first
+line is neither `PASS` nor `FAIL` counts as `FAIL`.
+
+Artifacts and `state.json` (`{ goal, state, round, testCmd, maxRounds }`, saved after every transition)
+live in `~/.at/compose/<goalId>/`. A missing `plan.md`/`verdict.md` or a non-zero agent exit aborts with
+the failing state named in the message and exit 1.
+
