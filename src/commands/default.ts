@@ -1,10 +1,10 @@
-import fs from "fs";
 import { Command } from 'commander';
 import { AGENTS } from '../agents/registry';
 import { loadGenericAgents } from '../agents/generic-loader';
 import { resolveFromArgs, parseJsonInput } from '../resolver';
 import { run } from '../runner';
 import { loadConfig, applyTierOverrides } from '../config';
+import { readPromptFile } from '../prompt-file';
 
 async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) return '';
@@ -14,28 +14,6 @@ async function readStdin(): Promise<string> {
     process.stdin.on('data', (chunk) => (data += chunk));
     process.stdin.on('end', () => resolve(data.trim()));
   });
-}
-
-function readPromptFile(filePath: string): string {
-  try {
-    const ext = filePath.split('.').pop()?.toLowerCase();
-    const content = fs.readFileSync(filePath, 'utf8');
-    
-    if (ext === 'json') {
-      try {
-        const parsed = JSON.parse(content);
-        if (parsed.prompt && typeof parsed.prompt === 'string') {
-          return parsed.prompt;
-        }
-        return content;
-      } catch (e) {
-        return content;
-      }
-    }
-    return content;
-  } catch (error) {
-    throw new Error(`Failed to read prompt file: ${(error as Error).message}`);
-  }
 }
 
 export function registerDefaultCommand(program: Command): void {
@@ -83,7 +61,7 @@ export function registerDefaultCommand(program: Command): void {
         if (opts.json) {
           const stdinData = await readStdin();
           const parsed = parseJsonInput(stdinData);
-          const finalPrompt = (parsed.prompt || filePrompt || opts.prompt || '').trim();
+          const finalPrompt = (parsed.prompt || parsed.promptFileContent || filePrompt || opts.prompt || '').trim();
           runOptions = resolveFromArgs({
             agent: parsed.agent,
             tier: opts.tier,

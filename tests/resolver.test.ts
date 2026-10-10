@@ -1,6 +1,7 @@
 import { parseJsonInput, resolveFromArgs } from '../src/resolver';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import { resolveStateDir } from '../src/state-dir';
 
 describe('parseJsonInput', () => {
@@ -208,5 +209,77 @@ describe('parseJsonInput edge cases', () => {
   it('defaults verify to undefined when missing from JSON', () => {
     const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'hello' }));
     expect(opts.verify).toBeUndefined();
+  });
+});
+
+describe('parseJsonInput promptFile', () => {
+  let tmpDir: string;
+  beforeAll(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'at-prompt-file-'));
+  });
+  afterAll(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function write(name: string, body: string): string {
+    const p = path.join(tmpDir, name);
+    fs.writeFileSync(p, body);
+    return p;
+  }
+
+  it('resolves prompt from a .md file when promptFile is provided', () => {
+    const p = write('hi.md', 'hello from md');
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', promptFile: p }));
+    expect(opts.prompt).toBe('hello from md');
+    expect(opts.promptFileContent).toBe('hello from md');
+  });
+
+  it('resolves prompt from a .json file (uses inner prompt field)', () => {
+    const p = write('hi.json', JSON.stringify({ prompt: 'inside-json' }));
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', promptFile: p }));
+    expect(opts.prompt).toBe('inside-json');
+  });
+
+  it('falls back to raw .json content when no inner prompt field', () => {
+    const p = write('raw.json', '{"foo":"bar"}');
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', promptFile: p }));
+    expect(opts.prompt).toBe('{"foo":"bar"}');
+  });
+
+  it('inline prompt wins over promptFile when both are provided', () => {
+    const p = write('ignored.md', 'from file');
+    const opts = parseJsonInput(JSON.stringify({ agent: 'mm-code', prompt: 'inline', promptFile: p }));
+    expect(opts.prompt).toBe('inline');
+  });
+
+  it('throws when promptFile is a non-string', () => {
+    expect(() =>
+      parseJsonInput(JSON.stringify({ agent: 'mm-code', promptFile: 123 }))
+    ).toThrow('promptFile must be a non-empty string');
+  });
+
+  it('throws when promptFile is empty string', () => {
+    expect(() =>
+      parseJsonInput(JSON.stringify({ agent: 'mm-code', promptFile: '   ' }))
+    ).toThrow('promptFile must be a non-empty string');
+  });
+
+  it('throws when promptFile points to a missing file', () => {
+    expect(() =>
+      parseJsonInput(JSON.stringify({ agent: 'mm-code', promptFile: path.join(tmpDir, 'nope.md') }))
+    ).toThrow(/Failed to read prompt file/);
+  });
+
+  it('throws when neither prompt nor promptFile is supplied', () => {
+    expect(() =>
+      parseJsonInput(JSON.stringify({ agent: 'mm-code' }))
+    ).toThrow(/prompt is required/);
+  });
+
+  it('accepts a payload with only promptFile and no agent/prompt', () => {
+    const p = write('only.md', 'lonely');
+    const opts = parseJsonInput(JSON.stringify({ promptFile: p }));
+    expect(opts.agent).toBe('auto');
+    expect(opts.prompt).toBe('lonely');
   });
 });

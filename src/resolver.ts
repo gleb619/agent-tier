@@ -1,4 +1,5 @@
 import { resolveStateDir } from './state-dir';
+import { readPromptFile } from './prompt-file';
 
 export interface RunOptions {
   agent: string;
@@ -68,6 +69,12 @@ export interface ParsedJson {
   sse?: boolean;
   ssePort?: number;
   verify?: string;
+  /**
+   * Resolved prompt content from a `promptFile` field. Holds the file's text
+   * (or the inner `prompt` field for .json) AFTER read. Allows `prompt` to
+   * be derived purely from a file path passed via JSON.
+   */
+  promptFileContent?: string;
 }
 
 export function resolveFromArgs(argv: ArgvOptions): RunOptions {
@@ -139,8 +146,24 @@ export function parseJsonInput(raw: string): ParsedJson {
     throw new Error('Invalid JSON input');
   }
 
-  const prompt = (parsed.prompt as string | undefined)?.trim() ?? '';
-  if (!prompt) throw new Error('JSON input: prompt is required');
+  const inlinePrompt = (parsed.prompt as string | undefined)?.trim() ?? '';
+
+  // Optional `promptFile` field. If present and `prompt` isn't, read the file
+  // and use its content as the prompt. If both are present, the inline `prompt`
+  // wins (user wrote it literally). Validate type up-front so we can throw
+  // before hitting the filesystem.
+  let promptFileContent: string | undefined;
+  if (parsed.promptFile !== undefined) {
+    if (typeof parsed.promptFile !== 'string' || !parsed.promptFile.trim()) {
+      throw new Error('JSON input: promptFile must be a non-empty string');
+    }
+    if (!inlinePrompt) {
+      promptFileContent = readPromptFile(parsed.promptFile);
+    }
+  }
+
+  const prompt = inlinePrompt || promptFileContent || '';
+  if (!prompt) throw new Error('JSON input: prompt is required (or supply promptFile)');
 
   const rawEnv = parsed.env;
   let env: Record<string, string> | undefined;
@@ -175,5 +198,6 @@ export function parseJsonInput(raw: string): ParsedJson {
     sse: parsed.sse === true,
     ssePort,
     verify: (parsed.verify as string | undefined)?.trim() || undefined,
+    promptFileContent,
   };
 }
