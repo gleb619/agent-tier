@@ -83,9 +83,13 @@ describe('tui2 sidebar row model', () => {
     });
 
     it('keeps the placeholder "no runs" case compact', () => {
+      // 'nope' matches no menu keyword and no label, and no runs exist — so
+      // the row model collapses to filter + the two separators framing the
+      // (empty) menu block. Compact: just the input box visible.
       const rows = buildRowModel({ groups: [], filter: 'nope', activeView: 'dashboard' });
-      // filter + sep + 4 menu + sep = 7 rows
-      expect(rows).toHaveLength(7);
+      // filter + sep + sep = 3 rows
+      expect(rows).toHaveLength(3);
+      expect(rows.map((r) => r.kind)).toEqual(['filter', 'separator', 'separator']);
     });
   });
 
@@ -169,6 +173,110 @@ describe('tui2 sidebar row model', () => {
         { kind: 'group-header', label: 'Today' },
       ];
       expect(moveSelection(empty, -1, 1)).toBe(-1);
+    });
+  });
+
+  describe('menu filter', () => {
+    /** Collect just the menu rows, in display order. */
+    const menuRows = (rows: Row[]) =>
+      rows.filter((r): r is Extract<Row, { kind: 'menu' }> => r.kind === 'menu');
+
+    it('keeps all four menu rows when the filter is empty', () => {
+      const rows = buildRowModel({ groups: [], filter: '', activeView: 'dashboard' });
+      expect(menuRows(rows).map((m) => m.view)).toEqual([
+        'dashboard',
+        'new-task',
+        'run-details',
+        'settings',
+      ]);
+    });
+
+    it('keeps all four menu rows when the filter is whitespace only', () => {
+      const rows = buildRowModel({ groups: [], filter: '   \t ', activeView: 'dashboard' });
+      expect(menuRows(rows).map((m) => m.view)).toEqual([
+        'dashboard',
+        'new-task',
+        'run-details',
+        'settings',
+      ]);
+    });
+
+    it('matches a substring of a menu label (case-insensitive)', () => {
+      const rows = buildRowModel({ groups: [], filter: 'dash', activeView: 'settings' });
+      const menus = menuRows(rows);
+      expect(menus.map((m) => m.view)).toEqual(['dashboard']);
+      // Filter row always first so the input stays visible.
+      expect(rows[0].kind).toBe('filter');
+      // Separator around the (possibly empty) menu block still in place.
+      expect(rows[1].kind).toBe('separator');
+    });
+
+    it('matches a keyword/alias per view (retries → Settings)', () => {
+      const rows = buildRowModel({ groups: [], filter: 'retries', activeView: 'dashboard' });
+      expect(menuRows(rows).map((m) => m.view)).toEqual(['settings']);
+    });
+
+    it('matches keywords for semantic queries (sandbox → Settings)', () => {
+      const rows = buildRowModel({ groups: [], filter: 'sandbox', activeView: 'dashboard' });
+      expect(menuRows(rows).map((m) => m.view)).toEqual(['settings']);
+    });
+
+    it('multi-token query: every token must match somewhere (label or keywords)', () => {
+      // "new task" → label of New Task matches as one substring; also each
+      // token individually matches ("new" in label, "task" in label).
+      const rows = buildRowModel({ groups: [], filter: 'new task', activeView: 'dashboard' });
+      expect(menuRows(rows).map((m) => m.view)).toEqual(['new-task']);
+    });
+
+    it('multi-token query that splits cleanly across keyword sets returns no menu rows', () => {
+      // "dash retries": "dash" matches Dashboard, "retries" matches Settings —
+      // AND across tokens leaves neither view matching both.
+      const rows = buildRowModel({ groups: [], filter: 'dash retries', activeView: 'dashboard' });
+      expect(menuRows(rows)).toEqual([]);
+    });
+
+    it('emits zero menu rows when nothing matches, but the filter row is still first', () => {
+      const rows = buildRowModel({ groups: [], filter: 'zzzz', activeView: 'dashboard' });
+      expect(rows[0].kind).toBe('filter');
+      expect(menuRows(rows)).toEqual([]);
+      // selectable indices are still valid — j/k navigation snaps to filter.
+      const sel = selectableRowIndices(rows);
+      expect(sel).toContain(0);
+      expect(moveSelection(rows, -1, 1)).toBe(0);
+    });
+
+    it('keeps the active marker correct after filtering (▶ on Settings only)', () => {
+      const rows = buildRowModel({ groups: [], filter: 'retries', activeView: 'settings' });
+      const menus = menuRows(rows);
+      expect(menus).toHaveLength(1);
+      expect(menus[0]).toMatchObject({ kind: 'menu', view: 'settings', active: true });
+    });
+
+    it('drops the active marker when the active view itself is filtered out', () => {
+      // Filter excludes the active view — no menu row, so no row carries `active`.
+      const rows = buildRowModel({ groups: [], filter: 'retries', activeView: 'dashboard' });
+      for (const row of rows) {
+        if (row.kind === 'menu') expect(row.active).toBe(false);
+      }
+    });
+
+    it('does not touch the run list — buildRowModel renders the groups it was given', () => {
+      // Run-list filtering happens upstream (filteredSessions2 → groupRunsByDate).
+      // This row model trusts the pre-filtered groups; the menu filter only
+      // changes which menu rows appear, not which runs are rendered.
+      const runs = [
+        mockRun('r1', { agent: 'glm-code', prompt: 'fix bug' }),
+        mockRun('r2', { agent: 'mm-code', prompt: 'add feature' }),
+      ];
+      const rows = buildRowModel({
+        groups: groupRunsByDate(runs),
+        filter: 'mm-code',
+        activeView: 'dashboard',
+      });
+      const runRows = rows.filter((r) => r.kind === 'run');
+      expect(runRows.map((r) => (r as { runId: string }).runId)).toEqual(['r1', 'r2']);
+      // The filter string lands on the filter row only.
+      expect(rows[0]).toMatchObject({ kind: 'filter', filter: 'mm-code' });
     });
   });
 });

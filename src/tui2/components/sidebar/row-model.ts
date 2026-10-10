@@ -53,6 +53,39 @@ export const SIDEBAR_MENU_ITEMS: ReadonlyArray<Omit<MenuRow, 'active'>> = [
   { kind: 'menu', view: 'settings', key: '4', label: 'Settings' },
 ];
 
+/**
+ * Per-view keyword/keyword aliases for the sidebar filter. The filter matches
+ * a menu item when the query is a substring of the item's label OR of any of
+ * its keywords. Lower-cased before comparison.
+ */
+export const MENU_KEYWORDS: Record<ActiveView, readonly string[]> = {
+  dashboard: ['runs', 'history', 'status', 'overview', 'dashboard'],
+  'new-task': ['task', 'new', 'prompt', 'run', 'create', 'submit'],
+  'run-details': ['log', 'detail', 'output', 'run', 'prompt', 'meta'],
+  settings: ['config', 'setting', 'retry', 'retries', 'sandbox', 'timeout', 'line', 'tier'],
+};
+
+/** All label/keyword strings for a menu item, lower-cased. */
+function menuSearchCorpus(item: Omit<MenuRow, 'active'>): string[] {
+  return [item.label.toLowerCase(), ...MENU_KEYWORDS[item.view].map((k) => k.toLowerCase())];
+}
+
+/**
+ * Does `query` match this menu item? Empty/whitespace → matches all. A single
+ * token must hit the corpus somewhere; multi-token queries (split on
+ * whitespace) must hit everywhere (AND across tokens).
+ */
+export function menuMatchesQuery(
+  item: Omit<MenuRow, 'active'>,
+  query: string,
+): boolean {
+  const trimmed = query.trim().toLowerCase();
+  if (!trimmed) return true;
+  const tokens = trimmed.split(/\s+/);
+  const corpus = menuSearchCorpus(item);
+  return tokens.every((t) => corpus.some((entry) => entry.includes(t)));
+}
+
 export interface RunGroup {
   label: string;
   runs: RunRecord[];
@@ -98,12 +131,18 @@ export interface RowModelInput {
  * Two visual separators: one between the filter and the menu so the filter
  * input never touches the first menu row, and one between the menu and the
  * run list so the two zones read as distinct blocks.
+ *
+ * The sidebar filter also narrows the menu rows: non-matching items are
+ * hidden so the input behaves as a unified context filter. The filter row
+ * itself always renders, and the row model stays valid (selectable indices
+ * always include at least the filter row) even when every menu row is hidden.
  */
 export function buildRowModel(input: RowModelInput): Row[] {
   const rows: Row[] = [];
   rows.push({ kind: 'filter', label: 'Filter runs…', filter: input.filter });
   rows.push({ kind: 'separator' });
   for (const item of SIDEBAR_MENU_ITEMS) {
+    if (!menuMatchesQuery(item, input.filter)) continue;
     rows.push({ kind: 'menu', view: item.view, key: item.key, label: item.label, active: input.activeView === item.view });
   }
   rows.push({ kind: 'separator' });

@@ -158,7 +158,7 @@ export function App(): JSX.Element {
   /** Hotkey target: switch view and snap the sidebar cursor to the matching menu row. */
   function jumpToView(view: ActiveView, menuRowIndex: number): void {
     goToView(view);
-    setSidebarIndex(menuRowIndex);
+    if (menuRowIndex >= 0) setSidebarIndex(menuRowIndex);
   }
 
   /** Enter on the highlighted row: filter row → edit, menu row → switch view, run row → open details. */
@@ -239,11 +239,16 @@ export function App(): JSX.Element {
     const zone = focusZone();
 
     // Direct view jumps: synchronise the sidebar cursor with the matching
-    // menu row so the highlight follows the hotkey.
-    if (name === '1') jumpToView('dashboard', 1);
-    else if (name === '2') jumpToView('new-task', 2);
-    else if (name === '3') jumpToView('run-details', 3);
-    else if (name === '4') jumpToView('settings', 4);
+    // menu row so the highlight follows the hotkey. The menu row index is
+    // dynamic — when the sidebar filter hides the target menu item, the
+    // hotkey becomes a no-op for the sidebar cursor (the view still switches).
+    if (name === '1' || name === '2' || name === '3' || name === '4') {
+      const targetView: ActiveView =
+        name === '1' ? 'dashboard' : name === '2' ? 'new-task' : name === '3' ? 'run-details' : 'settings';
+      const rows = currentRows();
+      const menuRowIndex = rows.findIndex((r) => r.kind === 'menu' && r.view === targetView);
+      jumpToView(targetView, menuRowIndex);
+    }
     else if (name === 'q') quit();
     else if (zone === 'settings') {
       if (name === 'up' || name === 'k') setSettingsRow(clampRow(settingsRow() - 1));
