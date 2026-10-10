@@ -75,14 +75,26 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
   const selected = (): boolean => props.index === sidebarIndex();
 
   if (props.row.kind === 'separator') {
-    // Decorative divider — flush against the rows above and below
-    // (marginTop/marginBottom 0, and the parent column uses gap={0}) so the
-    // filter input hugs its underline and the closing divider hugs the next
-    // group header.
+    // Full-width hairline rule. Replaces the old hardcoded 22-cell dash
+    // string, which only ever stretched to 22 cells and looked cramped
+    // whenever the sidebar was wider than that. A border-top on a 1-row
+    // empty box draws a single horizontal rule that auto-stretches to the
+    // parent's inner width (`BorderSides[]` is supported by @opentui/core).
+    // No paddingX so the rule sits edge-to-edge of the scrollbox content
+    // area. Vertical rhythm: this separator carries NO marginTop (the
+    // preceding row — filter, or the last menu row — supplies the 1-line
+    // gap above via its own marginBottom); marginBottom=1 supplies the
+    // 1-line gap below before the next section.
     return (
-      <box paddingX={1} marginTop={0} marginBottom={0}>
-        <text content="──────────────────────" fg={SECTION_RULE} />
-      </box>
+      <box
+        width="100%"
+        height={1}
+        border={['top']}
+        borderStyle="single"
+        borderColor={SECTION_RULE}
+        marginTop={0}
+        marginBottom={1}
+      />
     );
   }
 
@@ -92,11 +104,11 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
     // `── Today ──` label sits exactly in the visual middle of the sidebar
     // column, regardless of column width. No paddingX/left offset, so it
     // can't drift off-center.
+    // marginTop=0 lets the separator above supply the 1-line gap; if the
+    // header carried its own marginTop=1 on top of the separator's
+    // marginBottom=1 the section would look gappy. marginBottom=1 gives
+    // one blank line before the group's first run row.
     return (
-      // marginTop 0 keeps the header glued to whatever sits above it (the
-      // separator closing the menu block, or the previous run). marginBottom 1
-      // gives one blank line before the group's first run row — headers start
-      // a section, so they carry the spacing, not the space above them.
       <box width="100%" flexDirection="row" justifyContent="center" marginTop={0} marginBottom={1}>
         <text content={`── ${props.row.label} ──`} fg={DIMMER} />
       </box>
@@ -161,9 +173,11 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
     const isOn = (): boolean => selected() || row.active;
     const marker = (): string => (isOn() ? `▶ [${row.key}]` : `  [${row.key}]`);
     return (
-      // marginBottom 0 = the menu is a compact list; consecutive items sit on
-      // adjacent lines with no gap between them.
-      <box {...rowBox(selected(), 0)} onMouseDown={activate}>
+      // marginBottom=1 separates consecutive menu rows by one blank line so
+      // items read as distinct entries rather than a flush list. The same
+      // value on the last menu row carries the 1-line gap above the
+      // closing separator (the separator itself has marginTop=0).
+      <box {...rowBox(selected(), 1)} onMouseDown={activate}>
         <text fg={isOn() ? ACTIVE : DIM}>{`${marker()} ${row.label}`}</text>
       </box>
     );
@@ -237,13 +251,23 @@ export function Sidebar(): JSX.Element {
       padding={1}
     >
       <scrollbox flexGrow={1} onMouseDown={() => setFocusZone('sidebar-list')}>
-        {/* Spacing map (vertical rhythm is per-row margin, parent gap is 0):
-            filter row     marginBottom 1  → one blank line, then divider
-            separator      margin 0        → hugs rows above and below
-            menu rows      marginBottom 0  → compact list, adjacent lines
+        {/* Spacing map (per-row margins, parent gap=0). Target rhythm: one
+            blank line between every adjacent pair, breathing but not gappy.
+            filter row     marginBottom 1  → one blank line above separator
+            separator      marginTop 0 /
+                            marginBottom 1 → tight above (gap comes from
+                                              the preceding row), 1 blank
+                                              below; rule is a hairline
+                                              border-top stretching the
+                                              full inner width
+            menu rows      marginBottom 1  → one blank line between rows;
+                                              the last menu's margin also
+                                              feeds the gap to separator
             group header   marginTop 0 /
-                            marginBottom 1 → glued above, one line before first run
-            run rows       marginBottom 1  → one blank line between entries */}
+                            marginBottom 1 → tight below the closing
+                                              separator, one blank before
+                                              the group's first run
+            run rows       marginBottom 1  → one blank line between runs */}
         <box flexDirection="column" gap={0}>
           <For each={rows()}>
             {(row, i) => <SidebarRow row={row} index={i()} />}
