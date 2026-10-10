@@ -11,11 +11,16 @@ function buildCli(): void {
   execSync('npm run build', { stdio: 'inherit' });
 }
 
-function runCli(args: string[], stdinData?: string): { exitCode: number; stdout: string; stderr: string } {
+function runCli(
+  args: string[],
+  stdinData?: string,
+  env?: NodeJS.ProcessEnv,
+): { exitCode: number; stdout: string; stderr: string } {
   const result = spawnSync('node', [cliPath, ...args], {
     input: stdinData,
     encoding: 'utf8',
     cwd: process.cwd(),
+    env: env ?? process.env,
   });
   return {
     exitCode: result.status ?? -1,
@@ -118,11 +123,23 @@ describe('--json stdin mode', () => {
   });
 
   it('respects precedence: CLI --global-prompt > JSON globalPrompt > config globalPrompt', async () => {
+    // Isolate HOME so the user's real ~/.at/config.json (which may define
+    // globalPrompt) cannot leak into the "no globals" sub-case below.
+    // LOCAL_BIN must keep pointing at the real bin dir — the mock agent
+    // binary resolves to $LOCAL_BIN/mock-agent and would ENOENT otherwise.
+    const isolatedHome = mkdtempSync(path.join(os.tmpdir(), 'at-stdin-home-'));
+    const isolatedEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      HOME: isolatedHome,
+      LOCAL_BIN: path.join(os.homedir(), '.local', 'bin'),
+    };
+
     // Test 1: CLI --global-prompt takes precedence
     const logDir1 = mkdtempSync(path.join(os.tmpdir(), 'at-stdin-test-1'));
     const result1 = runCli(
       ['--json', '--global-prompt', 'CLI GLOBAL', '--log-dir', logDir1],
       JSON.stringify({ prompt: 'json prompt', agent: 'mock', globalPrompt: 'JSON GLOBAL' }),
+      isolatedEnv,
     );
     expect(result1.exitCode).toBe(0);
     const logFile1 = waitForLogFile(logDir1, 'mock');
@@ -138,6 +155,7 @@ describe('--json stdin mode', () => {
     const result2 = runCli(
       ['--json', '--log-dir', logDir2],
       JSON.stringify({ prompt: 'json prompt', agent: 'mock', globalPrompt: 'JSON GLOBAL' }),
+      isolatedEnv,
     );
     expect(result2.exitCode).toBe(0);
     const logFile2 = waitForLogFile(logDir2, 'mock');
@@ -146,12 +164,13 @@ describe('--json stdin mode', () => {
     expect(content2).toContain('JSON GLOBAL');
     expect(content2).toContain('json prompt');
 
-    // Test 3: Config globalPrompt when neither CLI nor JSON present
-    // We'd need to set up config, but for simplicity we'll test with no globals
+    // Test 3: no globals at all (isolated HOME has no ~/.at/config.json,
+    // so config globalPrompt cannot inject itself)
     const logDir3 = mkdtempSync(path.join(os.tmpdir(), 'at-stdin-test-3'));
     const result3 = runCli(
       ['--json', '--log-dir', logDir3],
       JSON.stringify({ prompt: 'json prompt', agent: 'mock' }),
+      isolatedEnv,
     );
     expect(result3.exitCode).toBe(0);
     const logFile3 = waitForLogFile(logDir3, 'mock');
