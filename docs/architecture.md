@@ -1,0 +1,64 @@
+# Architecture
+
+Detail doc for [README.md](../README.md) and [AGENTS.md](../AGENTS.md).
+
+`at` is thin CLI wrapper that routes coding prompt to one of many AI agent binaries via round-robin scheduling and retry.
+
+```
+src/cli.ts          parse flags + stdin → resolveFromArgs/parseJsonInput → run()
+src/resolver.ts     normalise raw argv/JSON into a typed RunOptions struct
+src/scheduler.ts    round-robin state: read/write /tmp/at-<tier>-state.json
+src/runner.ts       spawn agent process (stream or detached), retry on non-zero exit
+src/agents/registry.ts  AgentDef[] — name, tier, bin(), buildArgs(), buildEnv(), promptMode
+src/agents/generic-loader.ts  discover plugins from ~/.at/*/generic.js
+src/config.ts            load ~/.at/config.json with HMAC verification
+src/feedback-store.ts  feedback.jsonl CRUD, autoclean, and file locking
+src/commands/feedback.ts  `at feedback` subcommands: add, list, show, update, resolve, rm, clear, prune
+src/notify/types.ts     NotifyEvent / NotifyAdapter iface
+src/notify/index.ts     adapter registry + setupNotify()
+src/notify/hub.ts       HTTP/SSE hub (/events, /emit, replay + live)
+src/notify/store.ts     jsonl event persistence (readEvents/appendEvent)
+src/notify/tailer.ts    log file tail → adapter.parseLine → hub.publish
+src/notify/adapters/*   per-agent stream-json/--json/log adapters
+```
+
+**Flow:** CLI → Resolver → Runner → (Scheduler picks agent) → child process spawned
+
+## Key design points
+
+- **Binary resolution:** Each `AgentDef.bin()` checks env override (e.g. `OPENCODE_BIN`) then falls back to `$NODE_BIN/<name>`  `$LOCAL_BIN/<name>`. `NODE_BIN` defaults to dir of running `node` binary (`path.dirname(process.execPath)`); `LOCAL_BIN` to `~/.local/bin`. Override via `env.local.sh` (gitignored).
+- **promptMode:** Defaults to `'arg'` (prompt passed as CLI arg). Set to `'stdin'` (e.g. `agy`) to pipe prompt to child's stdin instead.
+- **Detached mode (default):** Child is spawned detached; stdout/stderr go to `/tmp/at-logs/at-<timestamp>-<agent>.log`. Caller gets the run box (runId, pid, log path) and returns immediately. A background supervisor (`src/run-watch.ts`) polls the pid, marks the run `done` with `exitCode: null` (the real exit code of a non-child process is unknowable) and runs the `--callback` (`AT_EXIT_CODE=0`). `--wait` (or `-s`) blocks until the child exits, enabling `--timeout`, retry, agent-health tracking and a callback with the real exit code.
+- **Stream mode (`-s`):** Child output is streamed to terminal and simultaneously written to `/tmp/at-logs/at-<timestamp>-<agent>.log`.
+- **Retry:** On non-zero exit, `runner` picks next agent in same tier and retries, up to `min(retries, candidates.length - 1)` additional attempts. Named agents (`-a <name>`) never retry. Retry only applies to `--wait` / `-s` runs — non-wait detached runs return immediately with no observable exit code.
+- **`--verify <cmd>`:** Post-run shell hook fired after the agent exits and before `--callback`. Non-zero exit fails the run (status `failed`, log line, callback still fires with `AT_STATUS=failed`); in blocking modes the runner raises `AgentError('verify failed …')` so the existing retry-with-next-agent loop applies. The detached supervisor receives the command via `AT_VERIFY_CMD` env (no argv extension) and runs it in `AT_CWD` (`options.cwd`) when set, else its own cwd.
+- **Scheduler state:** `/tmp/at-<tier>-state.json` (or `/tmp/at-global-state.json` w/ `--global-state`). Shape: `{ index: number }`.
+- **JSON mode (`--json`):** Reads `{ agent, prompt, model, cwd, env }` from stdin — compatible w/ existing `coding-agent` protocol.
+- **`defaultSpawner` is injectable** in `runner.run()` for testing w/o real agent binaries.
+
+## State locking
+
+All write operations on shared state files use file-based mutex to prevent TOCTOU races when multiple `at` processes run concurrently.
+
+**Lock dir:** `~/.at/locks/`
+
+**Lock file naming:** state file path → lowercase, replace `/`  `.` w/ `-`append `.lock`
+  Example: `/home/user/.at/state.json` → `~/.at/locks/home-user--at-state-json.lock`
+
+**Lock file content:**
+```json
+{ "pid": 12345, "hostname": "my-host", "startedAt": "2026-...", "stateFile": "/path/to/state.json" }
+```
+
+**Stale lock detection:** if PID in lock file is no longer alive (`process.kill(pid, 0)` throws), lock is stolen and retried immediately.
+
+**Locked operations:**
+- `pickAgent()` in `scheduler.ts` — round-robin index read→increment→write
+- `recordResult()` `setDeactivated()` `resetAgent()` in `health.ts` — agent health read→modify→write
+- `addRun()` `updateRun()` `pruneRuns()` in `run-store.ts` — runs index read→modify→write
+
+**Module:** `src/lock.ts` — exports `acquireLock` `releaseLock` `withLock`
+
+## Adding an agent
+
+Add new `AgentDef` entry to `AGENTS` in `src/agents/registry.ts`. Implement `bin()` `buildArgs()`and optionally `buildEnv()`  `promptMode`. No other files need changing.
