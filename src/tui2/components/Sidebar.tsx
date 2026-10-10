@@ -80,8 +80,11 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
   }
 
   if (props.row.kind === 'group-header') {
+    // Full-width row so justifyContent="center" centers the dashed label
+    // horizontally across the sidebar column (parent scrollbox stretches
+    // children along the cross axis).
     return (
-      <box paddingX={1} marginBottom={1}>
+      <box width="100%" paddingX={1} marginBottom={1} justifyContent="center">
         <text content={`── ${props.row.label} ──`} fg={DIMMER} />
       </box>
     );
@@ -124,10 +127,22 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
       setSidebarIndex(props.index);
       goToView(row.view);
     };
-    const marker = row.active ? `▶ [${row.key}]` : `  [${row.key}]`;
+    // Marker mirrors the run-row cursor convention: the `▶` lights up when
+    // either the cursor is on the row OR the menu item represents the active
+    // view (so the user always sees which screen they are on).
+    const isOn = (): boolean => selected() || row.active;
+    const marker = (): string => (isOn() ? `▶ [${row.key}]` : `  [${row.key}]`);
+    // Label column is indented to match the run-row sub-line so both row
+    // types start their label text at the same visual column.
+    const labelIndent = (): string => (selected() ? '   ' : '    ');
     return (
-      <box {...rowBox(selected())} onMouseDown={activate}>
-        <text fg={row.active ? ACTIVE : DIM}>{`${marker} ${row.label}`}</text>
+      <box
+        {...rowBox(selected())}
+        flexDirection="column"
+        onMouseDown={activate}
+      >
+        <text fg={isOn() ? ACTIVE : DIM}>{marker()}</text>
+        <text fg={selected() ? NORMAL : DIM}>{`${labelIndent()}${row.label}`}</text>
       </box>
     );
   }

@@ -55,7 +55,15 @@ export function RunDetails(props: RunDetailsProps): JSX.Element {
           />
         }
       >
-        <RunMeta session={session()!} />
+        <box
+          border
+          borderStyle="rounded"
+          borderColor="#30363d"
+          padding={1}
+          marginBottom={1}
+        >
+          <RunMeta session={session()!} />
+        </box>
 
         <Show when={props.showPrompt}>
           <box

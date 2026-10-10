@@ -127,13 +127,20 @@ function MetaRowView(props: { row: MetaRow; width: number }): JSX.Element {
   );
 }
 
-/** Padded, aligned metadata block for the run-details panel. */
+/**
+ * Padded, aligned metadata block for the run-details panel.
+ *
+ * The component itself renders the rows without any padding — the surrounding
+ * bordered container in `RunDetails` provides padding, border and the gap
+ * below the block. Keeping the layout here purely structural makes the row
+ * model easy to unit-test and lets the panel own all visual chrome.
+ */
 export function RunMeta(props: RunMetaProps): JSX.Element {
   const rows = createMemo(() => runMetaRows(props.session));
   const width = createMemo(() => metaLabelWidth(rows()) + 1);
 
   return (
-    <box flexDirection="column" gap={1} paddingTop={1} paddingLeft={1} paddingRight={1} paddingBottom={1}>
+    <box flexDirection="column" gap={1}>
       <For each={rows()}>{(row) => <MetaRowView row={row} width={width()} />}</For>
     </box>
   );

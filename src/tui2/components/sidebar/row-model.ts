@@ -93,11 +93,16 @@ export interface RowModelInput {
 
 /**
  * Build the flat row list in display order:
- * filter → 4 menu → separator → group-header + runs (per group).
+ * filter → separator → 4 menu → separator → group-header + runs (per group).
+ *
+ * Two visual separators: one between the filter and the menu so the filter
+ * input never touches the first menu row, and one between the menu and the
+ * run list so the two zones read as distinct blocks.
  */
 export function buildRowModel(input: RowModelInput): Row[] {
   const rows: Row[] = [];
   rows.push({ kind: 'filter', label: 'Filter runs…', filter: input.filter });
+  rows.push({ kind: 'separator' });
   for (const item of SIDEBAR_MENU_ITEMS) {
     rows.push({ kind: 'menu', view: item.view, key: item.key, label: item.label, active: input.activeView === item.view });
   }
