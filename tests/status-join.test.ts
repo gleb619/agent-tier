@@ -168,6 +168,13 @@ describe('formatStatusTable with scope', () => {
   it('no SCOPE column for plain runs (back-compat)', () => {
     expect(formatStatusTable([baseRun])).not.toContain('SCOPE');
   });
+
+  it('SCOPE column shown when joined, even if all runs come from one source', () => {
+    const scoped = { ...baseRun, scope: 'global' } as RunRecord & { scope: string };
+    const out = formatStatusTable([scoped]);
+    expect(out).toContain('SCOPE');
+    expect(out).toContain('global');
+  });
 });
 
 describe('formatStateReports', () => {
