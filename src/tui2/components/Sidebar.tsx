@@ -72,19 +72,24 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
   const selected = (): boolean => props.index === sidebarIndex();
 
   if (props.row.kind === 'separator') {
+    // Decorative divider — sits flush against the row above and the row below
+    // so the filter input hugs its underline and runs don't pile space onto the
+    // closing divider before the next group header.
     return (
-      <box paddingX={1} marginBottom={1}>
+      <box paddingX={1} marginBottom={0}>
         <text content="──────────────────────" fg={SECTION_RULE} />
       </box>
     );
   }
 
   if (props.row.kind === 'group-header') {
-    // Full-width row so justifyContent="center" centers the dashed label
-    // horizontally across the sidebar column (parent scrollbox stretches
-    // children along the cross axis).
+    // Full-width row, flexDirection=row + justifyContent=center centers the
+    // single text child along the row's main axis so the dashed
+    // `── Today ──` label sits exactly in the visual middle of the sidebar
+    // column, regardless of column width. No paddingX/left offset, so it
+    // can't drift off-center.
     return (
-      <box width="100%" paddingX={1} marginBottom={1} justifyContent="center">
+      <box width="100%" flexDirection="row" justifyContent="center" marginBottom={1}>
         <text content={`── ${props.row.label} ──`} fg={DIMMER} />
       </box>
     );
@@ -93,9 +98,23 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
   if (props.row.kind === 'filter') {
     const row = props.row;
     const editing = (): boolean => focusZone() === 'sidebar-filter';
+    // The filter row hugs the divider beneath it; spacing below the input
+    // is provided by the separator itself, not by an extra marginBottom.
+    const filterBox = {
+      flexDirection: 'row' as const,
+      paddingX: 1,
+      backgroundColor: undefined as string | undefined,
+      marginBottom: 0,
+    };
+    const filterBoxSelected = {
+      flexDirection: 'row' as const,
+      paddingX: 1,
+      backgroundColor: SELECTION,
+      marginBottom: 0,
+    };
     if (editing()) {
       return (
-        <box {...rowBox(true)}>
+        <box {...filterBoxSelected}>
           <text fg={ACTIVE}>{'/  '}</text>
           <input
             value={sidebarFilter()}
@@ -113,7 +132,7 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
       setFocusZone('sidebar-filter');
     };
     return (
-      <box {...rowBox(selected())} onMouseDown={activate}>
+      <box {...(selected() ? filterBoxSelected : filterBox)} onMouseDown={activate}>
         <text fg={ACTIVE}>{'/  '}</text>
         <text fg={selected() ? NORMAL : DIM}>{'Filter runs…'}</text>
         <text fg={HINT}>{'  '}{hintText()}</text>
@@ -127,22 +146,15 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
       setSidebarIndex(props.index);
       goToView(row.view);
     };
-    // Marker mirrors the run-row cursor convention: the `▶` lights up when
-    // either the cursor is on the row OR the menu item represents the active
-    // view (so the user always sees which screen they are on).
+    // Single-line menu row: cursor + `[N]` + label sit in one text node so the
+    // hotkey and label read as a single horizontal unit (matches the pre-2-line
+    // layout). The `▶` lights when the cursor is on the row OR the menu item
+    // represents the active view, so the user always sees which screen is up.
     const isOn = (): boolean => selected() || row.active;
     const marker = (): string => (isOn() ? `▶ [${row.key}]` : `  [${row.key}]`);
-    // Label column is indented to match the run-row sub-line so both row
-    // types start their label text at the same visual column.
-    const labelIndent = (): string => (selected() ? '   ' : '    ');
     return (
-      <box
-        {...rowBox(selected())}
-        flexDirection="column"
-        onMouseDown={activate}
-      >
-        <text fg={isOn() ? ACTIVE : DIM}>{marker()}</text>
-        <text fg={selected() ? NORMAL : DIM}>{`${labelIndent()}${row.label}`}</text>
+      <box {...rowBox(selected())} onMouseDown={activate}>
+        <text fg={isOn() ? ACTIVE : DIM}>{`${marker()} ${row.label}`}</text>
       </box>
     );
   }
