@@ -54,7 +54,30 @@ git worktree prune
 
 ## Features
 
-//TODO add here a table with features name, description, and location in codebase
+| Feature | Description | Location |
+|---------|-------------|----------|
+| Prompt routing | Flags / stdin / `-f` file / `--json` → typed RunOptions | `src/cli.ts`, `src/resolver.ts`, `src/prompt-file.ts` |
+| Agent registry | 14 built-in agents: tier, `bin()`, `buildArgs()`, `buildEnv()`, `promptMode` | `src/agents/registry.ts` |
+| Round-robin scheduler | Per-tier agent rotation persisted in `<stateDir>/state.json` | `src/scheduler.ts` |
+| Generic plugin agents | Drop-in `~/.at/<name>/generic.js` agents (`AT_GENERIC_DIR`) | `src/agents/generic-loader.ts` |
+| Runner | Spawn agent stream/detached, retry next-in-tier, `--timeout` | `src/runner.ts` |
+| Run supervisor | Polls detached pid, marks run done, fires `--callback` | `src/run-watch.ts` |
+| Post-run hooks | `--verify <cmd>` before `--callback`, both get `AT_*` env | `src/runner.ts`, `src/run-watch.ts` |
+| Run history | `runs.jsonl` CRUD + stuck detection; `at status` / `at stop` | `src/run-store.ts`, `src/commands/status.ts`, `src/commands/stop.ts` |
+| Agent health | Track failures, `at enable` / `at disable` / auto-deactivate | `src/health.ts`, `src/commands/health.ts` |
+| State locking | File mutex with stale-lock steal for concurrent `at` processes | `src/lock.ts` |
+| Config + HMAC | `~/.at/config.json` `tierOverrides`, tamper-evident via `at config sign` | `src/config.ts`, `src/commands/config.ts` |
+| SSE live progress | `--sse` hub: `/events`, `/emit`, replay + live; standalone `at serve` | `src/notify/hub.ts`, `src/commands/serve.ts` |
+| Notify adapters | Per-agent output → structured events; log tail fallback | `src/notify/index.ts`, `src/notify/adapters/*`, `src/notify/tailer.ts` |
+| Discuss channel | Blocking agent↔host ask/answer/note over SSE or JSONL | `src/commands/discuss.ts`, `src/notify/discuss-store.ts` |
+| Output chop | Compress stream-mode logs via external `chop` (`--no-chop`) | `src/chop.ts` |
+| Feedback store | `feedback.jsonl` CRUD with file locking + autoclean | `src/feedback-store.ts`, `src/commands/feedback.ts` |
+| Session namer | Random run names via ollama / openrouter (`~/.at/namer.json`) | `src/namer/` |
+| Init wrappers | Create wrapper scripts for built-in agents (`at init`) | `src/init/index.ts`, `src/commands/init.ts` |
+| MCP server | stdio server: `run_prompt`, `list_agents`, `get_status` tools | `src/mcp/server.ts`, `src/mcp/tools.ts` |
+| TUI | No-arg `at` on TTY → interactive dashboard (opentui/solid, needs Bun) | `src/tui/`, `src/cli.ts` |
+| Compose | Multi-agent goal pipeline: arch → dev → test → review stages | `src/compose/` |
+| CodeGraph index | Wrap `codegraph` CLI for semantic code graph (`at index`) | `src/commands/codegraph.ts` |
 
 ## Commands
 
@@ -86,7 +109,7 @@ Deep dives: [docs/architecture.md](docs/architecture.md) (source map, key design
 |---------------|---------------------------------------|----------------------------|
 | 1             | glm-code, codex, kimi                 | architect / review         |
 | 2 *(default)* | mm-code, opencode, qwen, pi, cline    | dev / QA                   |
-| 3             | kilo, agy, kiro, cursor               | experimental / boilerplate |
+| 3             | kilo, agy, kiro, devin               | experimental / boilerplate |
 | 4             | mock, mock-long                       | dry-run / test agents      |
 
 ## More docs
