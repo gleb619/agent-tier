@@ -123,3 +123,57 @@ Artifacts and `state.json` (`{ goal, state, round, testCmd, maxRounds }`, saved 
 live in `~/.at/compose/<goalId>/`. A missing `plan.md`/`verdict.md` or a non-zero agent exit aborts with
 the failing state named in the message and exit 1.
 
+## Kanban board (`at kanban`)
+
+`docs/kanban.md` is a Markdown table that agents use as a shared task board. The CLI is the only
+sanctioned mutator: it parses to an mdast, edits the table node, and re-stringifies, so column
+padding and pipe escaping stay correct and hand-editing is never required.
+
+Board resolution: `[file]` positional → `--board <path>` → `$AT_KANBAN_FILE` → `<git root>/docs/kanban.md`.
+Every subcommand takes `--json`; `lint` exits 1 on violations and `guard` exits 1 on a dropped ID.
+
+```bash
+at kanban init [file] [--force]          # scaffold legend + empty 9-column table
+at kanban list [file]                    # ID / Status / Priority / Title (Blocked By)
+at kanban next [file] [--start]          # pick work; --start marks it In Progress
+at kanban show <id> [file] [--with-plan] # field block + first 100 lines of the plan file
+at kanban add [file] [--id T7] --title "..." [--priority High|Medium|Low] [--owner o]
+                     [--blocks ids] [--blocked-by ids] [--plan path] [--description text]
+at kanban status <id> <status> [file]    # vocabulary comes from the board's own legend
+at kanban remove <id> [file]             # alias: rm
+at kanban clean [file]                   # drop every Done row
+at kanban lint [file] [--root path]      # column count, unique IDs, legend statuses, plan files
+at kanban guard <base> [--board rel]     # append-only history check
+```
+
+**Selection** (`next`) is a pure, totally-ordered function: an `In Progress` row always wins and is
+returned as `type: "current"`, so an interrupted loop resumes instead of starting fresh and `--start`
+is then a no-op. Otherwise the highest-priority unblocked `Backlog` row wins, ties broken by lowest
+*numeric* ID. A task is blocked when any `Blocked By` ID exists on the board and is not `Done`;
+unknown IDs are ignored. `Blocked` rows are never selected. No candidate prints
+`No executable task found.` — a STOP signal, not an error.
+
+**`add` is an idempotent upsert.** With an existing ID it changes only the flags you passed and never
+touches `Status`; new rows are inserted in numeric-ID order (not appended) and get `Backlog` / `Low` /
+`loop` / `-` defaults. A `--description` over 128 code points is trimmed to 125 plus `...` with a
+warning on stderr — over-long input degrades, it never errors.
+
+**Schema:** `ID` (`T<integer>`, unique), `Status` (from the legend table), `Title`, `Description`
+(≤128), `Priority` (`High`/`Medium`/`Low`), `Owner`, `Blocks` (advisory only), `Blocked By` (what
+selection actually reads), `Plan File` (path or `-`). Optional cells use the `-` sentinel, never
+empty. The Status Legend table *is* the status vocabulary — add a status by editing the legend and
+both `status` and `lint` accept it with no code change.
+
+**`guard <base>`** compares the ID *set* at `<base>` against HEAD, so it is immune to re-padding
+churn. A dropped ID fails unless some commit in `<base>..HEAD` carries a `[kanban-rewrite]` trailer,
+which is the deliberate-rewrite audit trail. A missing base blob (base predates the board) passes.
+In CI, check out with `fetch-depth: 0` and run it on `pull_request` before any build step:
+
+```yaml
+- run: node dist/cli.js kanban guard "${{ github.event.pull_request.base.sha }}"
+```
+
+**Known limitation:** whole-file rewrite with no locking, so concurrent writers clobber each other.
+Safe under the single-writer assumption of a serial loop; parallel agents need `flock` or one board
+per worktree.
+

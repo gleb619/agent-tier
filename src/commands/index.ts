@@ -3,6 +3,7 @@ import { registerDefaultCommand } from './default';
 import { registerConfigCommand } from './config';
 import { registerLineCommand } from './line';
 import { registerInitCommand } from './init';
+import { registerKanbanCommand } from './kanban';
 import { registerStatusCommand } from './status';
 import { registerStopCommand } from './stop';
 import { registerHealthCommands } from './health';
@@ -20,6 +21,7 @@ export function registerCommands(program: Command): void {
   registerConfigCommand(program);
   registerLineCommand(program);
   registerInitCommand(program);
+  registerKanbanCommand(program);
   registerStatusCommand(program);
   registerStopCommand(program);
   registerHealthCommands(program);
