@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { generateSessionName } from '../../src/namer/orchestrator';
+import { NAMER_PROMPT_MAX_CHARS } from '../../src/namer';
 import type { NamerProvider } from '../../src/namer/types';
 import type { NamerConfig } from '../../src/namer/types';
 
@@ -148,5 +149,58 @@ describe('generateSessionName', () => {
       fallbackName: 'custom-fallback',
     });
     expect(result.name).toBe('custom-fallback');
+  });
+
+  it('concatenates opts.context into the provider prompt', async () => {
+    let captured = '';
+    const providers = [
+      makeProvider({
+        name: 'spy',
+        async generate(prompt: string) { captured = prompt; return 'reflective-name'; },
+      }),
+    ];
+    await generateSessionName(TEST_PROMPT, '/tmp/at-state', {
+      providers,
+      context: '--- run log tail ---\nfixed the auth bug',
+    });
+    expect(captured).toBe(`${TEST_PROMPT}\n\n--- run log tail ---\nfixed the auth bug`);
+  });
+
+  it('keeps the prompt verbatim when no context is given', async () => {
+    let captured = '';
+    const providers = [
+      makeProvider({
+        name: 'spy',
+        async generate(prompt: string) { captured = prompt; return 'plain-name'; },
+      }),
+    ];
+    await generateSessionName(TEST_PROMPT, '/tmp/at-state', { providers });
+    expect(captured).toBe(TEST_PROMPT);
+  });
+
+  it('truncates prompt+context to NAMER_PROMPT_MAX_CHARS', async () => {
+    let captured = '';
+    const providers = [
+      makeProvider({
+        name: 'spy',
+        async generate(prompt: string) { captured = prompt; return 'short-name'; },
+      }),
+    ];
+    await generateSessionName(TEST_PROMPT, '/tmp/at-state', {
+      providers,
+      context: 'x'.repeat(2000),
+    });
+    expect(captured.length).toBeLessThanOrEqual(NAMER_PROMPT_MAX_CHARS);
+    expect(captured.startsWith(TEST_PROMPT)).toBe(true);
+  });
+
+  it('quiet:true suppresses provider warnings', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const providers = [
+      makeProvider({ name: 'a', async generate() { return null; } }),
+    ];
+    await generateSessionName(TEST_PROMPT, '/tmp/at-state', { providers, quiet: true });
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

@@ -1,6 +1,6 @@
 import { main, buildRunWatchArgs, spawnRunWatch, POLL_INTERVAL_MS, HEARTBEAT_INTERVAL_MS } from '../src/run-watch';
 
-const { isPidAliveMock, updateRunMock, spawnSyncMock, spawnMock, appendFileMock, readFileMock, recordResultMock, applyRunNameMock } = vi.hoisted(() => ({
+const { isPidAliveMock, updateRunMock, spawnSyncMock, spawnMock, appendFileMock, readFileMock, recordResultMock, applyRunNameMock, drainNamingQueueMock, readLogTailMock } = vi.hoisted(() => ({
   isPidAliveMock: vi.fn<boolean, [number]>(),
   updateRunMock: vi.fn(async () => {}),
   spawnSyncMock: vi.fn(),
@@ -9,12 +9,18 @@ const { isPidAliveMock, updateRunMock, spawnSyncMock, spawnMock, appendFileMock,
   readFileMock: vi.fn(() => ''),
   recordResultMock: vi.fn(async () => {}),
   applyRunNameMock: vi.fn(async () => null),
+  drainNamingQueueMock: vi.fn(async () => {}),
+  readLogTailMock: vi.fn(() => ''),
 }));
 
 vi.mock('../src/process-utils', () => ({ isPidAlive: isPidAliveMock }));
 vi.mock('../src/run-store', () => ({ updateRun: updateRunMock, UNNAMED_PLACEHOLDER: 'unnamed' }));
 vi.mock('../src/health', () => ({ recordResult: recordResultMock }));
-vi.mock('../src/naming', () => ({ applyRunName: applyRunNameMock }));
+vi.mock('../src/naming', () => ({
+  applyRunName: applyRunNameMock,
+  drainNamingQueue: drainNamingQueueMock,
+  readLogTail: readLogTailMock,
+}));
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   return { ...actual, spawnSync: spawnSyncMock, spawn: spawnMock };
@@ -260,6 +266,7 @@ describe('run-watch — supervisor naming (AT_NAME_RUN)', () => {
     isPidAliveMock.mockReturnValue(false);
     spawnSyncMock.mockReturnValue({ status: 0, stdout: '', stderr: '' });
     process.env.AT_PROMPT = 'refactor the auth module';
+    readLogTailMock.mockReturnValue('fixed login redirect, updated tests');
   });
 
   afterEach(() => {
@@ -268,18 +275,51 @@ describe('run-watch — supervisor naming (AT_NAME_RUN)', () => {
     delete process.env.AT_PROMPT;
   });
 
-  it('names the run and hands the name to the callback', async () => {
+  it('names the run reflectively after the pid dies and hands the name to the callback', async () => {
     process.env.AT_NAME_RUN = '1';
     applyRunNameMock.mockResolvedValue({ name: 'refactor-auth-module-oidc', provider: 'local-ollama' });
     expect(await main([...ARGS, 'cb'])).toBe(0);
-    expect(applyRunNameMock).toHaveBeenCalledWith({
+    expect(applyRunNameMock).toHaveBeenCalledWith(expect.objectContaining({
       stateDir: '/tmp/at-state',
       runId: 'run-1',
       prompt: 'refactor the auth module',
       logFile: '/tmp/at-logs/run.log',
-    });
+      logTail: 'fixed login redirect, updated tests',
+      cwd: expect.any(String),
+    }));
+    expect(readLogTailMock).toHaveBeenCalledWith('/tmp/at-logs/run.log');
     const cbCall = spawnSyncMock.mock.calls.find((c) => c[0] === 'cb');
     expect((cbCall as any)[2].env.AT_RUN_NAME).toBe('refactor-auth-module-oidc');
+  });
+
+  it('does not name while the supervised pid is still alive', async () => {
+    process.env.AT_NAME_RUN = '1';
+    isPidAliveMock.mockReturnValue(true);
+    const p = main(ARGS);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(applyRunNameMock).not.toHaveBeenCalled();
+    isPidAliveMock.mockReturnValue(false);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    expect(await p).toBe(0);
+    expect(applyRunNameMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the run done before naming starts', async () => {
+    process.env.AT_NAME_RUN = '1';
+    isPidAliveMock.mockReturnValueOnce(true).mockReturnValue(false);
+    const p = main(ARGS);
+    await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS);
+    expect(await p).toBe(0);
+    expect(updateRunMock).toHaveBeenCalledWith('/tmp/at-state', 'run-1', expect.objectContaining({ status: 'done' }));
+    expect(applyRunNameMock.mock.invocationCallOrder[0]!).toBeGreaterThan(
+      updateRunMock.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('drains the naming queue even when it does not own naming', async () => {
+    expect(await main(ARGS)).toBe(0);
+    expect(drainNamingQueueMock).toHaveBeenCalledWith('/tmp/at-state');
+    expect(applyRunNameMock).not.toHaveBeenCalled();
   });
 
   it('does not exit while naming is still in flight (fast agent would lose the name)', async () => {

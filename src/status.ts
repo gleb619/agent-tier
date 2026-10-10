@@ -5,6 +5,7 @@ import { AGENTS, getAgentsByTier } from './agents/registry';
 import { loadGenericAgents } from './agents/generic-loader';
 import { loadConfig, getLineAgents } from './config';
 import { loadHealth, AgentHealth } from './health';
+import { drainNamingQueue } from './naming';
 
 // --- Data types ---
 
@@ -250,6 +251,15 @@ export function formatCombinedReport(stateDir: string, runs: RunRecord[]): strin
 }
 
 export async function runStatus(stateDir: string, opts?: { json?: boolean }): Promise<void> {
+  // Best-effort flush of the naming queue (jobs land there when the namer
+  // lock timed out). Drain is silent and never throws — naming is
+  // enrichment and must not break or add stderr noise to `at status`,
+  // especially in --json mode.
+  try {
+    await drainNamingQueue(stateDir);
+  } catch {
+    // ignore — status must work regardless
+  }
   // Single locked read→prune→detect→write: output matches disk, no race with
   // concurrent addRun/updateRun (the old code fired pruneRuns() without
   // awaiting it, then persisted an unpruned snapshot via unlocked saveRuns).

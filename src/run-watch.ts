@@ -9,16 +9,17 @@
  * 120s Bash-tool limit, ...).
  *
  * Responsibilities — deliberately minimal:
- *   1. poll the agent pid with `isPidAlive` every POLL_INTERVAL_MS
- *   2. when `AT_NAME_RUN=1`, name the run via `src/naming` — kicked off
- *      immediately, awaited before exit. The parent CLI is already gone in this
- *      mode, so the supervisor is the only process that can persist the name.
+ *   1. drain any naming jobs queued by earlier lock timeouts (best-effort)
+ *   2. poll the agent pid with `isPidAlive` every POLL_INTERVAL_MS
  *   3. when the pid is gone, mark the run record `done` with `exitCode: null`
  *      (the exit status of a process that is not our child is unknowable)
- *   4. optionally run the `--callback` command with the same `AT_*` env
+ *   4. when `AT_NAME_RUN=1`, name the run via `src/naming` — reflectively,
+ *      AFTER the run finished, fed the tail of the run log; awaited before
+ *      exit so the name reaches runs.jsonl while this process still lives
+ *   5. optionally run the `--callback` command with the same `AT_*` env
  *      contract as `executeCallback` in runner.ts, except `AT_EXIT_CODE=0`
  *      (plus `AT_RUN_NAME`, which the supervisor knows by then)
- *   5. exit 0
+ *   6. exit 0
  *
  * It intentionally does NOT call `recordResult` (agent health): failure
  * detection is impossible without the real exit code, so health tracking stays
@@ -33,7 +34,7 @@ import { isPidAlive } from './process-utils';
 import { updateRun, UNNAMED_PLACEHOLDER } from './run-store';
 import { recordResult } from './health';
 import { getStateFilePath } from './state-dir';
-import { applyRunName } from './naming';
+import { applyRunName, drainNamingQueue, readLogTail } from './naming';
 
 export const POLL_INTERVAL_MS = 2000;
 /**
@@ -192,13 +193,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     prompt: process.env.AT_PROMPT ?? '',
   };
 
-  // Kick naming off immediately so it overlaps with the agent run, then await
-  // it before exiting — otherwise a fast agent (mock: ~60 ms) would let this
-  // process end while the namer is still in flight and the name would be lost.
-  const naming =
-    process.env.AT_NAME_RUN === '1'
-      ? applyRunName({ stateDir, runId, prompt: options.prompt, logFile })
-      : Promise.resolve(null);
+  // Flush naming jobs queued by earlier lock timeouts — best-effort, silent,
+  // and it overlaps with the supervised run.
+  await drainNamingQueue(stateDir).catch(() => {});
 
   try {
     const startedAt = Date.now();
@@ -252,9 +249,21 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       }
     }
 
-    // Awaited here (not fire-and-forget): the name must be in runs.jsonl
+    // Reflective naming, only after the run produced output: the log tail
+    // gives the namer something to reflect on instead of the raw prompt
+    // alone. Awaited (not fire-and-forget): the name must be in runs.jsonl
     // before this process exits, and the callback should see it.
-    const named = await naming;
+    const named =
+      process.env.AT_NAME_RUN === '1'
+        ? await applyRunName({
+            stateDir,
+            runId,
+            prompt: options.prompt,
+            logFile,
+            logTail: readLogTail(logFile),
+            cwd: process.env.AT_CWD ?? process.cwd(),
+          })
+        : null;
 
     let finalStatus: 'done' | 'failed' = 'done';
     const verifyCmd = process.env.AT_VERIFY_CMD?.trim();

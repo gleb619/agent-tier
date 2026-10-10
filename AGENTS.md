@@ -72,7 +72,7 @@ git worktree prune
 | Discuss channel | Blocking agent↔host ask/answer/note over SSE or JSONL | `src/commands/discuss.ts`, `src/notify/discuss-store.ts` |
 | Output chop | Stream log filtering + `ChopLogger` buffered batch compression via external `chop` (isolated install `~/.at/chop`, `AT_CHOP_DIR`, raw fallback) | `src/chop.ts` |
 | Feedback store | `feedback.jsonl` CRUD with file locking + autoclean | `src/feedback-store.ts`, `src/commands/feedback.ts` |
-| Session namer | LLM-generated run names via ollama / openrouter (`~/.at/namer.json`, `think: false`); detached runs are named by the supervisor | `src/namer/`, `src/naming.ts`, `docs/namer.ignore.md` |
+| Session namer | LLM-generated run names via ollama / openrouter (`~/.at/namer.json`, `think: false`); post-run reflective naming (prompt + log tail), serialized via `namer.lock`, lock-timeout jobs queued to `naming-queue.jsonl` and drained by `applyRunName` / supervisor / `at status`; detached runs are named by the supervisor | `src/namer/`, `src/naming.ts`, `docs/namer.ignore.md` |
 | Init wrappers | Create wrapper scripts for built-in agents (`at init`) | `src/init/index.ts`, `src/commands/init.ts` |
 | MCP server | stdio server: `run_prompt`, `list_agents`, `get_status` tools | `src/mcp/server.ts`, `src/mcp/tools.ts` |
 | TUI | No-arg `at` on TTY → interactive dashboard (opentui/solid, needs Bun) | `src/tui/`, `src/cli.ts` |

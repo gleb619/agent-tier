@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import path from 'path';
+import os from 'os';
 import { run, type Spawner } from '../src/runner';
 import type { RunOptions } from '../src/resolver';
 import type { AgentDef } from '../src/agents/registry';
@@ -92,6 +95,9 @@ describe('run — async namer (T09)', () => {
     await Promise.resolve();
     expect(spawnCalled).toBe(true);
 
+    // Naming starts only after the agent result is known — wait for the request
+    await vi.waitFor(() => expect(generateSessionNameMock).toHaveBeenCalled());
+
     // Now resolve namer — run() should still complete normally
     resolveName({ name: 'late-name-arrives', provider: 'local-ollama' });
     await runP;
@@ -140,6 +146,7 @@ describe('run — async namer (T09)', () => {
     expect(settled).toBe(false); // namer still in flight → CLI must not exit yet
     expect(updateRunMock).not.toHaveBeenCalled();
 
+    await vi.waitFor(() => expect(generateSessionNameMock).toHaveBeenCalled());
     resolveName({ name: 'name-lands-before-exit', provider: 'local-ollama' });
     await expect(runP).resolves.toBe(0);
     expect(updateRunMock).toHaveBeenCalledWith(baseOptions.stateDir, expect.any(String), {
@@ -171,6 +178,62 @@ describe('run — async namer (T09)', () => {
     await run({ ...baseOptions, runName: 'my-own-name' }, agents, spawner);
     expect(generateSessionNameMock).not.toHaveBeenCalled();
     expect(updateRunMock).not.toHaveBeenCalled();
+  });
+
+  it('names only after the agent result is known (post-completion)', async () => {
+    const order: string[] = [];
+    generateSessionNameMock.mockImplementation(async () => {
+      order.push('namer');
+      return { name: 'post-completion-name', provider: 'local-ollama' };
+    });
+    const spawner: Spawner = vi.fn(async () => {
+      order.push('agent');
+      return 0;
+    });
+    await run({ ...baseOptions }, agents, spawner);
+    expect(order).toEqual(['agent', 'namer']);
+  });
+
+  it('reflects on the run log tail when the run record has a log file', async () => {
+    const stateDir = mkdtempSync(path.join(os.tmpdir(), 'at-runner-reflect-'));
+    const logFile = path.join(stateDir, 'run.log');
+    writeFileSync(logFile, 'implemented the queue drain\n', 'utf8');
+    let capturedRunId = '';
+    generateSessionNameMock.mockResolvedValue({ name: 'reflective-name', provider: 'local-ollama' });
+    const spawner: Spawner = vi.fn(async (_agent, _opts, runId) => {
+      capturedRunId = runId;
+      return 0;
+    });
+    const loadRunsSpy = vi.spyOn(runStore, 'loadRuns').mockImplementation(
+      () => [
+        {
+          runId: capturedRunId,
+          agent: 'mock',
+          tier: 2,
+          pid: 1,
+          prompt: 'refactor auth middleware',
+          logFile,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
+          exitCode: null,
+          status: 'running',
+          name: 'unnamed',
+        },
+      ],
+    );
+    try {
+      await run({ ...baseOptions, stateDir }, agents, spawner);
+      expect(generateSessionNameMock).toHaveBeenCalledWith(
+        baseOptions.prompt,
+        stateDir,
+        expect.objectContaining({
+          context: expect.stringContaining('implemented the queue drain'),
+        }),
+      );
+    } finally {
+      loadRunsSpy.mockRestore();
+      rmSync(stateDir, { recursive: true, force: true });
+    }
   });
 });
 

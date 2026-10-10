@@ -7,10 +7,10 @@ import { applyNormkaFlag } from './agents/normka-flag';
 import { RunOptions } from './resolver';
 import { pickAgent, getStateFile } from './scheduler';
 import { filterHealthy, recordResult, isDeactivated, loadHealth } from './health';
-import { addRun, updateRun, UNNAMED_PLACEHOLDER } from './run-store';
+import { addRun, updateRun, loadRuns, UNNAMED_PLACEHOLDER } from './run-store';
 import { getStateFilePath } from './state-dir';
 import { setupNotify, startHub, tailLogFile, type Hub, type NotifyEvent } from './notify';
-import { applyRunName } from './naming';
+import { applyRunName, readLogTail } from './naming';
 import { spawnRunWatch } from './run-watch';
 import { loadConfig, getLineAgents } from './config';
 import { runSandboxTest } from './sandbox';
@@ -411,21 +411,7 @@ export async function run(
   process.once('SIGINT', cleanup);
 
   try {
-    // Naming runs in parallel with agent selection + spawn: the child launches
-    // with `UNNAMED_PLACEHOLDER` as AT_RUN_NAME and the real name lands on the
-    // run record when a namer provider answers.
-    //
-    // Only the blocking modes (`-s`, `--wait`, `--sse`) name here, because they
-    // keep this process alive for the whole run. The default detached mode exits
-    // right after the run box, so it delegates naming to the supervisor
-    // (`spawnRunWatch({ nameRun: true })`) — a name produced by a process that
-    // is about to die is a name that never reaches runs.jsonl.
     const runId = generateRunId();
-    const naming =
-      !options.runName && (options.stream || options.wait || options.sse)
-        ? applyRunName({ stateDir: options.stateDir, runId, prompt: options.prompt })
-        : Promise.resolve(null);
-
     const stateFilePath = getStateFilePath(options.stateDir);
     const healthState = loadHealth(stateFilePath);
     let candidates: AgentDef[];
@@ -481,9 +467,24 @@ export async function run(
       let healthRecorded = false;
       try {
         const exitCode = await spawner(agent, options, runId);
-        // Awaited (not fire-and-forget) so the name is on disk before this
-        // process is allowed to exit — usually already resolved by now.
-        const namedRun = await naming;
+        // Reflective naming, only after the agent result is known: the run
+        // record holds the log file, whose tail gives the namer something to
+        // reflect on instead of the raw prompt alone. Only the blocking modes
+        // (`-s`, `--wait`, `--sse`) name here — they keep this process alive
+        // for the whole run. The default detached mode exits right after the
+        // run box, so it delegates naming to the supervisor
+        // (`spawnRunWatch({ nameRun: true })`).
+        let namedRun: Awaited<ReturnType<typeof applyRunName>> = null;
+        if (!options.runName && (options.stream || options.wait || options.sse)) {
+          const record = loadRuns(options.stateDir).find((r) => r.runId === runId);
+          const logFile = record?.logFile;
+          namedRun = await applyRunName({
+            stateDir: options.stateDir,
+            runId,
+            prompt: options.prompt,
+            ...(logFile ? { logFile, logTail: readLogTail(logFile) } : {}),
+          });
+        }
         // T10: SSE rename event — published only when sse is on
         if (namedRun && options.sse) {
           try {

@@ -85,4 +85,33 @@ describe('applyRunName', () => {
     await applyRunName({ ...BASE, signal });
     expect(generateSessionNameMock).toHaveBeenCalledWith(BASE.prompt, BASE.stateDir, { signal });
   });
+
+  it('passes logTail as a reflection context to the orchestrator', async () => {
+    await applyRunName({ ...BASE, logTail: 'wrote tests for the naming queue' });
+    expect(generateSessionNameMock).toHaveBeenCalledWith(BASE.prompt, BASE.stateDir, {
+      context: expect.stringContaining('wrote tests for the naming queue'),
+    });
+    expect(updateRunMock).toHaveBeenCalledWith(BASE.stateDir, BASE.runId, {
+      name: 'refactor-auth-module-oidc',
+    });
+  });
+
+  it('marks the context as a run-log tail', async () => {
+    await applyRunName({ ...BASE, logTail: 'did stuff' });
+    expect(generateSessionNameMock).toHaveBeenCalledWith(BASE.prompt, BASE.stateDir, {
+      context: expect.stringContaining('--- run log tail ---'),
+    });
+  });
+
+  it('folds the run cwd into the context header when given', async () => {
+    await applyRunName({ ...BASE, logTail: 'did stuff', cwd: '/repo/feature-x' });
+    expect(generateSessionNameMock).toHaveBeenCalledWith(BASE.prompt, BASE.stateDir, {
+      context: expect.stringContaining('cwd: /repo/feature-x'),
+    });
+  });
+
+  it('falls back to prompt-only naming when logTail is empty', async () => {
+    await applyRunName({ ...BASE, logTail: '' });
+    expect(generateSessionNameMock).toHaveBeenCalledWith(BASE.prompt, BASE.stateDir, {});
+  });
 });
