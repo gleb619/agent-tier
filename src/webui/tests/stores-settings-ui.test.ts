@@ -60,9 +60,10 @@ describe("settings store", () => {
     const { settings, saveSettings } = await import("../stores/settings");
     await saveSettings({ defaultAgent: "pi" });
     const call = fetchSpy.mock.calls[0];
+    const init = call?.[1] as RequestInit;
     expect(call?.[0]).toBe("/api/settings");
-    expect((call?.[1] as RequestInit).method).toBe("PUT");
-    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toMatchObject({ defaultTier: 2, defaultAgent: "pi" });
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(String(init.body))).toMatchObject({ defaultTier: 2, defaultAgent: "pi" });
     expect(get(settings).defaultAgent).toBe("pi");
   });
 });

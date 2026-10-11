@@ -1,6 +1,6 @@
 <script lang="ts">
 import { filteredRuns } from "$stores/filters";
-import { selectRun, selectedRunId } from "$stores/runs";
+import { selectedRunId, selectRun } from "$stores/runs";
 import { setCurrentView } from "$stores/ui";
 import type { ApiRun } from "$types/api";
 import { groupRunsByDate, type RunGroup } from "$utils/grouping";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterLines, findMatches, splitHighlight, stepMatch, toLogLines, type LogLine } from "../utils/log";
+import { filterLines, findMatches, type LogLine, splitHighlight, stepMatch, toLogLines } from "../utils/log";
 
 function lines(...texts: string[]): LogLine[] {
   return toLogLines(texts);

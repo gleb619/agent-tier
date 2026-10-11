@@ -1,7 +1,16 @@
-import { beforeEach, describe, expect, it } from "vitest";
 import { get } from "svelte/store";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  activeRuns,
+  applySseEvent,
+  completedRuns,
+  runs,
+  selectedRun,
+  selectRun,
+  setRuns,
+  upsertRun,
+} from "../stores/runs";
 import type { ApiRun, NotifyEvent } from "../types/api";
-import { activeRuns, applySseEvent, completedRuns, runs, selectRun, selectedRun, setRuns, upsertRun } from "../stores/runs";
 
 function run(partial: Partial<ApiRun>): ApiRun {
   return {
@@ -31,7 +40,10 @@ describe("runs store", () => {
   });
 
   it("setRuns sorts newest first", () => {
-    setRuns([run({ runId: "old", startedAt: "2026-10-10T10:00:00.000Z" }), run({ runId: "new", startedAt: "2026-10-11T10:00:00.000Z" })]);
+    setRuns([
+      run({ runId: "old", startedAt: "2026-10-10T10:00:00.000Z" }),
+      run({ runId: "new", startedAt: "2026-10-11T10:00:00.000Z" }),
+    ]);
     expect(get(runs).map((r) => r.runId)).toEqual(["new", "old"]);
   });
 
@@ -51,7 +63,11 @@ describe("runs store", () => {
       run({ runId: "d", status: "stuck" }),
     ]);
     expect(get(activeRuns).map((r) => r.runId)).toEqual(["a"]);
-    expect(get(completedRuns).map((r) => r.runId).sort()).toEqual(["b", "c"]);
+    expect(
+      get(completedRuns)
+        .map((r) => r.runId)
+        .sort(),
+    ).toEqual(["b", "c"]);
   });
 
   it("selectRun exposes the selected run (or null)", () => {

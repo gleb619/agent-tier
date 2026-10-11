@@ -6,7 +6,7 @@ import LogViewer from "../components/run/LogViewer.svelte";
 import RunDetailsView from "../components/run/RunDetailsView.svelte";
 import RunMeta from "../components/run/RunMeta.svelte";
 import { createRunDetailsSession } from "../stores/run-details";
-import { selectRun, selectedRunId, setRuns } from "../stores/runs";
+import { selectedRunId, selectRun, setRuns } from "../stores/runs";
 import { toasts } from "../stores/toast";
 import type { ApiDiscussEntry, ApiRun } from "../types/api";
 
@@ -230,9 +230,7 @@ describe("RunDetailsView", () => {
     expect(await screen.findByTestId("run-meta")).toBeInTheDocument();
     expect(screen.getByTestId("log-viewer")).toBeInTheDocument();
     expect(screen.getByTestId("discuss-panel")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(fetchMock.mock.calls.some((c) => /\/api\/runs\/r1\/log/.test(String(c[0])))).toBe(true),
-    );
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => /\/api\/runs\/r1\/log/.test(String(c[0])))).toBe(true));
     expect(await screen.findByText("hello log")).toBeInTheDocument();
     expect(await screen.findByTestId("discuss-question")).toBeInTheDocument();
     expect(get(selectedRunId)).toBe("r1");

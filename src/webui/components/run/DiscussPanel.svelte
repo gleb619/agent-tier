@@ -1,9 +1,9 @@
 <script lang="ts">
-import { getRunDiscuss, postRunDiscuss } from "../../api/runs";
 import Button from "$components/common/Button.svelte";
 import type { RunDetailsSession } from "$stores/run-details";
 import { showToast } from "$stores/toast";
 import type { ApiDiscussEntry, ApiRun } from "$types/api";
+import { getRunDiscuss, postRunDiscuss } from "../../api/runs";
 
 export let session: RunDetailsSession;
 export let run: ApiRun;

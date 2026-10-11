@@ -1,6 +1,6 @@
 <script lang="ts">
-import { AlertTriangle, CheckCircle2, Circle, Loader2, XCircle } from "lucide-svelte";
 import clsx from "clsx";
+import { AlertTriangle, CheckCircle2, Circle, Loader2, XCircle } from "lucide-svelte";
 import type { ApiRun } from "$types/api";
 import { formatDuration, runDurationSeconds } from "$utils/formatters";
 

@@ -5,7 +5,9 @@ import type { ApiRun, NotifyEvent } from "$types/api";
 export const runs = writable<ApiRun[]>([]);
 
 export const activeRuns = derived(runs, ($runs) => $runs.filter((r) => r.status === "running"));
-export const completedRuns = derived(runs, ($runs) => $runs.filter((r) => r.status === "done" || r.status === "failed"));
+export const completedRuns = derived(runs, ($runs) =>
+  $runs.filter((r) => r.status === "done" || r.status === "failed"),
+);
 
 export const selectedRunId = writable<string | null>(null);
 /** The selected run, kept fresh against `runs` (null when missing or nothing selected). */
@@ -57,6 +59,7 @@ export function applySseEvent(event: NotifyEvent): void {
 }
 
 function readExitCode(event: NotifyEvent): number | null {
+  // biome-ignore lint/complexity/useLiteralKeys: index-signature access required by tsconfig.webui
   const code = event.data?.["exitCode"];
   return typeof code === "number" ? code : null;
 }

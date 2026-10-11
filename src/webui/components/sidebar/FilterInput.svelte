@@ -1,5 +1,5 @@
 <script lang="ts">
-import { agentFilter, searchQuery, statusFilter, type StatusFilter } from "$stores/filters";
+import { agentFilter, type StatusFilter, searchQuery, statusFilter } from "$stores/filters";
 import { runs } from "$stores/runs";
 
 const STATUSES: { value: StatusFilter; label: string }[] = [

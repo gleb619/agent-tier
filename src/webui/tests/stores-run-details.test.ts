@@ -1,9 +1,9 @@
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SSE_CLOSED, type SseSource } from "../api/sse";
-import type { NotifyEvent } from "../types/api";
 import { createRunDetailsSession, LOG_TAIL_LINES, MAX_LOG_LINES } from "../stores/run-details";
 import { setRuns } from "../stores/runs";
+import type { NotifyEvent } from "../types/api";
 
 interface FakeSource {
   listeners: Map<string, ((ev: { data: string; lastEventId: string }) => void)[]>;
@@ -23,10 +23,11 @@ function makeSource(): FakeSource {
       src.readyState = SSE_CLOSED;
     },
   };
-  (src as unknown as { addEventListener: (t: string, cb: (ev: { data: string; lastEventId: string }) => void) => void })
-    .addEventListener = (t, cb) => {
-      src.listeners.set(t, [...(src.listeners.get(t) ?? []), cb]);
-    };
+  (
+    src as unknown as { addEventListener: (t: string, cb: (ev: { data: string; lastEventId: string }) => void) => void }
+  ).addEventListener = (t, cb) => {
+    src.listeners.set(t, [...(src.listeners.get(t) ?? []), cb]);
+  };
   return src;
 }
 
@@ -97,11 +98,14 @@ describe("createRunDetailsSession", () => {
     (src as FakeSource | null)?.onopen?.();
     expect(get(session.connected)).toBe(true);
 
-    dispatch(
-      src!,
-      "message",
-      { runId: "r1", agent: "mm-code", ts: "t", seq: 1, type: "message", text: "live one\nlive two" },
-    );
+    dispatch(src!, "message", {
+      runId: "r1",
+      agent: "mm-code",
+      ts: "t",
+      seq: 1,
+      type: "message",
+      text: "live one\nlive two",
+    });
     expect(get(session.lines).map((l) => l.text)).toEqual(["seed", "live one", "live two"]);
     expect(get(session.lines).map((l) => l.n)).toEqual([1, 2, 3]);
     expect(get(session.lastEvent)?.type).toBe("message");

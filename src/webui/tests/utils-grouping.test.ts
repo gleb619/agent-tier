@@ -27,10 +27,7 @@ describe("groupRunsByDate", () => {
   });
 
   it("labels older runs with month + day (year only when it differs)", () => {
-    const groups = groupRunsByDate(
-      [run("a", new Date(2026, 9, 9, 8, 0)), run("b", new Date(2025, 11, 31, 8, 0))],
-      NOW,
-    );
+    const groups = groupRunsByDate([run("a", new Date(2026, 9, 9, 8, 0)), run("b", new Date(2025, 11, 31, 8, 0))], NOW);
     expect(groups.map((g) => g.label)).toEqual(["Oct 9", "Dec 31, 2025"]);
   });
 
@@ -48,7 +45,10 @@ describe("groupRunsByDate", () => {
   });
 
   it("keeps input order (assumed newest first) within a group without re-sorting", () => {
-    const groups = groupRunsByDate([run("a", new Date(2026, 9, 11, 9, 0)), run("b", new Date(2026, 9, 11, 14, 0))], NOW);
+    const groups = groupRunsByDate(
+      [run("a", new Date(2026, 9, 11, 9, 0)), run("b", new Date(2026, 9, 11, 14, 0))],
+      NOW,
+    );
     expect(groups[0]?.runs.map((r) => r.runId)).toEqual(["a", "b"]);
   });
 

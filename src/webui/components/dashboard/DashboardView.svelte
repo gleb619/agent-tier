@@ -2,8 +2,8 @@
 import { onMount } from "svelte";
 import { agents, dashboardError, refreshDashboard, stats } from "$stores/dashboard";
 import { lastEventTime } from "$stores/sse";
-import AgentsPanel from "./AgentsPanel.svelte";
 import ActiveRuns from "./ActiveRuns.svelte";
+import AgentsPanel from "./AgentsPanel.svelte";
 import QuickStats from "./QuickStats.svelte";
 import RecentCompletions from "./RecentCompletions.svelte";
 

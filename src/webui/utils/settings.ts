@@ -1,5 +1,5 @@
 import type { WebSettings } from "$stores/settings";
-import { MAX_RETRIES, isRunMode } from "./newtask";
+import { isRunMode, MAX_RETRIES } from "./newtask";
 
 export const MAX_SSE_PORT = 65535;
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SSE_CLOSED, SSE_CONNECTING, SSE_OPEN, SseManager, type SseSource } from "../api/sse";
 import type { NotifyEvent } from "../types/api";
-import { SseManager, SSE_CLOSED, SSE_CONNECTING, SSE_OPEN, type SseSource } from "../api/sse";
 
 /** Minimal EventSource double: manual dispatch, controllable readyState. */
 class FakeSource implements SseSource {
@@ -49,7 +49,14 @@ function lastInstance(): FakeSource {
   return FakeSource.instances[FakeSource.instances.length - 1] as FakeSource;
 }
 
-const EVT: NotifyEvent = { runId: "r1", agent: "mm-code", ts: "2026-10-11T10:00:00.000Z", seq: 3, type: "progress", text: "hi" };
+const EVT: NotifyEvent = {
+  runId: "r1",
+  agent: "mm-code",
+  ts: "2026-10-11T10:00:00.000Z",
+  seq: 3,
+  type: "progress",
+  text: "hi",
+};
 
 describe("SseManager", () => {
   beforeEach(() => {
@@ -73,7 +80,11 @@ describe("SseManager", () => {
 
   it("dispatches parsed NotifyEvents to onEvent", () => {
     const seen: NotifyEvent[] = [];
-    const m = new SseManager({ url: "/api/events", createSource: (u) => new FakeSource(u), onEvent: (e) => seen.push(e) });
+    const m = new SseManager({
+      url: "/api/events",
+      createSource: (u) => new FakeSource(u),
+      onEvent: (e) => seen.push(e),
+    });
     m.connect();
     lastInstance().dispatch("progress", EVT, "3");
     expect(seen).toHaveLength(1);
@@ -83,7 +94,12 @@ describe("SseManager", () => {
 
   it("reports connected on open, disconnected on error", () => {
     const statuses: boolean[] = [];
-    const m = new SseManager({ url: "/api/events", createSource: (u) => new FakeSource(u), onEvent: () => {}, onStatus: (ok) => statuses.push(ok) });
+    const m = new SseManager({
+      url: "/api/events",
+      createSource: (u) => new FakeSource(u),
+      onEvent: () => {},
+      onStatus: (ok) => statuses.push(ok),
+    });
     m.connect();
     lastInstance().open();
     expect(statuses).toEqual([true]);
@@ -191,7 +207,12 @@ describe("SseManager", () => {
   });
 
   it("close() tears everything down and never reconnects", async () => {
-    const m = new SseManager({ url: "/api/events", createSource: (u) => new FakeSource(u), onEvent: () => {}, baseDelayMs: 10 });
+    const m = new SseManager({
+      url: "/api/events",
+      createSource: (u) => new FakeSource(u),
+      onEvent: () => {},
+      baseDelayMs: 10,
+    });
     m.connect();
     const src = lastInstance();
     m.close();

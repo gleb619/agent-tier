@@ -1,5 +1,5 @@
-import type { DashboardStat } from "$types/dashboard";
 import type { ApiStats } from "$types/api";
+import type { DashboardStat } from "$types/dashboard";
 
 /**
  * Derive the QuickStats tiles from `GET /api/stats` (src/web/server.ts).

@@ -240,4 +240,30 @@ describe("NewTaskView", () => {
     expect(get(selectedRunId)).toBe("late");
     expect(get(runs).map((r) => r.runId)).toEqual(["late"]);
   }, 10_000);
+
+  it("keeps polling past pre-existing runs until the newly recorded run shows up", async () => {
+    // The store already holds an older run; the first post-submit fetch only
+    // sees that one, so the loop must not stop there — the second fetch
+    // reveals the run recorded by the detached spawn.
+    setRuns([makeRun("old")]);
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/agents") return new Response(JSON.stringify([]), { status: 200 });
+        if (url === "/api/runs" && (init?.method ?? "GET") === "GET") {
+          calls += 1;
+          const list = calls >= 2 ? [makeRun("newest", { prompt: "ship it" }), makeRun("old")] : [makeRun("old")];
+          return new Response(JSON.stringify(list), { status: 200 });
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 202 });
+      }),
+    );
+    render(NewTaskView);
+    await fireEvent.input(screen.getByTestId("prompt-input"), { target: { value: "ship it" } });
+    await fireEvent.click(screen.getByRole("button", { name: /start run/i }));
+    await vi.waitFor(() => expect(get(currentView)).toBe("run-details"), { timeout: 8000 });
+    expect(get(selectedRunId)).toBe("newest");
+  }, 10_000);
 });

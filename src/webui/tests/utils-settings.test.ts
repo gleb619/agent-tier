@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS, type WebSettings } from "../stores/settings";
 import { MAX_RETRIES } from "../utils/newtask";
 import {
-  MAX_SSE_PORT,
   extraSettingsEntries,
   formFromSettings,
+  MAX_SSE_PORT,
+  type SettingsForm,
   settingsPatchFromForm,
   validateSettingsForm,
-  type SettingsForm,
 } from "../utils/settings";
 
 const VALID_FORM: SettingsForm = {
@@ -110,7 +110,13 @@ describe("validateSettingsForm", () => {
 describe("settingsPatchFromForm", () => {
   it("coerces numeric fields and passes booleans/strings through", () => {
     const patch = settingsPatchFromForm({ ...VALID_FORM, defaultTier: "3", retries: "2", runMode: "block" });
-    expect(patch).toMatchObject({ defaultTier: 3, retries: 2, runMode: "block", autoRefresh: true, defaultAgent: "mm-code" });
+    expect(patch).toMatchObject({
+      defaultTier: 3,
+      retries: 2,
+      runMode: "block",
+      autoRefresh: true,
+      defaultAgent: "mm-code",
+    });
   });
 
   it("clears advanced fields that are empty so the stored key is dropped", () => {
@@ -123,7 +129,12 @@ describe("settingsPatchFromForm", () => {
   });
 
   it("trims and coerces filled advanced fields", () => {
-    const patch = settingsPatchFromForm({ ...VALID_FORM, ssePort: " 7800 ", logDir: " /tmp/logs ", stateDir: "/tmp/state" });
+    const patch = settingsPatchFromForm({
+      ...VALID_FORM,
+      ssePort: " 7800 ",
+      logDir: " /tmp/logs ",
+      stateDir: "/tmp/state",
+    });
     expect(patch.ssePort).toBe(7800);
     expect(patch.logDir).toBe("/tmp/logs");
     expect(patch.stateDir).toBe("/tmp/state");

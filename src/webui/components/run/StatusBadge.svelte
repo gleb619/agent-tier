@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { RunStatus } from "$types/run";
 import Badge from "$components/common/Badge.svelte";
+import type { RunStatus } from "$types/run";
 
 export let status: RunStatus;
 

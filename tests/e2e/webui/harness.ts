@@ -91,10 +91,15 @@ export async function startWeb(): Promise<WebE2E> {
   };
 }
 
-function waitForBoot(child: ChildProcess): Promise<string> {
+export function waitForBoot(child: ChildProcess, timeoutMs = 30_000): Promise<string> {
   return new Promise((resolve, reject) => {
     let out = "";
-    const timer = setTimeout(() => reject(new Error(`at web did not start. Output:\n${out}`)), 30_000);
+    // Kill the child on timeout — a rejecting promise alone would orphan the
+    // server (and its temp state dir) for the rest of the run.
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new Error(`at web did not start. Output:\n${out}`));
+    }, timeoutMs);
     const onData = (chunk: Buffer) => {
       out += chunk.toString();
       const m = out.match(/\[at\] web: http:\/\/127\.0\.0\.1:(\d+)/);

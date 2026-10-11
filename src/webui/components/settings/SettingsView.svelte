@@ -1,22 +1,22 @@
 <script lang="ts">
-import { agents, refreshDashboard } from "$stores/dashboard";
-import { DEFAULT_SETTINGS, loadSettings, saveSettings, settings } from "$stores/settings";
-import { showToast } from "$stores/toast";
-import { MAX_RETRIES, RUN_MODES } from "$utils/newtask";
-import {
-  MAX_SSE_PORT,
-  extraSettingsEntries,
-  formFromSettings,
-  settingsPatchFromForm,
-  validateSettingsForm,
-  type SettingsForm,
-  type SettingsFormErrors,
-} from "$utils/settings";
 import Button from "$components/common/Button.svelte";
 import Card from "$components/common/Card.svelte";
 import Input from "$components/common/Input.svelte";
 import Select from "$components/common/Select.svelte";
 import Toggle from "$components/common/Toggle.svelte";
+import { agents, refreshDashboard } from "$stores/dashboard";
+import { DEFAULT_SETTINGS, loadSettings, saveSettings, settings } from "$stores/settings";
+import { showToast } from "$stores/toast";
+import { MAX_RETRIES, RUN_MODES } from "$utils/newtask";
+import {
+  extraSettingsEntries,
+  formFromSettings,
+  MAX_SSE_PORT,
+  type SettingsForm,
+  type SettingsFormErrors,
+  settingsPatchFromForm,
+  validateSettingsForm,
+} from "$utils/settings";
 
 // Local editable mirror; re-initialized from the backend once settings load.
 let form: SettingsForm = formFromSettings(DEFAULT_SETTINGS);

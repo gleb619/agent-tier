@@ -1,9 +1,9 @@
 <script lang="ts">
 import clsx from "clsx";
 import { Activity, LayoutDashboard, PlusSquare, Settings } from "lucide-svelte";
+import Tooltip from "$components/common/Tooltip.svelte";
 import { currentView, setCurrentView, sidebarOpen } from "$stores/ui";
 import type { ViewType } from "$types/index";
-import Tooltip from "$components/common/Tooltip.svelte";
 
 const items: { id: ViewType; label: string; shortcut: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", shortcut: "1", icon: LayoutDashboard },

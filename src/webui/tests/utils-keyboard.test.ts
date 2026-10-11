@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ApiRun } from "../types/api";
 import {
   handleKeydown,
   isFormField,
+  type KeyboardHandlers,
   keyboardShortcuts,
   neighborRunId,
   resolveShortcut,
-  type KeyboardHandlers,
 } from "../utils/keyboard";
-import type { ApiRun } from "../types/api";
 
 function keyEvent(key: string, mods: { ctrl?: boolean; alt?: boolean; meta?: boolean } = {}): KeyboardEvent {
   return new KeyboardEvent("keydown", {

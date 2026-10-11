@@ -54,7 +54,9 @@ export class SseManager {
   /** Last seen SSE event id (from MessageEvent.lastEventId), for diagnostics. */
   lastEventId = "";
 
-  private readonly opts: Required<Pick<SseManagerOptions, "url" | "onEvent" | "baseDelayMs" | "maxDelayMs" | "maxRetries" | "pollIntervalMs">> &
+  private readonly opts: Required<
+    Pick<SseManagerOptions, "url" | "onEvent" | "baseDelayMs" | "maxDelayMs" | "maxRetries" | "pollIntervalMs">
+  > &
     SseManagerOptions;
   private source: SseSource | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;

@@ -114,7 +114,9 @@ describe("SettingsView", () => {
     await vi.waitFor(() =>
       expect(putCalls(fetchMock)[0]).toMatchObject({ ssePort: 7800, logDir: "/tmp/logs", stateDir: "/tmp/state" }),
     );
-    await vi.waitFor(() => expect(get(settings)).toMatchObject({ ssePort: 7800, logDir: "/tmp/logs", stateDir: "/tmp/state" }));
+    await vi.waitFor(() =>
+      expect(get(settings)).toMatchObject({ ssePort: 7800, logDir: "/tmp/logs", stateDir: "/tmp/state" }),
+    );
   });
 
   it("renders read-only entries for keys the form does not edit", async () => {

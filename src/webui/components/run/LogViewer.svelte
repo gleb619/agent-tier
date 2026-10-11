@@ -30,7 +30,12 @@ $: range = virtualRange(offsets, heights, scrollTop, viewportH || FALLBACK_VIEWP
 $: rendered = visible.slice(range.start, range.end);
 $: matchIndexes = findMatches(visible, query);
 $: matchLines = matchIndexes.map((i) => visible[i]!.n);
-$: matchPosition = activeLine !== null && matchLines.includes(activeLine) ? matchLines.indexOf(activeLine) + 1 : matchLines.length > 0 ? 1 : 0;
+$: matchPosition =
+  activeLine !== null && matchLines.includes(activeLine)
+    ? matchLines.indexOf(activeLine) + 1
+    : matchLines.length > 0
+      ? 1
+      : 0;
 $: totalHeight = offsets.length > 0 ? offsets[offsets.length - 1]! + ROW_H : 0;
 
 // Pin to the bottom on new lines while following; user scroll-up unfollows.

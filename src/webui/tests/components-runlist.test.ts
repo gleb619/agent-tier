@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import RunItem from "../components/sidebar/RunItem.svelte";
 import RunList from "../components/sidebar/RunList.svelte";
 import { agentFilter, searchQuery, statusFilter } from "../stores/filters";
-import { selectRun, selectedRunId, setRuns } from "../stores/runs";
+import { selectedRunId, selectRun, setRuns } from "../stores/runs";
 import { currentView } from "../stores/ui";
 import type { ApiRun } from "../types/api";
 
@@ -76,10 +76,7 @@ describe("RunList", () => {
   });
 
   it("reflects the filters store", () => {
-    setRuns([
-      makeRun("ok"),
-      makeRun("bad", { status: "failed", exitCode: 1 }),
-    ]);
+    setRuns([makeRun("ok"), makeRun("bad", { status: "failed", exitCode: 1 })]);
     searchQuery.set("ok");
     render(RunList);
     expect(screen.getByRole("button", { name: /Run ok/ })).toBeInTheDocument();

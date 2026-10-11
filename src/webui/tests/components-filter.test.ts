@@ -2,9 +2,9 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { get } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import FilterInput from "../components/sidebar/FilterInput.svelte";
-import type { ApiRun } from "../types/api";
 import { agentFilter, searchQuery, statusFilter } from "../stores/filters";
 import { setRuns } from "../stores/runs";
+import type { ApiRun } from "../types/api";
 
 function run(id: string, agent: string): ApiRun {
   return {

@@ -13,8 +13,12 @@ describe("webui e2e: settings persist", () => {
   });
 
   afterAll(async () => {
-    await browser.close();
-    await web.close();
+    // beforeAll may have thrown between startWeb and launchBrowser; closing
+    // must still reach the server so no orphan `at web` (or temp dir) leaks.
+    try {
+      await browser?.close();
+    } catch {}
+    await web?.close();
   });
 
   it("saves defaults to the server and survives a reload", async () => {

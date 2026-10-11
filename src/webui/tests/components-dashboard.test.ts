@@ -1,12 +1,12 @@
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it } from "vitest";
+import ActiveRuns from "../components/dashboard/ActiveRuns.svelte";
 import AgentsPanel from "../components/dashboard/AgentsPanel.svelte";
 import QuickStats from "../components/dashboard/QuickStats.svelte";
-import ActiveRuns from "../components/dashboard/ActiveRuns.svelte";
 import RecentCompletions from "../components/dashboard/RecentCompletions.svelte";
 import { agents, dashboardError, refreshDashboard, stats } from "../stores/dashboard";
-import { selectRun, selectedRunId, setRuns } from "../stores/runs";
+import { selectedRunId, selectRun, setRuns } from "../stores/runs";
 import { currentView } from "../stores/ui";
 import type { ApiAgent, ApiRun, ApiStats } from "../types/api";
 
@@ -133,7 +133,11 @@ describe("AgentsPanel", () => {
   it("reflects enabled/disabled state in the toggle", () => {
     render(AgentsPanel, {
       props: {
-        agents: [makeAgent("ok"), makeAgent("off", { deactivated: true }), makeAgent("temp", { disabledTo: "2030-01-01T00:00:00Z" })],
+        agents: [
+          makeAgent("ok"),
+          makeAgent("off", { deactivated: true }),
+          makeAgent("temp", { disabledTo: "2030-01-01T00:00:00Z" }),
+        ],
       },
     });
     expect(within(screen.getByTestId("agent-ok")).getByRole("switch")).toHaveAttribute("aria-checked", "true");
@@ -159,7 +163,10 @@ describe("dashboard store", () => {
 
   it("keeps the previous data and sets dashboardError when the fetch fails", async () => {
     stats.set(makeStats());
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("boom", { status: 500 })),
+    );
     await refreshDashboard();
     expect(get(stats)).not.toBeNull();
     expect(get(dashboardError)).toContain("HTTP 500");

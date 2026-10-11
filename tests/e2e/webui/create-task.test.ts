@@ -15,8 +15,12 @@ describe("webui e2e: create task", () => {
   });
 
   afterAll(async () => {
-    await browser.close();
-    await web.close();
+    // beforeAll may have thrown between startWeb and launchBrowser; closing
+    // must still reach the server so no orphan `at web` (or temp dir) leaks.
+    try {
+      await browser?.close();
+    } catch {}
+    await web?.close();
   });
 
   it("submits a tier-4 mock run with #NORMKA and sees it complete", async () => {

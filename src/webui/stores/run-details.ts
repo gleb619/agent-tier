@@ -1,11 +1,10 @@
-import { writable, type Readable } from "svelte/store";
+import { type Readable, writable } from "svelte/store";
+import type { NotifyEvent } from "$types/api";
+import { type LogLine, toLogLines } from "$utils/log";
 import { getRunLog } from "../api/runs";
 import type { SseSource } from "../api/sse";
-import type { NotifyEvent } from "$types/api";
-import { toLogLines, type LogLine } from "$utils/log";
-import { createSseConnection, type SseConnection } from "./sse";
 import { applySseEvent } from "./runs";
-import { connectionError, sseConnected } from "./sse";
+import { connectionError, createSseConnection, type SseConnection, sseConnected } from "./sse";
 
 /** Initial tail fetched from GET /api/runs/:id/log on refresh. */
 export const LOG_TAIL_LINES = 500;

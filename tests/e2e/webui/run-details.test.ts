@@ -21,8 +21,12 @@ describe("webui e2e: run details log", () => {
   });
 
   afterAll(async () => {
-    await browser.close();
-    await web.close();
+    // beforeAll may have thrown between startWeb and launchBrowser; closing
+    // must still reach the server so no orphan `at web` (or temp dir) leaks.
+    try {
+      await browser?.close();
+    } catch {}
+    await web?.close();
   });
 
   it("opens the run from the sidebar and shows meta + log output", async () => {

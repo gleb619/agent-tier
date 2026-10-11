@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import MainLayout from "../components/layout/MainLayout.svelte";
 import { listRuns } from "../api/runs";
-import { runs, selectRun, selectedRunId, setRuns } from "../stores/runs";
+import MainLayout from "../components/layout/MainLayout.svelte";
+import { runs, selectedRunId, selectRun, setRuns } from "../stores/runs";
 import { currentView, setCurrentView } from "../stores/ui";
 import type { ApiRun } from "../types/api";
 

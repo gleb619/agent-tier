@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { ApiClient, ApiError } from "../api/client";
 import type { ApiRun } from "../types/api";
 
@@ -91,9 +91,21 @@ describe("ApiClient", () => {
   });
 
   it("getAgents and getStats parse their payloads", async () => {
-    const agents = [{ name: "mm-code", tier: 2, promptMode: "pipe", deactivated: false, failures: 0, lastFailure: null, disabledTo: null }];
+    const agents = [
+      {
+        name: "mm-code",
+        tier: 2,
+        promptMode: "pipe",
+        deactivated: false,
+        failures: 0,
+        lastFailure: null,
+        disabledTo: null,
+      },
+    ];
     const stats = { total: 1, running: 1, done: 0, failed: 0, stuck: 0, agents: { total: 14, deactivated: 0 } };
-    const { impl, calls } = mockFetch((url) => (url === "/api/agents" ? jsonResponse(200, agents) : jsonResponse(200, stats)));
+    const { impl, calls } = mockFetch((url) =>
+      url === "/api/agents" ? jsonResponse(200, agents) : jsonResponse(200, stats),
+    );
     const client = new ApiClient("", impl);
     await expect(client.getAgents()).resolves.toEqual(agents);
     await expect(client.getStats()).resolves.toEqual(stats);
@@ -102,7 +114,7 @@ describe("ApiClient", () => {
 
   it("getSettings GETs and putSettings PUTs the JSON object", async () => {
     const settings = { defaultTier: 2 };
-    const { impl, calls } = mockFetch((url, init) => {
+    const { impl, calls } = mockFetch((_url, init) => {
       if (init?.method === "PUT") return jsonResponse(200, settings);
       return jsonResponse(200, settings);
     });

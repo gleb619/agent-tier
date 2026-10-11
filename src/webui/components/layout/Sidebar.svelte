@@ -1,8 +1,8 @@
 <script lang="ts">
 import clsx from "clsx";
-import { sidebarOpen } from "$stores/ui";
 import Navigation from "$components/sidebar/Navigation.svelte";
 import RunList from "$components/sidebar/RunList.svelte";
+import { sidebarOpen } from "$stores/ui";
 </script>
 
 <!--

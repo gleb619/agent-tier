@@ -1,6 +1,6 @@
 import { writable } from "svelte/store";
-import { api } from "../api/client";
 import type { ApiAgent, ApiStats } from "$types/api";
+import { api } from "../api/client";
 
 /** Latest `GET /api/stats` payload (null until the first successful fetch). */
 export const stats = writable<ApiStats | null>(null);

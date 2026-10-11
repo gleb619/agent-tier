@@ -81,19 +81,19 @@ async function submit(): Promise<void> {
   showToast("Run started", "success");
   prompt = "";
   // The detached spawn records the run asynchronously; the first refetch is
-  // usually too early. Poll briefly until the submitted prompt shows up (or
-  // the budget runs out), then open the newest run.
+  // usually too early. Poll briefly until a run the store did not have before
+  // the submit shows up (any new runId — the prompt may be prefixed by
+  // globalPrompt), then open it; fall back to the newest run.
+  const knownIds = new Set(get(runs).map((r) => r.runId));
   try {
-    let matched: ApiRun | undefined;
+    let recorded: ApiRun | undefined;
     for (let attempt = 0; attempt < RUN_POLL_ATTEMPTS; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, RUN_POLL_INTERVAL_MS));
-      const list = await listRuns();
-      setRuns(list);
-      matched = get(runs).find((r) => form.prompt.trim() !== "" && r.prompt.includes(form.prompt));
-      // Stop as soon as anything is visible — matched run preferred, else newest.
-      if (matched || get(runs).length > 0) break;
+      setRuns(await listRuns());
+      recorded = get(runs).find((r) => !knownIds.has(r.runId));
+      if (recorded) break;
     }
-    const newest = matched ?? get(runs)[0];
+    const newest = recorded ?? get(runs)[0];
     if (newest) {
       selectRun(newest.runId);
       setCurrentView("run-details");
