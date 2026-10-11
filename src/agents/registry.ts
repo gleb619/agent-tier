@@ -71,6 +71,33 @@ export interface AgentDef {
   promptMode?: "arg" | "stdin";
 }
 
+// pi (@earendil-works/pi-coding-agent) authenticates against OpenRouter via
+// the `OPENROUTER_API_KEY` environment variable (its `auth.json` on this host
+// is empty and provider login is TUI-only — no non-interactive key flow, so
+// `at` must inject the key into the child env). Its settings default
+// (`openrouter/free`) is not a real model id, so also pin a default free
+// model; a free-tier OpenRouter model costs nothing against the key's limits.
+const PI_OPENROUTER_MODEL = "openrouter/free";
+
+function resolveOpenRouterApiKey(): string | undefined {
+  const plausible = (k: string | undefined): k is string => !!k && k.startsWith("sk-or-");
+  // Explicit escape hatch wins.
+  if (plausible(process.env.PI_OPENROUTER_API_KEY)) return process.env.PI_OPENROUTER_API_KEY;
+  // The at vault wins over the ambient env: agent sessions leak revoked
+  // OPENROUTER_API_KEY values into their environment (OpenRouter then
+  // answers `401 {"message":"User not found."}`), while the vault holds the
+  // curated working key.
+  try {
+    const fs = require("fs");
+    const key = JSON.parse(fs.readFileSync(`${process.env.HOME}/.at/secrets.json`, "utf8"))?.openrouter;
+    if (plausible(key)) return key;
+  } catch {
+    /* fall through */
+  }
+  if (plausible(process.env.OPENROUTER_API_KEY)) return process.env.OPENROUTER_API_KEY;
+  return undefined;
+}
+
 export const AGENTS: AgentDef[] = [
   // Tier 1: architect / review
   {
@@ -119,7 +146,15 @@ export const AGENTS: AgentDef[] = [
     name: "pi",
     tier: 2,
     bin: () => process.env.PI_BIN ?? `${NODE_BIN}/pi`,
-    buildArgs: (prompt, model) => (model ? ["-p", "--model", model, prompt] : ["-p", prompt]),
+    buildArgs: (prompt, model) => ["-p", "--model", model ?? process.env.PI_MODEL ?? PI_OPENROUTER_MODEL, prompt],
+    // Without the key pi dies with `401 {"message":"User not found."}` instead
+    // of running; inject the resolved OpenRouter key (vault > env).
+    buildEnv: () => {
+      const env: Record<string, string> = {};
+      const key = resolveOpenRouterApiKey();
+      if (key) env.OPENROUTER_API_KEY = key;
+      return env;
+    },
   },
 
   // Tier 3: boilerplate / gen

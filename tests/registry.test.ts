@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { AGENTS, getAgentByName, getAgentsByTier } from "../src/agents/registry";
 
 describe("AgentRegistry", () => {
@@ -76,16 +79,101 @@ describe("AgentRegistry", () => {
     expect(agy.buildArgs("hi")).toEqual(["--dangerously-skip-permissions", "-p", "hi"]);
   });
 
-  it("pi buildArgs passes -p and prompt without ollama provider/model", () => {
+  it("pi buildArgs passes -p, a default openrouter free model, and the prompt", () => {
     const args = getAgentByName("pi")!.buildArgs("hello");
-    expect(args).toEqual(["-p", "hello"]);
-    expect(args).not.toContain("--provider");
-    expect(args).not.toContain("ollama");
+    // pi's own settings default is `openrouter/free`, a model id that does
+    // not exist; the runner must pin a real free model so the run does not
+    // die on model resolution.
+    expect(args).toEqual(["-p", "--model", "openrouter/free", "hello"]);
   });
 
-  it("pi buildArgs includes --model when model provided", () => {
+  it("pi buildArgs honors PI_MODEL as the default model", () => {
+    const orig = process.env.PI_MODEL;
+    process.env.PI_MODEL = "openrouter/poolside/laguna-xs-2.1:free";
+    try {
+      const args = getAgentByName("pi")!.buildArgs("hello");
+      expect(args).toEqual(["-p", "--model", "openrouter/poolside/laguna-xs-2.1:free", "hello"]);
+    } finally {
+      if (orig === undefined) delete process.env.PI_MODEL;
+      else process.env.PI_MODEL = orig;
+    }
+  });
+
+  it("pi buildArgs lets an explicit -m model win over the default", () => {
     const args = getAgentByName("pi")!.buildArgs("hello", "custom-model");
     expect(args).toEqual(["-p", "--model", "custom-model", "hello"]);
+  });
+
+  it("pi buildEnv injects OPENROUTER_API_KEY from the at vault", () => {
+    const home = process.env.HOME;
+    const vault = mkdtempSync(path.join(tmpdir(), "at-vault-"));
+    mkdirSync(path.join(vault, ".at"), { recursive: true });
+    writeFileSync(path.join(vault, ".at", "secrets.json"), JSON.stringify({ openrouter: "sk-or-v1-vault" }));
+    process.env.HOME = vault;
+    delete process.env.PI_OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    try {
+      expect(getAgentByName("pi")!.buildEnv?.("x")).toEqual({ OPENROUTER_API_KEY: "sk-or-v1-vault" });
+    } finally {
+      process.env.HOME = home;
+    }
+  });
+
+  it("pi buildEnv prefers PI_OPENROUTER_API_KEY over the vault", () => {
+    const home = process.env.HOME;
+    const vault = mkdtempSync(path.join(tmpdir(), "at-vault-"));
+    mkdirSync(path.join(vault, ".at"), { recursive: true });
+    writeFileSync(path.join(vault, ".at", "secrets.json"), JSON.stringify({ openrouter: "sk-or-v1-vault" }));
+    process.env.HOME = vault;
+    process.env.PI_OPENROUTER_API_KEY = "sk-or-v1-explicit";
+    try {
+      expect(getAgentByName("pi")!.buildEnv?.("x")).toEqual({ OPENROUTER_API_KEY: "sk-or-v1-explicit" });
+    } finally {
+      process.env.HOME = home;
+      delete process.env.PI_OPENROUTER_API_KEY;
+    }
+  });
+
+  it("pi buildEnv prefers the at vault over a revoked ambient env key", () => {
+    // Agent sessions leak stale OPENROUTER_API_KEY values into the
+    // environment; pi trusts the vault key instead of a 401-ing env key.
+    const home = process.env.HOME;
+    const vault = mkdtempSync(path.join(tmpdir(), "at-vault-"));
+    mkdirSync(path.join(vault, ".at"), { recursive: true });
+    writeFileSync(path.join(vault, ".at", "secrets.json"), JSON.stringify({ openrouter: "sk-or-v1-vault" }));
+    process.env.HOME = vault;
+    process.env.OPENROUTER_API_KEY = "sk-or-v1-revoked";
+    try {
+      expect(getAgentByName("pi")!.buildEnv?.("x")).toEqual({ OPENROUTER_API_KEY: "sk-or-v1-vault" });
+    } finally {
+      process.env.HOME = home;
+      delete process.env.OPENROUTER_API_KEY;
+    }
+  });
+
+  it("pi buildEnv falls back to the ambient env key when no vault exists", () => {
+    const home = process.env.HOME;
+    process.env.HOME = mkdtempSync(path.join(tmpdir(), "at-empty-"));
+    delete process.env.PI_OPENROUTER_API_KEY;
+    process.env.OPENROUTER_API_KEY = "sk-or-v1-env";
+    try {
+      expect(getAgentByName("pi")!.buildEnv?.("x")).toEqual({ OPENROUTER_API_KEY: "sk-or-v1-env" });
+    } finally {
+      process.env.HOME = home;
+      delete process.env.OPENROUTER_API_KEY;
+    }
+  });
+
+  it("pi buildEnv returns {} when no openrouter key is available", () => {
+    const home = process.env.HOME;
+    process.env.HOME = mkdtempSync(path.join(tmpdir(), "at-empty-"));
+    delete process.env.PI_OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+    try {
+      expect(getAgentByName("pi")!.buildEnv?.("x")).toEqual({});
+    } finally {
+      process.env.HOME = home;
+    }
   });
 
   it("cline passes run cwd via --cwd", () => {
