@@ -137,4 +137,40 @@ describe('stopRun', () => {
       'failed to signal pid 88888: permission denied',
     );
   });
+
+  // --- joined state dirs (project `.at/` + `~/.at/`, same scope as `at status`) ---
+
+  it('finds a run in a non-primary dir and writes the update there', async () => {
+    const run = makeRun({ runId: 'globalrun1', pid: 4242 });
+    vi.mocked(loadRuns).mockReset();
+    vi.mocked(loadRuns).mockImplementation((dir: string) => (dir === '/tmp/home-at' ? [run] : []));
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    await stopRun(['/tmp/project-at', '/tmp/home-at'], 'globalrun1', false);
+
+    expect(loadRuns).toHaveBeenCalledWith('/tmp/project-at');
+    expect(loadRuns).toHaveBeenCalledWith('/tmp/home-at');
+    expect(killSpy).toHaveBeenCalledWith(-4242, 'SIGTERM');
+    expect(updateRun).toHaveBeenCalledWith('/tmp/home-at', 'globalrun1', expect.any(Object));
+  });
+
+  it('stops the most recent running run across joined dirs when runId is omitted', async () => {
+    const older = makeRun({ runId: 'p-run', pid: 111, startedAt: new Date(Date.now() - 7_200_000).toISOString() });
+    const newer = makeRun({ runId: 'g-run', pid: 222, startedAt: new Date().toISOString() });
+    vi.mocked(loadRuns).mockReset();
+    vi.mocked(loadRuns).mockImplementation((dir: string) => (dir === '/tmp/home-at' ? [newer] : [older]));
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    await stopRun(['/tmp/project-at', '/tmp/home-at'], undefined, false);
+
+    expect(killSpy).toHaveBeenCalledWith(-222, 'SIGTERM');
+    expect(updateRun).toHaveBeenCalledWith('/tmp/home-at', 'g-run', expect.any(Object));
+  });
+
+  it('throws not-found across joined dirs', async () => {
+    vi.mocked(loadRuns).mockReset();
+    vi.mocked(loadRuns).mockImplementation(() => []);
+
+    await expect(stopRun(['/tmp/project-at', '/tmp/home-at'], 'xyz', false)).rejects.toThrow('run not found: xyz');
+  });
 });

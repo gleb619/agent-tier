@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runStatus, formatStatusTable, formatStateReports } from '../src/status';
+import { runStatus, formatStatusTable, formatStateReports, buildStateReportFor } from '../src/status';
 import * as stateDirModule from '../src/state-dir';
 import { RunRecord, saveRuns } from '../src/run-store';
 import { writeFileSync, mkdirSync, rmSync } from 'fs';
@@ -191,5 +191,22 @@ describe('formatStateReports', () => {
     const out = formatStateReports([projectDir, homeDir]);
     expect(out).toContain('- [project] tier-2 → index 0');
     expect(out).toContain('- [global] tier-3 → index 0');
+  });
+});
+
+describe('buildStateReportFor', () => {
+  it('joins scheduler + health when given multiple dirs', () => {
+    writeState(projectDir, { scheduler: { 'tier-2': { index: 0 } }, agents: { opencode: { failureTimes: [], disabledTo: null } } });
+    writeState(homeDir, { scheduler: { 'tier-3': { index: 0 } }, agents: { qwen: { failureTimes: [], disabledTo: null } } });
+    const report = buildStateReportFor([projectDir, homeDir]);
+    expect(report.scheduler.map((e) => `${e.scope}:${e.key}`)).toEqual(['project:tier-2', 'global:tier-3']);
+    expect(report.agents.map((a) => a.name).sort()).toEqual(['opencode', 'qwen']);
+  });
+
+  it('single dir → unscoped report (back-compat)', () => {
+    writeState(projectDir, { scheduler: { 'tier-2': { index: 0 } }, agents: {} });
+    const report = buildStateReportFor([projectDir]);
+    expect(report.scheduler).toHaveLength(1);
+    expect(report.scheduler[0].scope).toBeUndefined();
   });
 });

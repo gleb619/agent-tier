@@ -3,9 +3,16 @@ import { spawn } from 'child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { RunRecord } from '../../run-store';
 import { refreshRuns } from '../../run-store';
-import { resolveStateDir, getStateFilePath } from '../../state-dir';
+import { joinRuns } from '../../status';
+import { resolveStatusDirs, getStateFilePath } from '../../state-dir';
 
-const stateDir = resolveStateDir();
+// Same joined scope as `at status`: project `.at/` first, then `~/.at/`.
+// The TUI used to resolve a single dir, so global runs stayed invisible
+// whenever the project had its own `.at/` — `at status` showed them, the
+// TUI did not.
+const stateDirs = resolveStatusDirs();
+// Primary dir for TUI-local prefs (selectedRunId) — the old single-dir choice.
+const stateDir = stateDirs[0];
 
 const [sessions, setSessions] = createSignal<RunRecord[]>([]);
 const [selectedRunId, setSelectedRunId] = createSignal<string | null>(null);
@@ -74,11 +81,15 @@ export function runsEqual(a: RunRecord[], b: RunRecord[]): boolean {
   return true;
 }
 
-export function refreshSessions(): void {
+export function refreshSessions(): Promise<void> {
   // Atomic prune+detect under the runs-file lock; the old fire-and-forget
   // pruneRuns() + loadRuns() pair rendered a snapshot from before the prune.
-  void refreshRuns(stateDir)
-    .then((updated) => {
+  // Every resolved dir is refreshed, then merged like `at status` does —
+  // the promise is returned so callers (and tests) can await the merged
+  // snapshot instead of racing a void fire-and-forget.
+  return Promise.all(stateDirs.map((dir) => refreshRuns(dir)))
+    .then((runsPerDir) => {
+      const updated = joinRuns(stateDirs, runsPerDir);
       // Only publish when the snapshot actually moved: the poll re-reads
       // runs.jsonl every few seconds, and pushing an identical array would
       // invalidate every downstream memo (sidebar rows, dashboard counters)

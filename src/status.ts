@@ -109,6 +109,13 @@ export function buildJoinedStateReport(dirs: string[]): StateReport {
   return { scheduler, maxEntries, agents };
 }
 
+/** Build the state report for a resolved dir list: joined (scoped) when more
+ *  than one dir, plain single-dir report otherwise — matches `at status --json`
+ *  and the TUI dashboard. */
+export function buildStateReportFor(dirs: string[]): StateReport {
+  return dirs.length > 1 ? buildJoinedStateReport(dirs) : buildStateReport(dirs[0], { quiet: true });
+}
+
 /** Union of per-dir run lists, tagged with scope; dedupe by runId (earlier
  *  dir wins), newest first. Single dir: returned untouched (back-compat). */
 export function joinRuns(dirs: string[], runsPerDir: RunRecord[][]): ScopedRun[] {
@@ -337,7 +344,7 @@ export async function runStatus(stateDirs: string | string[], opts?: { json?: bo
   const runs = joinRuns(dirs, runsPerDir);
 
   if (opts?.json) {
-    const state = dirs.length > 1 ? buildJoinedStateReport(dirs) : buildStateReport(dirs[0], { quiet: true });
+    const state = buildStateReportFor(dirs);
     process.stdout.write(formatStatusJson(runs, state) + '\n');
     return;
   }

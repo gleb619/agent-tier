@@ -1,27 +1,35 @@
 import { Command } from 'commander';
-import { resolveStateDir } from '../state-dir';
-import { loadRuns, updateRun } from '../run-store';
+import { resolveStatusDirs } from '../state-dir';
+import { loadRuns, updateRun, RunRecord } from '../run-store';
 import { isPidAlive } from '../process-utils';
 
-export async function stopRun(stateDir: string, runId: string | undefined, force: boolean): Promise<void> {
-  const runs = loadRuns(stateDir);
+export async function stopRun(
+  stateDirs: string | string[],
+  runId: string | undefined,
+  force: boolean,
+): Promise<void> {
+  // Joined lookup, same scope `at status` shows: project `.at/` first, then
+  // `~/.at/`. A run listed by `at status` must be stoppable from anywhere.
+  const dirs = Array.isArray(stateDirs) ? stateDirs : [stateDirs];
+  const entries = dirs.flatMap((dir) => loadRuns(dir).map((run) => ({ run, dir })));
 
-  let target = runs.find((r) => r.runId === runId || r.runId.startsWith(runId ?? ''));
+  let target: { run: RunRecord; dir: string } | undefined;
   if (runId === undefined) {
-    const running = runs.filter((r) => r.status === 'running');
-    running.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    const running = entries
+      .filter((e) => e.run.status === 'running')
+      .sort((a, b) => new Date(b.run.startedAt).getTime() - new Date(a.run.startedAt).getTime());
     target = running[0];
-    if (!target) {
-      throw new Error('no running run to stop');
-    }
+  } else {
+    target = entries.find((e) => e.run.runId === runId || e.run.runId.startsWith(runId));
   }
 
   if (!target) {
-    throw new Error(`run not found: ${runId}`);
+    throw new Error(runId === undefined ? 'no running run to stop' : `run not found: ${runId}`);
   }
 
-  const resolvedRunId = target.runId;
-  const { pid } = target;
+  const { run, dir } = target;
+  const resolvedRunId = run.runId;
+  const { pid } = run;
 
   if (!isPidAlive(pid)) {
     console.log(`[at] run ${resolvedRunId} not running (pid ${pid} not alive)`);
@@ -45,7 +53,7 @@ export async function stopRun(stateDir: string, runId: string | undefined, force
   const verb = force ? 'killed' : 'stopped';
   console.log(`[at] ${verb} run ${resolvedRunId} (pid ${pid})`);
 
-  await updateRun(stateDir, resolvedRunId, {
+  await updateRun(dir, resolvedRunId, {
     status: 'failed',
     finishedAt: new Date().toISOString(),
   });
@@ -58,8 +66,8 @@ export function registerStopCommand(program: Command): void {
     .option('-F, --force', 'Send SIGKILL (kill -9) instead of SIGTERM')
     .action(async (runId: string | undefined, opts: Record<string, unknown>) => {
       try {
-        const stateDir = resolveStateDir();
-        await stopRun(stateDir, runId, (opts.force as boolean) ?? false);
+        const stateDirs = resolveStatusDirs();
+        await stopRun(stateDirs, runId, (opts.force as boolean) ?? false);
       } catch (err) {
         console.error(`[at] error: ${(err as Error).message}`);
         process.exit(1);

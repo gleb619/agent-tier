@@ -1,8 +1,8 @@
 import { For, Show, createMemo } from 'solid-js';
 import type { JSX } from 'solid-js';
 import type { RunRecord } from '../../run-store';
-import { buildStateReport, type StateReport } from '../../status';
-import { resolveStateDir } from '../../state-dir';
+import { buildStateReportFor, type StateReport } from '../../status';
+import { resolveStatusDirs } from '../../state-dir';
 import { autoRefresh } from '../../tui/store/log';
 import { agent, tier } from '../../tui/store/settings';
 import { filteredSessions2 } from '../store/filtered-sessions';
@@ -17,6 +17,9 @@ import {
 } from '../format';
 
 const RECENT_LIMIT = 8;
+
+// Joined scope, same as `at status` and the sessions store.
+const stateDirs = resolveStatusDirs();
 
 export interface DashStats {
   total: number;
@@ -83,8 +86,9 @@ export function Dashboard(): JSX.Element {
     const rate = stats().successRate;
     return rate === null ? 'success: -' : `success: ${rate.toFixed(0)}%`;
   });
-  // Same reports `at status` prints; cheap to rebuild from the state file.
-  const health = createMemo((): StateReport => buildStateReport(resolveStateDir()));
+  // Same reports `at status` prints — joined across project `.at/` + `~/.at/`
+  // when the project has its own scope, so agent health matches the run list.
+  const health = createMemo((): StateReport => buildStateReportFor(stateDirs));
 
   return (
     <box
