@@ -11,6 +11,52 @@ function findBin(name: string): string {
   return `${NODE_BIN}/${name}`;
 }
 
+// Token for the z.ai (Zhipu) OpenAI/Anthropic-compatible coding endpoint.
+// Same value as the user's ANTHROPIC_AUTH_TOKEN / cline `openAiApiKey`; used
+// to authenticate the `openai-compatible` cline provider.
+const ZAI_BASE_URL = 'https://api.z.ai/api/coding/paas/v4';
+
+function resolveZaiApiKey(): string | undefined {
+  // Ignore placeholder values (e.g. `test`) that would shadow a real token.
+  const plausible = (k: string | undefined): k is string => !!k && k.trim().length >= 20;
+  if (plausible(process.env.ZAI_API_KEY)) return process.env.ZAI_API_KEY;
+  if (plausible(process.env.ANTHROPIC_AUTH_TOKEN)) return process.env.ANTHROPIC_AUTH_TOKEN;
+  try {
+    const fs = require('fs');
+    const p = `${process.env.HOME}/.cline/data/secrets.json`;
+    const key = JSON.parse(fs.readFileSync(p, 'utf8'))?.openAiApiKey;
+    if (typeof key === 'string' && key) return key;
+  } catch { /* fall through */ }
+  return undefined;
+}
+
+// Seed a per-run cline data dir with an `openai-compatible` provider config.
+// cline stores provider auth in `<data-dir>/settings/providers.json`; without
+// it, runs against a fresh data dir would need interactive `cline auth`.
+function seedClineProviderConfig(dataDir: string, apiKey: string, model: string): void {
+  const fs = require('fs');
+  const path = require('path');
+  const settingsDir = path.join(dataDir, 'settings');
+  fs.mkdirSync(settingsDir, { recursive: true });
+  fs.writeFileSync(path.join(settingsDir, 'providers.json'), JSON.stringify({
+    version: 1,
+    lastUsedProvider: 'openai-compatible',
+    modes: {},
+    providers: {
+      'openai-compatible': {
+        settings: {
+          provider: 'openai-compatible',
+          apiKey,
+          model,
+          baseUrl: ZAI_BASE_URL,
+        },
+        updatedAt: new Date().toISOString(),
+        tokenSource: 'manual',
+      },
+    },
+  }));
+}
+
 export interface AgentDef {
   name: string;
   tier: 1 | 2 | 3 | 4;
@@ -113,7 +159,7 @@ export const AGENTS: AgentDef[] = [
     name: 'cline',
     tier: 2,
     bin: () => process.env.CLINE_BIN ?? `${NODE_BIN}/cline`,
-    buildArgs: (prompt, _model, cwd) => {
+    buildArgs: (prompt, model, cwd) => {
       // Per-run isolated cline data dir: the cline v3 hub daemon
       // (`--cline-hub-daemon`) keeps long-lived state in `~/.cline/data` by
       // default, so back-to-back runs share a hub and the LLM keeps
@@ -138,12 +184,25 @@ export const AGENTS: AgentDef[] = [
         // command the suffix specifies.
         '--thinking', 'none',
       ];
-      // Pin the model when CLINE_MODEL is set (or the default `cline-free`
-      // free-tier model). Without this, cline v3 sometimes auto-selects a
-      // non-free-tier model via the same provider, which then 401s on the
-      // user's free-tier account and the run dies before doing anything.
-      const model = process.env.CLINE_MODEL ?? 'cline-free/step-5-preview';
-      args.push('-m', model);
+      // The `cline` free-tier provider 401s: it needs an interactive
+      // `cline auth cline` OAuth sign-in, which cannot be done
+      // non-interactively. Re-point to the z.ai OpenAI-compatible coding
+      // endpoint (`openai-compatible` provider), which is authenticated on
+      // this host via the same token the anthropic-compatible tools use
+      // (mm-code/glm-code). `openai-native` is NOT usable here: it calls
+      // the Responses API, which z.ai does not implement; the `anthropic`
+      // provider rejects non-`sk-ant-` keys client-side.
+      const modelId = model ?? process.env.CLINE_MODEL ?? 'glm-5.3-flash';
+      const apiKey = resolveZaiApiKey();
+      if (apiKey) {
+        seedClineProviderConfig(dataDir, apiKey, modelId);
+        args.push('-P', 'openai-compatible');
+      } else {
+        // No z.ai token available — fall back to the previous behavior
+        // (free-tier provider; will 401 until `cline auth cline` is done).
+        args.push('-P', 'cline');
+      }
+      args.push('-m', modelId);
       args.push(prompt);
       return args;
     },
