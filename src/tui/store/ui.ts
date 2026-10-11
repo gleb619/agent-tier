@@ -1,41 +1,89 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createSignal } from "solid-js";
-import { getStateFilePath, resolveStateDir } from "../../state-dir";
 
-const [focusZone, setFocusZone] = createSignal<0 | 1 | 2 | 3 | 4>(4);
+export type ActiveView = "dashboard" | "new-task" | "settings" | "run-details";
 
-export { focusZone, setFocusZone };
+/**
+ * Which zone owns keyboard input. Text-entry zones ('sidebar-filter',
+ * 'prompt') swallow plain character keys, so global hotkeys (1-4, j/k, q)
+ * stand down while the user is typing.
+ */
+export type FocusZone = "sidebar-filter" | "sidebar-list" | "prompt" | "log" | "settings";
 
-export function loadUIState(): void {
-  try {
-    const stateDir = resolveStateDir();
-    const path = getStateFilePath(stateDir);
-    const data = JSON.parse(readFileSync(path, "utf8")) as { tui?: { focusZone?: number } };
-    if (typeof data.tui?.focusZone === "number") {
-      const zone = Math.max(0, Math.min(4, data.tui.focusZone));
-      setFocusZone(zone as 0 | 1 | 2 | 3 | 4);
-    }
-  } catch {
-    // ignore missing or malformed state.json
+const [activeView, setActiveView] = createSignal<ActiveView>("dashboard");
+const [sidebarFilter, setSidebarFilter] = createSignal<string>("");
+const [focusZone, setFocusZone] = createSignal<FocusZone>("sidebar-list");
+const [showPromptOverlay, setShowPromptOverlay] = createSignal<boolean>(false);
+const [settingsRow, setSettingsRow] = createSignal<number>(0);
+
+/**
+ * Index into the flat sidebar row model (filter → menu → separator → runs).
+ * `-1` means "no selection" — used when the selectable subset is empty.
+ * The Sidebar component owns clamping this against the current row list.
+ */
+const [sidebarIndex, setSidebarIndex] = createSignal<number>(0);
+
+export {
+  activeView,
+  focusZone,
+  setActiveView,
+  setFocusZone,
+  setSettingsRow,
+  setShowPromptOverlay,
+  setSidebarFilter,
+  setSidebarIndex,
+  settingsRow,
+  showPromptOverlay,
+  sidebarFilter,
+  sidebarIndex,
+};
+
+/** True while a text field owns the keyboard (plain-char hotkeys stay off). */
+export function isTextEntryFocused(): boolean {
+  const zone = focusZone();
+  return zone === "sidebar-filter" || zone === "prompt";
+}
+
+/** The main-column zone a view exposes, or null when it has nothing to focus. */
+const MAIN_ZONE: Record<ActiveView, FocusZone | null> = {
+  dashboard: null,
+  "new-task": "prompt",
+  "run-details": "log",
+  settings: "settings",
+};
+
+/** The main-column zone a view exposes, or the run list when it has none. */
+export function mainZoneForView(view: ActiveView): FocusZone {
+  return MAIN_ZONE[view] ?? "sidebar-list";
+}
+
+/** Zones Tab cycles through for a view: sidebar filter, run list, then main pane. */
+export function zonesForView(view: ActiveView): FocusZone[] {
+  const main = MAIN_ZONE[view];
+  return main ? ["sidebar-filter", "sidebar-list", main] : ["sidebar-filter", "sidebar-list"];
+}
+
+/**
+ * Switch views, dropping state that only made sense in the old one (prompt
+ * overlay) and moving focus somewhere valid inside the new one.
+ */
+export function goToView(view: ActiveView): void {
+  setActiveView(view);
+  setShowPromptOverlay(false);
+  if (view === "new-task") {
+    setFocusZone("prompt");
+    return;
+  }
+  if (!zonesForView(view).includes(focusZone())) {
+    setFocusZone(mainZoneForView(view));
   }
 }
 
-export function saveUIState(zone: number): void {
-  try {
-    const stateDir = resolveStateDir();
-    const path = getStateFilePath(stateDir);
-    let data: Record<string, unknown> = {};
-    try {
-      data = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-    } catch {
-      // ignore missing or malformed state.json
-    }
-    const tui = (data.tui as Record<string, unknown> | undefined) ?? {};
-    tui.focusZone = zone;
-    data.tui = tui;
-    mkdirSync(stateDir, { recursive: true });
-    writeFileSync(path, JSON.stringify(data, null, 2), "utf8");
-  } catch {
-    // ignore write errors
-  }
+/**
+ * Tab / Shift+Tab: walk the active view's zones. A focus zone that no longer
+ * belongs to the view (after a view switch) restarts from the first zone.
+ */
+export function cycleZone(direction: 1 | -1): void {
+  const zones = zonesForView(activeView());
+  const from = Math.max(0, zones.indexOf(focusZone()));
+  setFocusZone(zones[(from + direction + zones.length) % zones.length]);
 }

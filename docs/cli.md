@@ -200,15 +200,13 @@ In CI, check out with `fetch-depth: 0` and run it on `pull_request` before any b
 Safe under the single-writer assumption of a serial loop; parallel agents need `flock` or one board
 per worktree.
 
-## Experimental TUI v2 (`AT_EXPERIMENTAL_TUI`)
+## TUI
 
-`at` with no arguments on a TTY starts the interactive TUI (requires Bun). The classic single-log
-layout in `src/tui/` is the default and stays that way; `AT_EXPERIMENTAL_TUI=1` opts into the
-experimental rewrite in `src/tui2/` — a menu-driven two-column layout (sidebar + one active view):
+`at` with no arguments on a TTY starts the interactive TUI (requires Bun). It is a menu-driven
+two-column layout (sidebar + one active view) implemented in `src/tui/`:
 
 ```bash
-AT_EXPERIMENTAL_TUI=1 at          # experimental two-column TUI
-at                                # classic TUI (default)
+at          # TUI on a TTY
 ```
 
 Views: **Dashboard** (run counters, active runs, recent completions, agent health), **New Task**
@@ -228,7 +226,6 @@ viewer, submitted-prompt toggle), **Settings** (default tier/agent/mode/retries,
 | `Ctrl+R` | refresh runs and log |
 | `Ctrl+Q` / `q` | quit (`Esc` only leaves a text field) |
 
-tui2 reads the same stores as the classic TUI (`src/tui/store/{sessions,log,settings}.ts`) and
-submits through `src/tui/launch.ts`; the entry switch itself lives in `src/tui-entry.ts`. It is a
-drop-in experiment: run both, compare, and nothing in `src/tui/` changes.
+Stores (`src/tui/store/`) own the run list, log, settings, sidebar filter and focus zone; prompt
+submission goes through `src/tui/launch.ts`. The TUI entry module is `src/tui-entry.ts`.
 

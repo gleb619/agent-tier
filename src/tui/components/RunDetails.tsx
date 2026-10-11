@@ -1,9 +1,9 @@
 import type { JSX } from "solid-js";
 import { createEffect, createMemo, For, Show } from "solid-js";
 import type { RunRecord } from "../../run-store";
-import { goToTail, isLoading, logLines, scrollOffset, VISIBLE_LINES } from "../../tui/store/log";
-import { sessions } from "../../tui/store/sessions";
 import { lineColor, statusColor, truncate } from "../format";
+import { goToTail, isLoading, logLines, scrollOffset, VISIBLE_LINES } from "../store/log";
+import { sessions } from "../store/sessions";
 import { setShowPromptOverlay } from "../store/ui";
 import { RunMeta } from "./RunMeta";
 
@@ -28,7 +28,7 @@ export function RunDetails(props: RunDetailsProps): JSX.Element {
       .map((line, i) => [from + i + 1, line]);
   });
 
-  // Running sessions stay pinned to the newest output, as in the classic TUI.
+  // Running sessions stay pinned to the newest output.
   createEffect(() => {
     if (session()?.status === "running" && logLines().length > 0) {
       goToTail();

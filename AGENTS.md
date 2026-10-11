@@ -79,8 +79,7 @@ git worktree prune
 | Session namer | LLM-generated run names via ollama / openrouter (`~/.at/namer.json`, `think: false`); post-run reflective naming (prompt + log tail), serialized via `namer.lock`, lock-timeout jobs queued to `naming-queue.jsonl` and drained by `applyRunName` / supervisor / `at status`; detached runs are named by the supervisor | `src/namer/`, `src/naming.ts`, `docs/namer.ignore.md` |
 | Init wrappers | Create wrapper scripts for built-in agents (`at init`) | `src/init/index.ts`, `src/commands/init.ts` |
 | MCP server | stdio server: `run_prompt`, `list_agents`, `get_status` tools | `src/mcp/server.ts`, `src/mcp/tools.ts` |
-| TUI | No-arg `at` on TTY → interactive dashboard (opentui/solid, needs Bun); run list joins project `.at/` + `~/.at/` like `at status` | `src/tui/`, `src/cli.ts` |
-| Experimental TUI v2 | Two-column menu TUI (Dashboard / New Task / Run Details / Settings) chosen by `AT_EXPERIMENTAL_TUI=1`; reuses the classic stores | `src/tui2/`, `src/tui-entry.ts` |
+| TUI | No-arg `at` on TTY → two-column menu TUI (Dashboard / New Task / Run Details / Settings) built on opentui/solid (needs Bun); run list joins project `.at/` + `~/.at/` like `at status` | `src/tui/`, `src/cli.ts`, `src/tui-entry.ts` |
 | Compose | Multi-agent goal pipeline: arch → dev → test → review stages | `src/compose/` |
 | CodeGraph index | Wrap `codegraph` CLI for semantic code graph (`at index`) | `src/commands/codegraph.ts` |
 | Kanban board | Markdown task board mutated only via `at kanban` (AST, not regex): `list`/`next`/`show`/`add`/`status`/`remove`/`clean`/`lint`/`guard`/`init` | `src/kanban/`, `src/commands/kanban.ts`, `docs/kanban.md` |
@@ -138,7 +137,7 @@ Line order is stored in `~/.at/config.json` (`"line": ["agent", ...]`, HMAC-sign
 
 ## Formatting & lint
 
-Biome (`biome.json`, `@biomejs/biome`) is the single source of truth for lint + format — no ESLint/Prettier. 2-space indent, double quotes, semicolons, 120 width, recommended lint preset, import order via `organizeImports`. `npx biome ci .` is a merge guardrail (fix drift with `npm run lint:fix`); suppress real false positives with `// biome-ignore lint/<rule>: reason` (a11y already off for `src/tui/**`, `src/tui2/**` — opentui, not DOM).
+Biome (`biome.json`, `@biomejs/biome`) is the single source of truth for lint + format — no ESLint/Prettier. 2-space indent, double quotes, semicolons, 120 width, recommended lint preset, import order via `organizeImports`. `npx biome ci .` is a merge guardrail (fix drift with `npm run lint:fix`); suppress real false positives with `// biome-ignore lint/<rule>: reason` (a11y already off for `src/tui/**` — opentui, not DOM).
 
 ## Rules
 

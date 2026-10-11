@@ -47,7 +47,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/tui/**", "src/tui2/**"],
+      "includes": ["src/tui/**"],
       "linter": {
         "rules": {
           "a11y": {

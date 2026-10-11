@@ -3,18 +3,17 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * Regression: the experimental TUI v2 once shipped a root <box> with
- * `height="100%"` and no `flexShrink={0}` on the header/footer rows. In a
- * fixed-height terminal that let the `flexGrow={1}` middle row swallow the
- * natural height of the header and footer, hiding them. The fix pins both
- * rows to their natural size and lets the root inherit the renderer's
- * frame. This test pins those structural invariants in code so a future
- * refactor cannot reintroduce the bug silently — the headless render
- * harness in scripts/tui2-render-test.tsx verifies the same layout
- * against the real renderer under Bun.
+ * Regression: the TUI once shipped a root <box> with `height="100%"` and no
+ * `flexShrink={0}` on the header/footer rows. In a fixed-height terminal that
+ * let the `flexGrow={1}` middle row swallow the natural height of the header
+ * and footer, hiding them. The fix pins both rows to their natural size and
+ * lets the root inherit the renderer's frame. This test pins those
+ * structural invariants in code so a future refactor cannot reintroduce the
+ * bug silently — the headless render harness in scripts/tui-render-test.tsx
+ * verifies the same layout against the real renderer under Bun.
  */
-describe("tui2 App layout invariants", () => {
-  const appPath = resolve(__dirname, "..", "..", "src", "tui2", "App.tsx");
+describe("App layout invariants", () => {
+  const appPath = resolve(__dirname, "..", "..", "src", "tui", "App.tsx");
   const render = (): string => readFileSync(appPath, "utf8");
 
   function countOccurrences(haystack: string, needle: string): number {
@@ -50,7 +49,7 @@ describe("tui2 App layout invariants", () => {
     // require it to also carry flexShrink={0}.
     const headerMatch = src.match(/<box\s+flexDirection="row"\s+gap=\{2\}\s+paddingX=\{1\}/);
     expect(headerMatch, "header <box> literal not found").not.toBeNull();
-    const headerLine = headerMatch![0];
+    const _headerLine = headerMatch![0];
     // Same flexShrink={0} marker must be on the same opening tag (or on a
     // trailing attribute line inside the same element) — we sniff a small
     // window around the matched position to allow attribute order to vary.

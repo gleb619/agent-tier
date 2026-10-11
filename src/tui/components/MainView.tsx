@@ -1,6 +1,6 @@
 import type { JSX } from "solid-js";
 import { Match, Switch } from "solid-js";
-import { selectedRunId } from "../../tui/store/sessions";
+import { selectedRunId } from "../store/sessions";
 import { activeView, focusZone, showPromptOverlay } from "../store/ui";
 import { Dashboard } from "./Dashboard";
 import { NewTask } from "./NewTask";

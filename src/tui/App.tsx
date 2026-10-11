@@ -1,52 +1,78 @@
 import type { KeyEvent } from "@opentui/core";
-import { useKeyHandler } from "@opentui/solid";
+import { useKeyboard, useRenderer } from "@opentui/solid";
 import type { JSX } from "solid-js";
-import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
-import { HotkeyBar } from "./components/HotkeyBar";
-import { LogViewer } from "./components/LogViewer";
-import { PromptBar, type PromptSubmitOpts } from "./components/PromptBar";
-import { Sidebar } from "./components/Sidebar";
-import { submitPrompt } from "./launch";
+import { createEffect, createMemo, For, onCleanup, onMount } from "solid-js";
+import { MainView } from "./components/MainView";
+import { clampRow, SETTING_ACTIONS } from "./components/Settings";
+import { nextSidebarIndex, Sidebar } from "./components/Sidebar";
+import { buildRowModel, groupRunsByDate, type Row } from "./components/sidebar/row-model";
+import { formatClock, truncate } from "./format";
+import { isFilterHotkey } from "./hotkeys";
 import { startSessionAutoRefresh } from "./store/auto-refresh";
+import { filteredSessions2 } from "./store/filtered-sessions";
 import {
   autoRefresh,
-  filteredLines,
   goToHead,
   goToTail,
   loadLogFile,
+  logLines,
   refreshLog,
   scrollOffset,
-  setAutoRefresh,
   setCurrentLogFile,
   setLogLines,
   setScrollOffset,
-  setShowPrompt,
-  showPrompt,
   VISIBLE_LINES,
 } from "./store/log";
 import {
-  filteredSessions,
   killSession,
   loadSessionState,
   refreshSessions,
   retrySession,
-  saveSessionState,
   selectedRunId,
   selectedSession,
   setSelectedRunId,
-  setShowDashboard,
-  showDashboard,
 } from "./store/sessions";
-import { cycleAgent, cycleMode, cycleRetries, cycleTier, loadSettings } from "./store/settings";
-import { focusZone, loadUIState, saveUIState, setFocusZone } from "./store/ui";
+import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, loadSettings, mode, tier } from "./store/settings";
+import {
+  type ActiveView,
+  activeView,
+  cycleZone,
+  focusZone,
+  goToView,
+  isTextEntryFocused,
+  mainZoneForView,
+  setFocusZone,
+  setSettingsRow,
+  setShowPromptOverlay,
+  setSidebarIndex,
+  settingsRow,
+  sidebarFilter,
+  sidebarIndex,
+} from "./store/ui";
+
+const _VIEW_LABELS: Record<ActiveView, string> = {
+  dashboard: "dashboard",
+  "new-task": "new task",
+  "run-details": "run details",
+  settings: "settings",
+};
 
 export function App(): JSX.Element {
-  // Shared auto-refresh loop (same cadence/poller as tui2 — see
-  // src/tui/store/auto-refresh.ts); stopped when the component unmounts.
-  const stopSessionAutoRefresh = startSessionAutoRefresh();
-  onCleanup(stopSessionAutoRefresh);
+  const renderer = useRenderer();
 
-  // Load log file when selected session changes
+  // Must mirror Ctrl+C's built-in path: destroy(), not stop(). stop() leaves raw mode
+  // and the ref'd interval in place, so the CLI process never returns to the shell.
+  function quit(): void {
+    stopAutoRefresh();
+    renderer.destroy();
+  }
+
+  // One shared poll loop for the TUI — ./store/auto-refresh.ts owns the cadence.
+  const stopAutoRefresh = startSessionAutoRefresh();
+
+  onCleanup(stopAutoRefresh);
+
+  // The log store always follows the selected run, whatever view is on screen.
   createEffect(() => {
     const session = selectedSession();
     if (session) {
@@ -58,192 +84,289 @@ export function App(): JSX.Element {
     }
   });
 
-  // Save selected session id when it changes
-  createEffect(() => {
-    saveSessionState(selectedRunId());
-  });
-
-  // Save focused zone when it changes
-  createEffect(() => {
-    saveUIState(focusZone());
-  });
-
-  // Initial load
   onMount(() => {
     loadSessionState();
-    loadUIState();
     loadSettings();
     refreshSessions();
   });
 
-  // Keyboard handler
-  useKeyHandler((key: KeyEvent) => {
+  function moveRunSelection(delta: 1 | -1): void {
+    const runs = filteredSessions2();
+    if (runs.length === 0) return;
+    const idx = runs.findIndex((r) => r.runId === selectedRunId());
+    if (idx === -1) {
+      setSelectedRunId(runs[0].runId);
+      return;
+    }
+    const next = Math.max(0, Math.min(runs.length - 1, idx + delta));
+    setSelectedRunId(runs[next].runId);
+  }
+
+  function scrollLog(delta: 1 | -1): void {
+    const max = Math.max(0, logLines().length - 1);
+    setScrollOffset(Math.max(0, Math.min(max, scrollOffset() + delta)));
+  }
+
+  function togglePrompt(): void {
+    setShowPromptOverlay((v) => !v);
+  }
+
+  function retrySelected(): void {
+    const id = selectedRunId();
+    if (id) retrySession(id);
+  }
+
+  function applySettingsRow(): void {
+    SETTING_ACTIONS[clampRow(settingsRow())].act();
+  }
+
+  // Jump between the head and the tail of the log.
+  function jumpLog(): void {
+    if (scrollOffset() === 0) goToTail();
+    else goToHead();
+  }
+
+  /**
+   * Build the current row model for the keyboard handler. Reading these
+   * signals here keeps the handler reactive when filters or runs change.
+   */
+  function currentRows(): Row[] {
+    return buildRowModel({
+      groups: groupRunsByDate(filteredSessions2()),
+      filter: sidebarFilter(),
+      activeView: activeView(),
+    });
+  }
+
+  /** Hotkey target: switch view and snap the sidebar cursor to the matching menu row. */
+  function jumpToView(view: ActiveView, menuRowIndex: number): void {
+    goToView(view);
+    if (menuRowIndex >= 0) setSidebarIndex(menuRowIndex);
+  }
+
+  /**
+   * Hotkey target: put the sidebar cursor on the filter row and focus it
+   * ('/' and Ctrl+F). Works from every focus zone because the filter row is
+   * part of the unified sidebar row list in all views.
+   */
+  function jumpToFilter(): void {
+    const filterIndex = currentRows().findIndex((r) => r.kind === "filter");
+    if (filterIndex >= 0) setSidebarIndex(filterIndex);
+    setFocusZone("sidebar-filter");
+  }
+
+  /** Enter on the highlighted row: filter row → edit, menu row → switch view, run row → open details. */
+  function activateSidebarRow(idx: number): void {
+    const row = currentRows()[idx];
+    if (!row) return;
+    if (row.kind === "filter") {
+      setFocusZone("sidebar-filter");
+      return;
+    }
+    if (row.kind === "menu") {
+      goToView(row.view);
+      return;
+    }
+    if (row.kind === "run") {
+      setSelectedRunId(row.runId);
+      goToView("run-details");
+    }
+  }
+
+  useKeyboard((key: KeyEvent) => {
     if (key.eventType !== "press") return;
 
     const { name, ctrl, shift } = key;
+    const view = activeView();
 
-    // Tab: toggle between sidebar zones 0↔1 and log zones 2↔3
-    if (name === "tab" && !ctrl && !shift) {
-      const z = focusZone();
-      if (z === 0) setFocusZone(1);
-      else if (z === 1) setFocusZone(0);
-      else if (z === 2) setFocusZone(3);
-      else if (z === 3) setFocusZone(2);
-      // zone 4: no-op
-    } else if (ctrl && name === "]") {
-      // Panel navigation: C-] = next main zone
-      const z = focusZone();
-      if (z === 0 || z === 1) setFocusZone(2);
-      else if (z === 2 || z === 3) setFocusZone(4);
-      else if (z === 4) setFocusZone(1);
-    } else if (shift && name === "tab") {
-      // Panel navigation: S-Tab = previous main zone
-      const z = focusZone();
-      if (z === 0 || z === 1) setFocusZone(4);
-      else if (z === 2 || z === 3) setFocusZone(1);
-      else if (z === 4) setFocusZone(2);
-    } else if (ctrl && name === "d" && (focusZone() === 2 || focusZone() === 3)) {
-      if (scrollOffset() === 0) {
-        goToTail();
-      } else {
-        goToHead();
-      }
-    } else if (ctrl && name === "t") {
-      cycleTier();
-    } else if (ctrl && name === "a") {
-      cycleAgent();
-    } else if (ctrl && name === "o") {
-      cycleMode();
-    } else if (ctrl && name === "n") {
-      cycleRetries();
-    } else if (ctrl && name === "k") {
-      const runId = selectedRunId();
-      if (runId !== null) {
-        killSession(runId);
-      }
-    } else if (ctrl && name === "e") {
-      const runId = selectedRunId();
-      if (runId !== null) {
-        retrySession(runId);
-      }
-    } else if (ctrl && name === "p" && (focusZone() === 2 || focusZone() === 3)) {
-      setShowPrompt((v) => !v);
-    } else if (ctrl && name === "r") {
-      refreshSessions();
-      refreshLog();
-    } else if (ctrl && name === "l") {
-      setAutoRefresh(!autoRefresh());
-    } else if (name === "up" && (focusZone() === 0 || focusZone() === 1)) {
-      const sessions = filteredSessions();
-      const current = selectedRunId();
-      const idx = sessions.findIndex((s) => s.runId === current);
-      if (showDashboard()) {
-        // no-op, already at top
-      } else if (current === null) {
-        setShowDashboard(true);
-      } else if (idx === 0) {
-        setShowDashboard(true);
-        setSelectedRunId(null);
-      } else if (idx > 0) {
-        setSelectedRunId(sessions[idx - 1].runId);
-      }
-    } else if (name === "down" && (focusZone() === 0 || focusZone() === 1)) {
-      const sessions = filteredSessions();
-      const current = selectedRunId();
-      const idx = sessions.findIndex((s) => s.runId === current);
-      if (showDashboard()) {
-        setShowDashboard(false);
-        if (sessions.length > 0) {
-          setSelectedRunId(sessions[0].runId);
+    if (ctrl) {
+      switch (name) {
+        case "q":
+          quit();
+          return;
+        case "r":
+          refreshSessions();
+          refreshLog();
+          return;
+        case "t":
+          cycleTier();
+          return;
+        case "a":
+          cycleAgent();
+          return;
+        case "o":
+          cycleMode();
+          return;
+        case "n":
+          cycleRetries();
+          return;
+        case "k": {
+          const id = selectedRunId();
+          if (id) killSession(id);
+          return;
         }
-      } else if (current === null) {
-        if (sessions.length > 0) {
-          setSelectedRunId(sessions[0].runId);
-        }
-      } else if (idx < sessions.length - 1) {
-        setSelectedRunId(sessions[idx + 1].runId);
+        case "p":
+          if (view === "run-details") togglePrompt();
+          return;
+        case "d":
+          if (view === "run-details") jumpLog();
+          return;
+        case "f":
+          // Ctrl+F reaches the filter even while a text field owns the keyboard.
+          jumpToFilter();
+          return;
       }
-    } else if (name === "up" && (focusZone() === 2 || focusZone() === 3)) {
-      setScrollOffset(Math.max(0, scrollOffset() - 1));
-    } else if (name === "down" && (focusZone() === 2 || focusZone() === 3)) {
-      setScrollOffset(Math.min(filteredLines().length - 1, scrollOffset() + 1));
+      return;
     }
-  }, {});
 
-  const handleSubmit = (prompt: string, opts: PromptSubmitOpts): void => {
-    submitPrompt(prompt, opts);
-  };
+    if (name === "escape") {
+      // Esc only leaves a text field; the focused renderable swallows the first ESC,
+      // so it is deliberately not a quit binding (Ctrl+Q / q are).
+      if (isTextEntryFocused()) setFocusZone("sidebar-list");
+      return;
+    }
+
+    if (name === "tab") {
+      cycleZone(shift ? -1 : 1);
+      return;
+    }
+
+    // Plain-character hotkeys are swallowed by text fields.
+    if (isTextEntryFocused()) return;
+
+    const zone = focusZone();
+
+    // Direct view jumps: synchronise the sidebar cursor with the matching
+    // menu row so the highlight follows the hotkey. The menu row index is
+    // dynamic — when the sidebar filter hides the target menu item, the
+    // hotkey becomes a no-op for the sidebar cursor (the view still switches).
+    if (name === "1" || name === "2" || name === "3" || name === "4") {
+      const targetView: ActiveView =
+        name === "1" ? "dashboard" : name === "2" ? "new-task" : name === "3" ? "run-details" : "settings";
+      const rows = currentRows();
+      const menuRowIndex = rows.findIndex((r) => r.kind === "menu" && r.view === targetView);
+      jumpToView(targetView, menuRowIndex);
+    } else if (isFilterHotkey(key)) jumpToFilter();
+    else if (name === "q") quit();
+    else if (zone === "settings") {
+      if (name === "up" || name === "k") setSettingsRow(clampRow(settingsRow() - 1));
+      else if (name === "down" || name === "j") setSettingsRow(clampRow(settingsRow() + 1));
+      else if (name === "return") applySettingsRow();
+    } else if (zone === "log") {
+      // Doc §11.1 wants j/k to switch runs while §11.4 wants them to scroll the log;
+      // scroll stays lowercase, run switching moves to Shift+J/K.
+      if ((shift && name === "j") || name === "J") moveRunSelection(1);
+      else if ((shift && name === "k") || name === "K") moveRunSelection(-1);
+      else if (name === "down" || name === "j") scrollLog(1);
+      else if (name === "up" || name === "k") scrollLog(-1);
+      else if (name === "p") togglePrompt();
+      else if (name === "r") retrySelected();
+    } else if (zone === "sidebar-list") {
+      // Unified list navigation: filter → menu → runs are one continuous
+      // selection; separators and group headers are skipped automatically.
+      if (name === "down" || name === "j") {
+        const next = nextSidebarIndex(1);
+        if (next !== -1) setSidebarIndex(next);
+      } else if (name === "up" || name === "k") {
+        const next = nextSidebarIndex(-1);
+        if (next !== -1) setSidebarIndex(next);
+      } else if (name === "return") {
+        activateSidebarRow(sidebarIndex());
+      } else if (name === "r" && view === "run-details") {
+        retrySelected();
+      } else if (name === "p" && view === "run-details") {
+        togglePrompt();
+      }
+    }
+  });
+
+  const headerFields = createMemo((): string[] => {
+    const view = activeView();
+    const fields = ["at — agent tier", `auto-refresh ${autoRefresh() ? "ON" : "OFF"}`];
+
+    if (view === "run-details") {
+      const total = logLines().length;
+      const session = selectedSession();
+      fields.push(
+        `view: ${view}`,
+        `dir: ${scrollOffset() === 0 ? "head" : scrollOffset() >= total - VISIBLE_LINES ? "tail" : "scroll"}`,
+        `lines: ${Math.min(VISIBLE_LINES, Math.max(0, total - scrollOffset()))}/${total}`,
+      );
+      if (session) {
+        fields.push(
+          `status: ${session.status}`,
+          `code: ${session.exitCode ?? "-"}`,
+          `started: ${formatClock(session.startedAt)}`,
+          `finished: ${formatClock(session.finishedAt)}`,
+          `pid: ${session.pid}`,
+          `agent: ${session.agent}`,
+          `tier: ${session.tier}`,
+        );
+      }
+      return fields;
+    }
+
+    const runs = filteredSessions2();
+    if (view === "dashboard") {
+      const running = runs.filter((r) => r.status === "running").length;
+      fields.push(`view: ${view}`, `total: ${runs.length}`, `active: ${running}`, `finished: ${runs.length - running}`);
+    } else if (view === "new-task") {
+      fields.push(`view: ${view}`, `tier: ${tier()}`, `agent: ${agent()}`, `mode: ${mode()}`);
+    } else {
+      fields.push(`view: ${view}`, `runs: ${runs.length}`);
+    }
+    return fields;
+  });
+
+  const footerLine = createMemo((): string => {
+    const view = activeView();
+    const common = "[1-4] views  [Tab] focus  [^R] refresh  [^Q] quit";
+
+    if (view === "new-task") {
+      return focusZone() === "prompt"
+        ? "[Enter] submit  [Shift+Enter] newline  [^T] tier  [^A] agent  [^O] mode  [^N] retries  [Esc] leave field"
+        : `[Tab] edit prompt  ${common}`;
+    }
+    if (view === "settings") {
+      return `[↑/↓] select  [Enter] change  ${common}`;
+    }
+    if (view === "run-details") {
+      const nav =
+        focusZone() === "log" ? "[j/k] scroll  [J/K] run  [^D] head/tail" : "[j/k] prev/next run  [Enter] details";
+      return `${nav}  [p] prompt  [r] retry  [^K] kill  ${common}`;
+    }
+    return `[j/k] runs  [Enter] open run  ${common}`;
+  });
 
   return (
-    <box width="100%" height="100%" flexDirection="column">
-      {/* header */}
-      <box flexDirection="row" gap={2} padding={1} paddingY={0}>
-        <text content="at — agent tier" fg="#aaaaaa" />
-        <text
-          content={autoRefresh() ? "⟳ auto-refresh ON" : "⟳ auto-refresh OFF"}
-          fg={autoRefresh() ? "#00ff88" : "#555555"}
-        />
-        <text
-          content={
-            "\u00A0" +
-            `dir: ${scrollOffset() === 0 ? "head" : scrollOffset() >= filteredLines().length - VISIBLE_LINES ? "tail" : "scroll"}`
-          }
-          fg="#aaaaaa"
-        />
-        <text
-          content={
-            "\u00A0" +
-            `lines: ${Math.min(VISIBLE_LINES, Math.max(0, filteredLines().length - scrollOffset()))}/${filteredLines().length}`
-          }
-          fg="#aaaaaa"
-        />
-        <text content={selectedSession() ? "\u00A0" + `status: ${selectedSession()!.status}` : ""} fg="#aaaaaa" />
-        <text
-          content={selectedSession() ? "\u00A0" + `code: ${selectedSession()!.exitCode ?? "-"}` : ""}
-          fg="#aaaaaa"
-        />
-        <text
-          content={
-            selectedSession()
-              ? "\u00A0" + `started: ${new Date(selectedSession()!.startedAt).toLocaleTimeString()}`
-              : ""
-          }
-          fg="#aaaaaa"
-        />
-        <text
-          content={
-            selectedSession()
-              ? "\u00A0" +
-                `finished: ${(() => {
-                  const f = selectedSession()!.finishedAt;
-                  return f ? new Date(f).toLocaleTimeString() : "-";
-                })()}`
-              : ""
-          }
-          fg="#aaaaaa"
-        />
-        <text content={selectedSession() ? "\u00A0" + `pid: ${selectedSession()!.pid}` : ""} fg="#aaaaaa" />
-        <text content={selectedSession() ? "\u00A0" + `agent: ${selectedSession()!.agent}` : ""} fg="#aaaaaa" />
-        <text content={selectedSession() ? "\u00A0" + `tier: ${selectedSession()!.tier}` : ""} fg="#aaaaaa" />
+    // Root column: the renderer root sets the absolute frame, so we let this
+    // box inherit it (no `height="100%"`) and give the middle row the only
+    // flexGrow. Without `flexShrink={0}` on the header/footer the grow row
+    // can swallow their natural height in a 24-line terminal — pinning both
+    // here keeps them visible at every typical terminal size.
+    <box width="100%" flexDirection="column">
+      <box flexDirection="row" gap={2} paddingX={1} flexShrink={0}>
+        <For each={headerFields()}>
+          {(field, i) => (
+            <text
+              content={truncate(field, 60)}
+              fg={i() === 0 ? "#58a6ff" : i() === 1 ? (autoRefresh() ? "#3fb950" : "#555555") : "#aaaaaa"}
+            />
+          )}
+        </For>
       </box>
 
-      {/* main area: sidebar + log viewer side by side */}
-      <box flexDirection="row" flexGrow={1}>
-        <box width="25%" onMouseDown={() => setFocusZone(0)}>
-          <Sidebar focused={focusZone() <= 1} focusZone={Math.min(focusZone(), 1) as 0 | 1} />
+      <box flexDirection="row" flexGrow={1} flexShrink={1}>
+        <box width="28%" flexDirection="column" onMouseDown={() => setFocusZone("sidebar-list")}>
+          <Sidebar />
         </box>
-        <box flexGrow={1} onMouseDown={() => setFocusZone(2)}>
-          <LogViewer
-            focused={focusZone() >= 2 && focusZone() <= 3}
-            focusZone={focusZone() >= 2 && focusZone() <= 3 ? (focusZone() as 2 | 3) : 2}
-          />
+        <box flexGrow={1} flexDirection="column" onMouseDown={() => setFocusZone(mainZoneForView(activeView()))}>
+          <MainView />
         </box>
       </box>
 
-      {/* prompt bar */}
-      <box flexDirection="column" flexGrow={0} onMouseDown={() => setFocusZone(4)}>
-        <PromptBar focused={focusZone() === 4} onSubmit={handleSubmit} />
-        <HotkeyBar focusZone={focusZone() as 0 | 1 | 2 | 3 | 4} />
+      <box flexDirection="row" paddingX={1} flexShrink={0}>
+        <text content={footerLine()} fg="#484f58" />
       </box>
     </box>
   );

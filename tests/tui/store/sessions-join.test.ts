@@ -1,6 +1,6 @@
-import { mkdirSync, rmSync, writeFileSync } from "fs";
-import os from "os";
-import path from "path";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RunRecord } from "../../../src/run-store";
 import { saveRuns } from "../../../src/run-store";

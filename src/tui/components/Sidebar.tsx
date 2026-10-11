@@ -1,239 +1,309 @@
+import type { MouseEvent } from "@opentui/core";
 import type { JSX } from "solid-js";
-import { createMemo, For } from "solid-js";
-import type { RunRecord } from "../../run-store";
+import { createEffect, createMemo, For, Show } from "solid-js";
+import { formatDuration, statusColor, statusIcon, truncate } from "../format";
+import { filteredSessions2 } from "../store/filtered-sessions";
+import { selectedRunId, setSelectedRunId } from "../store/sessions";
 import {
-  filteredSessions,
-  selectedRunId,
-  setSelectedRunId,
-  setShowDashboard,
+  type ActiveView,
+  activeView,
+  focusZone,
+  goToView,
+  setFocusZone,
   setSidebarFilter,
-  showDashboard,
+  setSidebarIndex,
   sidebarFilter,
-} from "../store/sessions";
+  sidebarIndex,
+} from "../store/ui";
+import {
+  buildRowModel,
+  groupRunsByDate as groupRunsByDateImpl,
+  moveSelection,
+  preserveSidebarIndex,
+  type Row,
+  type RunGroup,
+  runLabel as runLabelImpl,
+  SIDEBAR_MENU_ITEMS,
+} from "./sidebar/row-model";
 
-interface SidebarProps {
-  focused: boolean;
-  focusZone: 0 | 1;
-}
-
-export function statusIcon(status: RunRecord["status"]): string {
-  switch (status) {
-    case "running":
-      return "●";
-    case "done":
-      return "✓";
-    case "failed":
-      return "✗";
-    case "stuck":
-      return "⚠";
-  }
-}
-
-export function statusColor(status: RunRecord["status"]): string {
-  switch (status) {
-    case "running":
-      return "#3fb950";
-    case "done":
-      return "#388bfd";
-    case "failed":
-      return "#f85149";
-    case "stuck":
-      return "#d29922";
-  }
-}
-
-export function formatDuration(r: RunRecord): string {
-  const start = new Date(r.startedAt).getTime();
-  const end = r.finishedAt ? new Date(r.finishedAt).getTime() : Date.now();
-  const diff = Math.floor((end - start) / 1000);
-  const mins = Math.floor(diff / 60);
-  const secs = diff % 60;
-  if (mins > 0) {
-    return `${mins}m ${secs}s`;
-  }
-  return `${secs}s`;
-}
-
-export function truncate(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return `${text.slice(0, maxLen - 1)}…`;
-}
-
-function selectSession(s: RunRecord): void {
-  if (showDashboard()) {
-    setShowDashboard(false);
-  }
-  setSelectedRunId(s.runId);
-}
-
-export type SidebarItem =
-  | { type: "session"; data: RunRecord; isSelected: boolean }
-  | { type: "action"; label: string; icon: string; active: boolean; onSelect: () => void };
-
-export interface SidebarGroup {
+/**
+ * Public re-exports — older callers (and the row-model test) still import the
+ * grouping helpers and the menu item list from this module path.
+ */
+export interface MenuItem {
+  key: string;
   label: string;
-  items: SidebarItem[];
+  view: ActiveView;
 }
 
-function getDateBucket(dateStr: string): string {
-  const date = new Date(dateStr);
-  const year = date.getFullYear();
-  const month = date.getMonth();
-  const day = date.getDate();
+export const MENU_ITEMS: MenuItem[] = SIDEBAR_MENU_ITEMS.map(({ key, label, view }) => ({ key, label, view }));
 
-  const today = new Date();
-  const todayYear = today.getFullYear();
-  const todayMonth = today.getMonth();
-  const todayDay = today.getDate();
-
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayYear = yesterday.getFullYear();
-  const yesterdayMonth = yesterday.getMonth();
-  const yesterdayDay = yesterday.getDate();
-
-  if (year === todayYear && month === todayMonth && day === todayDay) {
-    return "Today";
-  }
-  if (year === yesterdayYear && month === yesterdayMonth && day === yesterdayDay) {
-    return "Yesterday";
-  }
-
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${day} ${months[month]}`;
+export function groupRunsByDate(runs: Parameters<typeof groupRunsByDateImpl>[0]): RunGroup[] {
+  return groupRunsByDateImpl(runs);
 }
 
-export function groupSessionsByDate(sessions: RunRecord[], selectedId: string | null): SidebarGroup[] {
-  const groups: SidebarGroup[] = [];
-  let currentLabel: string | null = null;
-  let currentGroup: SidebarGroup | null = null;
-
-  for (let i = 0; i < sessions.length; i++) {
-    const session = sessions[i];
-    const label = getDateBucket(session.startedAt);
-    const item: SidebarItem = {
-      type: "session",
-      data: session,
-      isSelected: session.runId === selectedId,
-    };
-    if (label !== currentLabel) {
-      if (currentGroup) {
-        groups.push(currentGroup);
-      }
-      currentLabel = label;
-      currentGroup = { label, items: [item] };
-    } else if (currentGroup) {
-      currentGroup.items.push(item);
-    }
-  }
-
-  if (currentGroup) {
-    groups.push(currentGroup);
-  }
-
-  return groups;
+export function runLabel(run: Parameters<typeof runLabelImpl>[0]): string {
+  return runLabelImpl(run);
 }
 
-export function buildSidebarGroups(
-  sessions: RunRecord[],
-  selectedId: string | null,
-  dashboardActive: boolean,
-  onSelectDashboard: () => void,
-): SidebarGroup[] {
-  const sessionGroups = groupSessionsByDate(sessions, selectedId);
-  const actionGroup: SidebarGroup = {
-    label: "Actions",
-    items: [
-      {
-        type: "action",
-        label: "Dashboard",
-        icon: "📊",
-        active: dashboardActive,
-        onSelect: onSelectDashboard,
-      },
-    ],
+const HINT = "#6e7681";
+const DIM = "#8b949e";
+const DIMMER = "#484f58";
+const SECTION_RULE = "#30363d";
+const ACTIVE = "#58a6ff";
+const SELECTION = "#1c2128";
+const NORMAL = "#c9d1d9";
+
+function rowBox(
+  selected: boolean,
+  marginBottom: number,
+): {
+  flexDirection: "row" | "column";
+  paddingX: 1;
+  backgroundColor: string | undefined;
+  marginBottom: number;
+} {
+  // Shared box style for selectable rows. `marginBottom` is passed per row kind
+  // (menu rows 0 = flush, run rows 1 = one blank line) so the vertical rhythm
+  // is controlled here, not by a blanket parent gap.
+  return {
+    flexDirection: "row",
+    paddingX: 1,
+    backgroundColor: selected ? SELECTION : undefined,
+    marginBottom,
   };
-  return [actionGroup, ...sessionGroups];
 }
 
-export function Sidebar(props: SidebarProps): JSX.Element {
-  const groups = createMemo(() =>
-    buildSidebarGroups(filteredSessions(), selectedRunId(), showDashboard(), () => {
-      setShowDashboard(true);
-      setSelectedRunId(null);
+/** Single, uniform list entry — every row goes through this render path. */
+function SidebarRow(props: { row: Row; index: number }): JSX.Element {
+  const selected = (): boolean => props.index === sidebarIndex();
+
+  if (props.row.kind === "separator") {
+    // Full-width hairline rule. Replaces the old hardcoded 22-cell dash
+    // string, which only ever stretched to 22 cells and looked cramped
+    // whenever the sidebar was wider than that. A border-top on a 1-row
+    // empty box draws a single horizontal rule that auto-stretches to the
+    // parent's inner width (`BorderSides[]` is supported by @opentui/core).
+    // No paddingX so the rule sits edge-to-edge of the scrollbox content
+    // area. Vertical rhythm: this separator carries NO marginTop (the
+    // preceding row — filter, or the last menu row — supplies the 1-line
+    // gap above via its own marginBottom); marginBottom=1 supplies the
+    // 1-line gap below before the next section.
+    return (
+      <box
+        width="100%"
+        height={1}
+        border={["top"]}
+        borderStyle="single"
+        borderColor={SECTION_RULE}
+        marginTop={0}
+        marginBottom={1}
+      />
+    );
+  }
+
+  if (props.row.kind === "group-header") {
+    // Full-width row, flexDirection=row + justifyContent=center centers the
+    // single text child along the row's main axis so the dashed
+    // `── Today ──` label sits exactly in the visual middle of the sidebar
+    // column, regardless of column width. No paddingX/left offset, so it
+    // can't drift off-center.
+    // marginTop=0 lets the separator above supply the 1-line gap; if the
+    // header carried its own marginTop=1 on top of the separator's
+    // marginBottom=1 the section would look gappy. marginBottom=1 gives
+    // one blank line before the group's first run row.
+    return (
+      <box width="100%" flexDirection="row" justifyContent="center" marginTop={0} marginBottom={1}>
+        <text content={`── ${props.row.label} ──`} fg={DIMMER} />
+      </box>
+    );
+  }
+
+  if (props.row.kind === "filter") {
+    const row = props.row;
+    // The filter row carries one blank line below it (marginBottom 1) so the
+    // divider beneath sits at most one line under the input, never more.
+    const filterBox = {
+      flexDirection: "row" as const,
+      paddingX: 1,
+      backgroundColor: undefined as string | undefined,
+      marginBottom: 1,
+    };
+    const filterBoxSelected = {
+      flexDirection: "row" as const,
+      paddingX: 1,
+      backgroundColor: SELECTION,
+      marginBottom: 1,
+    };
+    const editing = (): boolean => focusZone() === "sidebar-filter";
+    const hintText = (): string => (row.filter ? truncate(row.filter, 12) : "");
+    // Mouse events bubble up through the scrollbox and the sidebar wrapper,
+    // whose handlers reset the focus zone to 'sidebar-list'. Stopping the
+    // bubble is what makes a click on the filter row stick (and keeps a click
+    // inside the input from blurring it on the same click).
+    const activate = (e: MouseEvent): void => {
+      e.stopPropagation();
+      setSidebarIndex(props.index);
+      if (!editing()) setFocusZone("sidebar-filter");
+    };
+    // The editing branch must swap reactively: a plain `if (editing())` in the
+    // component body runs once when For creates the row, so the input would
+    // never mount on a later focus change. <Show> mounts/unmounts the input
+    // with the focus zone (and `focused` puts the caret in it).
+    return (
+      <Show
+        when={editing()}
+        fallback={
+          <box {...(selected() ? filterBoxSelected : filterBox)} onMouseDown={activate}>
+            <text fg={ACTIVE}>{"/  "}</text>
+            <text fg={selected() ? NORMAL : DIM}>{"Filter runs…"}</text>
+            <text fg={HINT}>
+              {"  "}
+              {hintText()}
+            </text>
+          </box>
+        }
+      >
+        <box {...filterBoxSelected} onMouseDown={activate}>
+          <text fg={ACTIVE}>{"/  "}</text>
+          <input
+            value={sidebarFilter()}
+            placeholder="filter runs…"
+            focused={true}
+            onInput={(v: string) => setSidebarFilter(v)}
+            width="100%"
+          />
+        </box>
+      </Show>
+    );
+  }
+
+  if (props.row.kind === "menu") {
+    const row = props.row;
+    const activate = (): void => {
+      setSidebarIndex(props.index);
+      goToView(row.view);
+    };
+    // Single-line menu row: cursor + `[N]` + label sit in one text node so the
+    // hotkey and label read as a single horizontal unit (matches the pre-2-line
+    // layout). The `▶` lights when the cursor is on the row OR the menu item
+    // represents the active view, so the user always sees which screen is up.
+    const isOn = (): boolean => selected() || row.active;
+    const marker = (): string => (isOn() ? `▶ [${row.key}]` : `  [${row.key}]`);
+    return (
+      // marginBottom=1 separates consecutive menu rows by one blank line so
+      // items read as distinct entries rather than a flush list. The same
+      // value on the last menu row carries the 1-line gap above the
+      // closing separator (the separator itself has marginTop=0).
+      <box {...rowBox(selected(), 1)} onMouseDown={activate}>
+        <text fg={isOn() ? ACTIVE : DIM}>{`${marker()} ${row.label}`}</text>
+      </box>
+    );
+  }
+
+  // run
+  const row = props.row;
+  if (row.kind !== "run") {
+    return <box />;
+  }
+  const onClick = (): void => {
+    setSelectedRunId(row.runId);
+    setSidebarIndex(props.index);
+    goToView("run-details");
+  };
+  const statusLine = (): string => {
+    const cursor = selected() ? "▶ " : "  ";
+    return `${cursor}${statusIcon(row.run.status)} ${truncate(runLabel(row.run), 18)}`;
+  };
+  const subLabel = (): string => {
+    const indent = selected() ? "   " : "    ";
+    return `${indent}${row.run.agent} t${row.run.tier} · ${formatDuration(row.run)}`;
+  };
+  return (
+    // Two-line run row: status line + agent/tier/duration sub-line.
+    // marginBottom 1 keeps one blank line between consecutive run entries.
+    <box {...rowBox(selected(), 1)} flexDirection="column" onMouseDown={onClick}>
+      <text fg={statusColor(row.run.status)}>{statusLine()}</text>
+      <text fg={row.runId === selectedRunId() ? NORMAL : HINT}>{subLabel()}</text>
+    </box>
+  );
+}
+
+export function Sidebar(): JSX.Element {
+  const groups = createMemo(() => groupRunsByDate(filteredSessions2()));
+  const rows = createMemo(() =>
+    buildRowModel({
+      groups: groups(),
+      filter: sidebarFilter(),
+      activeView: activeView(),
     }),
   );
 
+  // Keep the cursor on the row the user is actually looking at when the list
+  // is rebuilt (runs progress/finish, new runs land at the top, filtered rows
+  // drop out): a cursor sitting on a run row follows that run id, anything
+  // else keeps its index while it stays selectable. The helper returns the
+  // input index unchanged for a no-op rebuild, so this effect only writes the
+  // signal when something really moved — no per-poll churn.
+  let prevRows = rows();
+  createEffect(() => {
+    const nextRows = rows();
+    const idx = sidebarIndex();
+    const next = preserveSidebarIndex(prevRows, idx, nextRows);
+    prevRows = nextRows;
+    if (next !== idx) setSidebarIndex(next);
+  });
+
   return (
     <box
-      title="Sessions"
+      title="Sidebar"
       border
       borderStyle="single"
-      borderColor={props.focused ? (props.focusZone === 1 ? "#00ddff" : "#00aaff") : "#555555"}
-      focused={props.focused}
+      borderColor={focusZone().startsWith("sidebar") ? "#00aaff" : "#555555"}
       flexDirection="column"
       flexGrow={1}
       padding={1}
     >
-      <input
-        value={sidebarFilter()}
-        placeholder={props.focusZone === 0 ? "🔍 Filter runs..." : "Filter runs..."}
-        focused={props.focusZone === 0}
-        onInput={(v: string) => setSidebarFilter(v)}
-        width="100%"
-      />
-
-      <text content="───────────────────────────" fg={props.focusZone === 0 ? "#00aaff" : "#555555"} />
-
-      <scrollbox flexGrow={1}>
-        <For each={groups()}>
-          {(group) => (
-            <>
-              <box width="100%" justifyContent="center" alignItems="center" paddingBottom={1}>
-                <text content={`── ${group.label} ──`} fg="#484f58" marginY={0} />
-              </box>
-              <For each={group.items}>
-                {(item) => {
-                  if (item.type === "action") {
-                    return (
-                      <box
-                        flexDirection="column"
-                        paddingY={0}
-                        paddingX={1}
-                        backgroundColor={item.active ? "#1c2128" : undefined}
-                        onMouseDown={() => item.onSelect()}
-                      >
-                        <text fg="#58a6ff" paddingY={1}>
-                          {item.active ? "▶ " : "  "}
-                          {item.icon} {item.label}
-                        </text>
-                      </box>
-                    );
-                  }
-                  return (
-                    <box
-                      flexDirection="column"
-                      paddingY={0}
-                      paddingX={1}
-                      backgroundColor={item.isSelected ? "#1c2128" : undefined}
-                      onMouseDown={() => selectSession(item.data)}
-                    >
-                      <text>
-                        {item.isSelected ? "▶ " : "  "}
-                        {statusIcon(item.data.status)} {truncate(item.data.runId, 20)}
-                      </text>
-                      <text fg="#8b949e" marginBottom={1}>
-                        {item.isSelected ? "   " : "    "}
-                        {item.data.agent} t{item.data.tier} · {formatDuration(item.data)}
-                      </text>
-                    </box>
-                  );
-                }}
-              </For>
-            </>
-          )}
-        </For>
+      <scrollbox flexGrow={1} onMouseDown={() => setFocusZone("sidebar-list")}>
+        {/* Spacing map (per-row margins, parent gap=0). Target rhythm: one
+            blank line between every adjacent pair, breathing but not gappy.
+            filter row     marginBottom 1  → one blank line above separator
+            separator      marginTop 0 /
+                            marginBottom 1  → tight above (gap comes from
+                                              the preceding row), 1 blank
+                                              below; rule is a hairline
+                                              border-top stretching the
+                                              full inner width
+            menu rows      marginBottom 1  → one blank line between rows;
+                                              the last menu's margin also
+                                              feeds the gap to separator
+            group header   marginTop 0 /
+                            marginBottom 1  → tight below the closing
+                                              separator, one blank before
+                                              the group's first run
+            run rows       marginBottom 1  → one blank line between runs */}
+        <box flexDirection="column" gap={0}>
+          <For each={rows()}>{(row, i) => <SidebarRow row={row} index={i()} />}</For>
+          <Show when={groups().length === 0}>
+            <box paddingX={1}>
+              <text fg={DIMMER} content="(no runs match)" />
+            </box>
+          </Show>
+        </box>
       </scrollbox>
     </box>
+  );
+}
+
+/** Pure helper for the keyboard handler in App.tsx. */
+export function nextSidebarIndex(delta: 1 | -1): number {
+  return moveSelection(
+    buildRowModel({
+      groups: groupRunsByDate(filteredSessions2()),
+      filter: sidebarFilter(),
+      activeView: activeView(),
+    }),
+    sidebarIndex(),
+    delta,
   );
 }

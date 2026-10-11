@@ -3,10 +3,10 @@ import { createMemo, For, Show } from "solid-js";
 import type { RunRecord } from "../../run-store";
 import { resolveStatusDirs } from "../../state-dir";
 import { buildStateReportFor, type StateReport } from "../../status";
-import { autoRefresh } from "../../tui/store/log";
-import { agent, tier } from "../../tui/store/settings";
-import { durationMs, formatAgentRow, formatMs, formatRunRow, isToday, statusColor, TUI2_COLORS } from "../format";
+import { durationMs, formatAgentRow, formatMs, formatRunRow, isToday, statusColor, TUI_COLORS } from "../format";
 import { filteredSessions2 } from "../store/filtered-sessions";
+import { autoRefresh } from "../store/log";
+import { agent, tier } from "../store/settings";
 
 const RECENT_LIMIT = 8;
 
@@ -50,7 +50,7 @@ export function computeStats(runs: RunRecord[]): DashStats {
 function SectionHeader(props: { title: string }): JSX.Element {
   return (
     <box marginBottom={1}>
-      <text fg={TUI2_COLORS.accent}>
+      <text fg={TUI_COLORS.accent}>
         <b>{props.title}</b>
       </text>
     </box>
@@ -60,8 +60,8 @@ function SectionHeader(props: { title: string }): JSX.Element {
 /** Padded, dim-bordered box for "nothing here yet" messages. */
 function EmptyState(props: { message: string }): JSX.Element {
   return (
-    <box borderColor={TUI2_COLORS.dim} borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
-      <text fg={TUI2_COLORS.dimmer} content={props.message} />
+    <box borderColor={TUI_COLORS.dim} borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
+      <text fg={TUI_COLORS.dimmer} content={props.message} />
     </box>
   );
 }
@@ -81,7 +81,7 @@ export function Dashboard(): JSX.Element {
       title="Dashboard"
       border
       borderStyle="single"
-      borderColor={TUI2_COLORS.border}
+      borderColor={TUI_COLORS.border}
       flexDirection="column"
       flexGrow={1}
       padding={1}
@@ -92,12 +92,12 @@ export function Dashboard(): JSX.Element {
           <box>
             <SectionHeader title="Quick stats" />
             <box flexDirection="row" gap={3}>
-              <text fg={TUI2_COLORS.fg} content={`runs: ${stats().total}`} />
-              <text fg={TUI2_COLORS.ok} content={`active: ${stats().running.length}`} />
-              <text fg={TUI2_COLORS.warn} content={`stuck: ${stats().stuck}`} />
-              <text fg={TUI2_COLORS.fg} content={`today: ${stats().today}`} />
-              <text fg={TUI2_COLORS.fg} content={successText()} />
-              <text fg={TUI2_COLORS.fg} content={`avg: ${formatMs(stats().avgDurationMs)}`} />
+              <text fg={TUI_COLORS.fg} content={`runs: ${stats().total}`} />
+              <text fg={TUI_COLORS.ok} content={`active: ${stats().running.length}`} />
+              <text fg={TUI_COLORS.warn} content={`stuck: ${stats().stuck}`} />
+              <text fg={TUI_COLORS.fg} content={`today: ${stats().today}`} />
+              <text fg={TUI_COLORS.fg} content={successText()} />
+              <text fg={TUI_COLORS.fg} content={`avg: ${formatMs(stats().avgDurationMs)}`} />
             </box>
           </box>
 
@@ -134,7 +134,7 @@ export function Dashboard(): JSX.Element {
           <box>
             <SectionHeader title="Agents" />
             <text
-              fg={TUI2_COLORS.muted}
+              fg={TUI_COLORS.muted}
               content={`  defaults: tier ${tier()} · agent ${agent()} · auto-refresh ${autoRefresh() ? "ON" : "OFF"}`}
             />
             <Show when={health().agents.length > 0} fallback={<EmptyState message="(no health records)" />}>
@@ -142,10 +142,7 @@ export function Dashboard(): JSX.Element {
                 <For each={health().agents}>
                   {(a) => (
                     <box marginBottom={a.deactivated ? 1 : 0}>
-                      <text
-                        fg={a.deactivated ? TUI2_COLORS.error : TUI2_COLORS.ok}
-                        content={`  ${formatAgentRow(a)}`}
-                      />
+                      <text fg={a.deactivated ? TUI_COLORS.error : TUI_COLORS.ok} content={`  ${formatAgentRow(a)}`} />
                     </box>
                   )}
                 </For>

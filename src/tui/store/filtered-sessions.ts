@@ -1,11 +1,9 @@
 import type { RunRecord } from "../../run-store";
-import { sessions } from "../../tui/store/sessions";
+import { sessions } from "./sessions";
 import { sidebarFilter } from "./ui";
 
 /**
  * Pure filter: case-insensitive substring match on run id, agent, or prompt.
- * (The classic store's `filteredSessions` matches runId/agent/status and
- * reads the classic store's own sidebarFilter, so tui2 keeps its own.)
  */
 export function filterRuns(runs: RunRecord[], filter: string): RunRecord[] {
   const needle = filter.trim().toLowerCase();
@@ -19,7 +17,7 @@ export function filterRuns(runs: RunRecord[], filter: string): RunRecord[] {
 }
 
 /**
- * tui2's run list — old store's sessions, tui2's own sidebarFilter.
+ * TUI run list — sessions from the store, sidebarFilter from this store.
  *
  * Deliberately a function, not a module-level `createMemo`: a computation
  * created outside any `createRoot` never re-runs when its sources change, so

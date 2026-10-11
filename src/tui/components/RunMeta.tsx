@@ -25,7 +25,7 @@ import { runLabel } from "./sidebar/row-model";
  * surface below so the row model stays unit-testable without a renderer.
  */
 
-/** Same colour family as the rest of tui2: dim labels, brighter values. */
+/** Same colour family as the rest of the TUI: dim labels, brighter values. */
 export const META_LABEL = "#8b949e";
 export const META_VALUE = "#c9d1d9";
 export const META_NAME = "#e6edf3";

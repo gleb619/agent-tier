@@ -1,18 +1,18 @@
-// Headless render smoke for tui2's outer box.
+// Headless render smoke for the TUI's outer box.
 //
 // Vitest can't drive @opentui/solid's renderer under Node — the renderer
 // needs `bun:ffi` or `node:ffi`, neither available on plain Node 22. Run
 // this script under Bun with the JSX runtime flags so it actually renders:
 //
 //   bun run --jsx-import-source @opentui/solid --jsx-runtime automatic \
-//       scripts/tui2-render-test.tsx
+//       scripts/tui-render-test.tsx
 //
 // Strategy: render the exact same outer column App.tsx returns (header row
 // of texts, middle row with sidebar+main panes both flexGrow=1, footer row
 // with the keybind line). The dashboard view keeps the inner body light
 // (no textarea, no whitespace-only text nodes) so the smoke test isolates
 // the layout. Real App.tsx is mounted indirectly — its outer column shares
-// this structure exactly, and the vitest suite under tests/tui2 already
+// this structure exactly, and the vitest suite under tests/tui already
 // covers the per-component behaviour.
 
 import { testRender } from "@opentui/solid";
@@ -92,7 +92,7 @@ async function main(): Promise<void> {
   const footerVisible = footerLine.includes(FOOTER_MARKER);
 
   // eslint-disable-next-line no-console
-  console.log(`--- tui2 render frame (${lines.length} lines, ${TERMINAL_ROWS} expected) ---`);
+  console.log(`--- TUI render frame (${lines.length} lines, ${TERMINAL_ROWS} expected) ---`);
   for (let i = 0; i < TERMINAL_ROWS; i++) {
     const mark = i === 0 ? "H" : i === TERMINAL_ROWS - 1 ? "F" : " ";
     // eslint-disable-next-line no-console
@@ -107,11 +107,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   // eslint-disable-next-line no-console
-  console.log("OK: tui2 header and footer are visible at 80x24");
+  console.log("OK: TUI header and footer are visible at 80x24");
 }
 
 main().catch((err: unknown) => {
   // eslint-disable-next-line no-console
-  console.error("tui2 render test crashed:", err);
+  console.error("TUI render test crashed:", err);
   process.exit(1);
 });

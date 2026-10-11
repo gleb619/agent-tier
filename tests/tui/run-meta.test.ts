@@ -11,8 +11,8 @@ import {
   padLabel,
   padValue,
   runMetaRows,
-} from "../../src/tui2/components/RunMeta";
-import { formatClock, formatClockRange, formatDuration, formatExitCode } from "../../src/tui2/format";
+} from "../../src/tui/components/RunMeta";
+import { formatClock, formatClockRange, formatDuration, formatExitCode } from "../../src/tui/format";
 
 const NOW = new Date();
 
@@ -43,7 +43,7 @@ const fieldRows = (session: RunRecord): MetaField[][] =>
 const byLabel = (fields: MetaField[]): Record<string, MetaField> =>
   Object.fromEntries(fields.flat().map((f) => [f.label, f]));
 
-describe("tui2 run meta rows", () => {
+describe("run meta rows", () => {
   const session = mockRun("run-42", {
     agent: "kimi",
     tier: 1,
@@ -88,7 +88,7 @@ describe("tui2 run meta rows", () => {
     expect(rows[0].kind === "identity" && rows[0].runId).toBeNull();
   });
 
-  it("colours the status with the shared tui2 palette", () => {
+  it("colours the status with the shared palette", () => {
     const status = byLabel(fieldRows(session)[1]).status;
     expect(status.color).toBe("#388bfd");
     expect(status.value).toContain("done");
@@ -107,7 +107,7 @@ describe("tui2 run meta rows", () => {
   });
 });
 
-describe("tui2 meta alignment", () => {
+describe("meta alignment", () => {
   const session = mockRun("run-42", { name: "Ship kanban" });
 
   it("derives one label column shared by every key/value row", () => {
@@ -121,7 +121,7 @@ describe("tui2 meta alignment", () => {
     expect(padLabel("duration", 8)).toBe("duration");
   });
 
-  it("keeps label and value colours from the tui2 palette", () => {
+  it("keeps label and value colours from the shared palette", () => {
     expect(META_LABEL).toBe("#8b949e");
   });
 
@@ -135,7 +135,7 @@ describe("tui2 meta alignment", () => {
   });
 });
 
-describe("tui2 meta value column", () => {
+describe("meta value column", () => {
   it("exposes META_VALUE_WIDTH as the shared value column width", () => {
     expect(META_VALUE_WIDTH).toBe(14);
   });
@@ -157,7 +157,7 @@ describe("tui2 meta value column", () => {
   });
 });
 
-describe("tui2 run meta row configuration", () => {
+describe("run meta row configuration", () => {
   const session = mockRun("run-42", {
     agent: "kimi",
     tier: 1,

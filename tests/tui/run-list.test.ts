@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { type RunRecord, UNNAMED_PLACEHOLDER } from "../../src/run-store";
-import { computeStats } from "../../src/tui2/components/Dashboard";
-import { clampRow, SETTING_ACTIONS, SETTINGS_ROW_COUNT } from "../../src/tui2/components/Settings";
-import { groupRunsByDate, runLabel } from "../../src/tui2/components/Sidebar";
+import { computeStats } from "../../src/tui/components/Dashboard";
+import { clampRow, SETTING_ACTIONS, SETTINGS_ROW_COUNT } from "../../src/tui/components/Settings";
+import { groupRunsByDate, runLabel } from "../../src/tui/components/Sidebar";
 import {
   dateBucket,
   durationMs,
@@ -16,9 +16,9 @@ import {
   RUN_COL,
   statusColor,
   statusIcon,
-  TUI2_COLORS,
+  TUI_COLORS,
   truncate,
-} from "../../src/tui2/format";
+} from "../../src/tui/format";
 
 const NOW = new Date();
 
@@ -43,7 +43,7 @@ const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord =
   ...overrides,
 });
 
-describe("tui2 sidebar grouping", () => {
+describe("sidebar grouping", () => {
   it("buckets runs by day and keeps their order", () => {
     const groups = groupRunsByDate([
       mockRun("r1", { startedAt: at(10) }),
@@ -66,7 +66,7 @@ describe("tui2 sidebar grouping", () => {
   });
 });
 
-describe("tui2 dashboard stats", () => {
+describe("dashboard stats", () => {
   const runs = [
     mockRun("r1"),
     mockRun("r2", { status: "done", exitCode: 0, startedAt: at(10), finishedAt: at(11) }),
@@ -101,7 +101,7 @@ describe("tui2 dashboard stats", () => {
   });
 });
 
-describe("tui2 settings rows", () => {
+describe("settings rows", () => {
   it("exposes the five preferences the view edits", () => {
     expect(SETTING_ACTIONS.map((row) => row.label)).toEqual([
       "Default tier",
@@ -127,7 +127,7 @@ describe("tui2 settings rows", () => {
   });
 });
 
-describe("tui2 format helpers", () => {
+describe("format helpers", () => {
   it("formats durations from start/finish", () => {
     const started = new Date("2026-03-01T10:00:00.000Z");
     const r = mockRun("r", {
@@ -187,9 +187,9 @@ describe("tui2 format helpers", () => {
     expect(lineColor("plain output")).toBe("#c9d1d9");
   });
 
-  it("exposes shared tui2 palette and column widths", () => {
-    expect(TUI2_COLORS.accent).toBe("#58a6ff");
-    expect(TUI2_COLORS.error).toBe("#f85149");
+  it("exposes shared palette and column widths", () => {
+    expect(TUI_COLORS.accent).toBe("#58a6ff");
+    expect(TUI_COLORS.error).toBe("#f85149");
     expect(RUN_COL).toEqual({ ID: 20, AGENT: 12, STATUS: 8 });
   });
 

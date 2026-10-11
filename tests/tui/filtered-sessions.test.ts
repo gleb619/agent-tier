@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { RunRecord } from "../../src/run-store";
+import { filteredSessions2, filterRuns } from "../../src/tui/store/filtered-sessions";
 import { setSelectedRunId, setSessions } from "../../src/tui/store/sessions";
-import { filteredSessions2, filterRuns } from "../../src/tui2/store/filtered-sessions";
-import { setSidebarFilter } from "../../src/tui2/store/ui";
+import { setSidebarFilter } from "../../src/tui/store/ui";
 
 const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord => ({
   runId,
@@ -25,7 +25,7 @@ const RUNS: RunRecord[] = [
   mockRun("gamma-333", { agent: "glm-code", prompt: "document the tiers", status: "failed" }),
 ];
 
-describe("tui2 filterRuns", () => {
+describe("filterRuns", () => {
   it("returns every run when the filter is blank", () => {
     expect(filterRuns(RUNS, "")).toEqual(RUNS);
     expect(filterRuns(RUNS, "   ")).toEqual(RUNS);
@@ -39,7 +39,7 @@ describe("tui2 filterRuns", () => {
     expect(filterRuns(RUNS, "opencode").map((r) => r.runId)).toEqual(["beta-222"]);
   });
 
-  it("matches on prompt text (the classic store does not)", () => {
+  it("matches on prompt text", () => {
     expect(filterRuns(RUNS, "kanban").map((r) => r.runId)).toEqual(["beta-222"]);
     expect(filterRuns(RUNS, "flaky").map((r) => r.runId)).toEqual(["alpha-111"]);
   });
@@ -55,7 +55,7 @@ describe("tui2 filterRuns", () => {
   });
 });
 
-describe("tui2 filteredSessions2", () => {
+describe("filteredSessions2", () => {
   beforeEach(() => {
     setSidebarFilter("");
     setSelectedRunId(null);
@@ -66,7 +66,7 @@ describe("tui2 filteredSessions2", () => {
     expect(filteredSessions2().map((r) => r.runId)).toEqual(["alpha-111", "beta-222", "gamma-333"]);
   });
 
-  it("reacts to the tui2 sidebar filter", () => {
+  it("reacts to the sidebar filter", () => {
     setSidebarFilter("glm");
     expect(filteredSessions2().map((r) => r.runId)).toEqual(["gamma-333"]);
 

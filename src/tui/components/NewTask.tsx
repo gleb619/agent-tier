@@ -1,8 +1,8 @@
 import type { TextareaRenderable } from "@opentui/core";
 import type { JSX } from "solid-js";
 import { createSignal, Show } from "solid-js";
-import { type PromptSubmitOpts, submitPrompt } from "../../tui/launch";
-import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, mode, retries, tier } from "../../tui/store/settings";
+import { type PromptSubmitOpts, submitPrompt } from "../launch";
+import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, mode, retries, tier } from "../store/settings";
 
 const MIN_PROMPT_LENGTH = 3;
 
@@ -79,7 +79,7 @@ export function NewTask(props: { focused: boolean }): JSX.Element {
         wrapMode="word"
         onSubmit={() => submit()}
         keyBindings={[
-          // Enter is the primary action here (the classic PromptBar behaviour);
+          // Enter is the primary action here;
           // Shift+Enter keeps multi-line prompts reachable.
           { name: "return", action: "submit" },
           { name: "kpenter", action: "submit" },

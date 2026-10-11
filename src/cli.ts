@@ -29,7 +29,6 @@ registerCommands(program);
 program.enablePositionalOptions();
 
 // No-arg invocation → launch interactive TUI via Bun
-// (AT_EXPERIMENTAL_TUI=1 selects the experimental tui2 entry)
 if (process.argv.length === 2 && process.stdin.isTTY) {
   const result = spawnTui(resolveTuiEntry());
   if ((result.error as NodeJS.ErrnoException)?.code === "ENOENT") {

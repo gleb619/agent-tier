@@ -1,7 +1,7 @@
 import type { JSX } from "solid-js";
 import { For } from "solid-js";
-import { autoRefresh, setAutoRefresh } from "../../tui/store/log";
-import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, mode, retries, tier } from "../../tui/store/settings";
+import { autoRefresh, setAutoRefresh } from "../store/log";
+import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, mode, retries, tier } from "../store/settings";
 import { settingsRow } from "../store/ui";
 
 export interface SettingAction {
@@ -12,7 +12,7 @@ export interface SettingAction {
 
 /**
  * One row per editable preference. Tier/agent/mode/retries persist through the
- * classic settings store (`saveSettings` inside each `cycle*`); auto-refresh is
+ * settings store (`saveSettings` inside each `cycle*`); auto-refresh is
  * runtime-only state in the log store.
  */
 export const SETTING_ACTIONS: SettingAction[] = [

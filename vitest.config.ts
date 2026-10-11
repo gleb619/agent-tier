@@ -14,7 +14,7 @@ export default defineConfig({
       reporter: ["json-summary", "text", "json"],
       reportsDirectory: "./coverage",
       include: ["src/**/*.ts"],
-      exclude: ["src/tui/**", "src/tui2/**", "src/types/**", "node_modules/**"]
+      exclude: ["src/tui/**", "src/types/**", "node_modules/**"]
     }
   },
 });

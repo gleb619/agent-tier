@@ -1,7 +1,7 @@
 import type { RunRecord } from "../run-store";
 
-/** Shared palette for the v2 dashboard and its helpers. Single source of truth. */
-export const TUI2_COLORS = {
+/** Shared palette for the TUI. Single source of truth. */
+export const TUI_COLORS = {
   fg: "#c9d1d9",
   muted: "#8b949e",
   dim: "#6e7681",
@@ -130,7 +130,7 @@ export function formatAgentRow(a: { name: string; failures: number; deactivated:
   return `${icon} ${a.name.padEnd(RUN_COL.AGENT)} failures ${a.failures}${suffix}`;
 }
 
-/** Log-line tint, same palette as the classic TUI. */
+/** Log-line tint. */
 export function lineColor(line: string): string {
   if (/\[ERROR\]|\[FAIL\]|error|Error/.test(line)) return "#f85149";
   if (/\[WARN\]|warn|Warning/.test(line)) return "#d29922";

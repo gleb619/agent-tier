@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type RunRecord, UNNAMED_PLACEHOLDER } from "../../src/run-store";
-import { groupRunsByDate } from "../../src/tui2/components/Sidebar";
+import { groupRunsByDate } from "../../src/tui/components/Sidebar";
 import {
   buildRowModel,
   isSelectable,
@@ -8,7 +8,7 @@ import {
   preserveSidebarIndex,
   type Row,
   selectableRowIndices,
-} from "../../src/tui2/components/sidebar/row-model";
+} from "../../src/tui/components/sidebar/row-model";
 
 const NOW = new Date();
 
@@ -33,7 +33,7 @@ const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord =
   ...overrides,
 });
 
-describe("tui2 sidebar row model", () => {
+describe("sidebar row model", () => {
   describe("buildRowModel", () => {
     it("places filter, a separator, the four menu rows, and a second separator in that order", () => {
       const rows = buildRowModel({ groups: [], filter: "", activeView: "dashboard" });

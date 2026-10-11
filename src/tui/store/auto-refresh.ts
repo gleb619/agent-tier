@@ -5,10 +5,8 @@ import { refreshSessions } from "./sessions";
 /**
  * Cadence of the shared run-list auto-refresh poll.
  *
- * One constant for BOTH TUIs (classic `src/tui/App.tsx` and experimental
- * `src/tui2/App.tsx`) so the two can never drift apart. 5s matches the
- * historical classic cadence; the poll re-reads `runs.jsonl` under the run
- * lock (annotating dead/stuck processes) and tails the selected log.
+ * 5s matches the historical default; the poll re-reads `runs.jsonl` under the
+ * run lock (annotating dead/stuck processes) and tails the selected log.
  */
 export const SESSION_POLL_MS = 5000;
 

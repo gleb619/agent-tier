@@ -1,5 +1,5 @@
-import { spawn } from "child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "fs";
+import { spawn } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { type Accessor, createMemo, createSignal } from "solid-js";
 import { type RunRecord, refreshRuns } from "../../run-store";
 import { getStateFilePath, resolveStatusDirs } from "../../state-dir";

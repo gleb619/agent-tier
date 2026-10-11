@@ -9,7 +9,6 @@ import {
   setSelectedRunId,
   setSessions,
   setSidebarFilter,
-  sidebarFilter,
 } from "../../../src/tui/store/sessions";
 
 vi.mock("fs", () => ({

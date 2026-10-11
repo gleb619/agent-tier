@@ -18,9 +18,9 @@ import {
   sidebarFilter,
   sidebarIndex,
   zonesForView,
-} from "../../src/tui2/store/ui";
+} from "../../src/tui/store/ui";
 
-describe("tui2 ui store", () => {
+describe("ui store", () => {
   beforeEach(() => {
     setActiveView("dashboard");
     setFocusZone("sidebar-list");

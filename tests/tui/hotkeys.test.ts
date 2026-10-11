@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { isFilterHotkey } from "../../src/tui2/hotkeys";
+import { isFilterHotkey } from "../../src/tui/hotkeys";
 
-describe("tui2 filter hotkey mapping", () => {
+describe("filter hotkey mapping", () => {
   it("binds / for the plain-character path", () => {
     expect(isFilterHotkey({ name: "/", ctrl: false })).toBe(true);
   });
