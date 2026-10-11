@@ -26,7 +26,7 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T5  | Done    | WebUI scaffold            | Vite+Svelte+Tailwind at src/webui, types, build scripts    | High     | loop  | -      | -                 | docs/plans/webui-02-scaffold.md       |
 | T6  | Done    | API client + SSE + stores | fetch client, SSE reconnect manager, svelte stores         | High     | loop  | -      | T4,T5             | docs/plans/webui-03-api-sse-stores.md |
 | T7  | Done    | Layout + nav + common UI  | shell, sidebar nav, common components, badges              | Medium   | loop  | -      | T5                | docs/plans/webui-04-layout-nav.md     |
-| T8  | Backlog | Sidebar run list + filter | RunList/RunItem/FilterInput, date groups, virtual list     | Medium   | loop  | -      | T6,T7             | docs/plans/webui-05-run-list.md       |
+| T8  | Done    | Sidebar run list + filter | RunList/RunItem/FilterInput, date groups, virtual list     | Medium   | loop  | -      | T6,T7             | docs/plans/webui-05-run-list.md       |
 | T9  | Backlog | Dashboard view            | QuickStats, ActiveRuns, Recent, AgentsPanel                | Medium   | loop  | -      | T6,T7             | docs/plans/webui-06-dashboard.md      |
 | T10 | Backlog | New Task view             | prompt form, tier/agent/mode/retries, submit               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-07-new-task.md       |
 | T11 | Backlog | Run Details + LogViewer   | RunMeta, live log viewer, retry/kill/discuss               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-08-run-details.md    |

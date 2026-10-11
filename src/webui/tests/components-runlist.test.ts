@@ -1,0 +1,127 @@
+import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { get } from "svelte/store";
+import { beforeEach, describe, expect, it } from "vitest";
+import RunItem from "../components/sidebar/RunItem.svelte";
+import RunList from "../components/sidebar/RunList.svelte";
+import { agentFilter, searchQuery, statusFilter } from "../stores/filters";
+import { selectRun, selectedRunId, setRuns } from "../stores/runs";
+import { currentView } from "../stores/ui";
+import type { ApiRun } from "../types/api";
+
+const NOW = Date.now();
+const MIN = 60000;
+
+function makeRun(id: string, partial: Partial<ApiRun> = {}): ApiRun {
+  return {
+    runId: id,
+    agent: "mm-code",
+    tier: 2,
+    pid: 1,
+    prompt: `prompt ${id}`,
+    logFile: `/tmp/${id}.log`,
+    startedAt: new Date(NOW - 10 * MIN).toISOString(),
+    finishedAt: new Date(NOW - 8 * MIN).toISOString(),
+    exitCode: 0,
+    status: "done",
+    name: `Run ${id}`,
+    ...partial,
+  };
+}
+
+beforeEach(() => {
+  setRuns([]);
+  selectRun(null);
+  statusFilter.set("all");
+  agentFilter.set("all");
+  searchQuery.set("");
+  currentView.set("dashboard");
+});
+
+describe("RunItem", () => {
+  it("renders status icon, name, agent, tier and duration", () => {
+    render(RunItem, { props: { run: makeRun("abc") } });
+    expect(screen.getByText("Run abc")).toBeInTheDocument();
+    expect(screen.getByText("mm-code")).toBeInTheDocument();
+    expect(screen.getByText("T2")).toBeInTheDocument();
+    expect(screen.getByText("2m 00s")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Run abc/ })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("marks a running run with aria-pressed highlight when selected", () => {
+    render(RunItem, {
+      props: { run: makeRun("abc", { status: "running", finishedAt: null }), selected: true },
+    });
+    expect(screen.getByRole("button", { name: /Run abc/ })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("invokes onSelect when clicked", async () => {
+    let clicked = 0;
+    render(RunItem, { props: { run: makeRun("abc"), onSelect: () => clicked++ } });
+    await fireEvent.click(screen.getByRole("button", { name: /Run abc/ }));
+    expect(clicked).toBe(1);
+  });
+});
+
+describe("RunList", () => {
+  it("groups runs by date, newest day first", () => {
+    setRuns([
+      makeRun("old", { startedAt: new Date(NOW - 3 * 86400000).toISOString() }),
+      makeRun("today-1"),
+      makeRun("today-2", { startedAt: new Date(NOW - 5 * MIN).toISOString() }),
+    ]);
+    render(RunList);
+    const headers = screen.getAllByTestId("group-header").map((h) => h.textContent);
+    expect(headers[0]).toBe("Today");
+    expect(headers[1]).toMatch(/Oct \d+/);
+  });
+
+  it("reflects the filters store", () => {
+    setRuns([
+      makeRun("ok"),
+      makeRun("bad", { status: "failed", exitCode: 1 }),
+    ]);
+    searchQuery.set("ok");
+    render(RunList);
+    expect(screen.getByRole("button", { name: /Run ok/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Run bad/ })).not.toBeInTheDocument();
+  });
+
+  it("selects the run and navigates to run-details on click", async () => {
+    setRuns([makeRun("abc")]);
+    render(RunList);
+    await fireEvent.click(screen.getByRole("button", { name: /Run abc/ }));
+    expect(get(selectedRunId)).toBe("abc");
+    expect(get(currentView)).toBe("run-details");
+  });
+
+  it("shows an empty state when nothing matches", () => {
+    setRuns([makeRun("abc")]);
+    searchQuery.set("zzz-no-match");
+    render(RunList);
+    expect(screen.getByTestId("run-list-empty")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("virtualizes long lists (>50 rows render only a window)", async () => {
+    const runs = Array.from({ length: 80 }, (_, i) => makeRun(`r${String(i).padStart(2, "0")}`));
+    setRuns(runs);
+    render(RunList);
+    const items = screen.getAllByTestId("run-item");
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.length).toBeLessThan(80);
+    // scrolling down reveals later rows
+    const scroller = screen.getByTestId("run-list-scroll");
+    await fireEvent.scroll(scroller, { target: { scrollTop: 100000 } });
+    const after = screen.getAllByTestId("run-item");
+    expect(after.length).toBeGreaterThan(0);
+    // scrolled to the very bottom: the oldest window (r75–r79) is rendered
+    expect(after[after.length - 1]?.textContent).toContain("r79");
+  });
+
+  it("renders short lists fully without virtualization", () => {
+    setRuns([makeRun("a"), makeRun("b")]);
+    render(RunList);
+    const list = screen.getByTestId("run-list");
+    expect(within(list).getAllByTestId("run-item")).toHaveLength(2);
+  });
+});
