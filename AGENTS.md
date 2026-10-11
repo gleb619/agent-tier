@@ -27,6 +27,10 @@ npx tsc --noEmit
 npx vitest run           # full suite; pre-existing tests_ai/glm-code fail is allowed, nothing else
 # (add linting / type-coverage / format checks here as they get wired)
 
+# CI guardrail — run in the worktree BEFORE merging whenever any of these changed:
+#   .github/workflows/*, scripts/ci-check.sh, or package.json "ci:check"
+npm run ci:check         # wrkflw dry-run validate + docker build check (skip parts: --skip-docker / --skip-validate)
+
 # 4. Commit on the branch (conventional-commits style). One commit per phase is fine,
 #    one big commit is fine. NEVER include Co-Authored-By trailers.
 git add -A
@@ -49,6 +53,7 @@ git worktree prune
 - If guardrails fail, fix in the same branch — do not rebase/rewrite history unless asked.
 - If `git merge --ff-only` refuses (main moved on), `git rebase main` inside the worktree, re-run guardrails, then re-attempt the ff merge.
 - Never `git stash` / `git reset` — preserve all working-tree state.
+- Touching `.github/workflows/`, `scripts/ci-check.sh`, or the `ci:check` npm script requires `npm run ci:check` to pass in the worktree before merge (step 3 guardrail).
 - Working tree at end of session: clean on `main`, no stale worktrees, no stale local branches (the merged feature branch is deleted in step 6).
 
 ## Features

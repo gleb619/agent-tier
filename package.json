@@ -14,7 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "test:gaps": "npx ts-node --project scripts/tsconfig.json scripts/coverage-gaps.ts",
     "build:mock": "make build",
-    "test:go": "make test-go"
+    "test:go": "make test-go",
+    "ci:check": "bash scripts/ci-check.sh"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.78.1",
