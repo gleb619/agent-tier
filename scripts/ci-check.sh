@@ -55,6 +55,8 @@ if [ "$SKIP_DOCKER" -eq 0 ]; then
     echo "ERROR: docker daemon not reachable" >&2
     fail=1
   elif docker run --rm \
+      --user "$(id -u):$(id -g)" \
+      -e HOME=/tmp \
       -v "$ROOT":/work -w /work \
       -e npm_config_update_notifier=false \
       "$IMAGE" \

@@ -36,6 +36,12 @@ describe('ci-check script', () => {
     const res = runScript(['--bogus']);
     expect(res.status).toBe(2);
   });
+
+  it('docker run executes as host uid/gid with writable HOME', () => {
+    const sh = readFileSync(SCRIPT, 'utf8');
+    expect(sh).toMatch(/--user "\$\(id -u\):\$\((id -g)\)"/);
+    expect(sh).toMatch(/-e HOME=/);
+  });
 });
 
 describe('ci workflow file', () => {
