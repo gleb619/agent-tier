@@ -57,4 +57,11 @@ describe("ComposeWorkspace", () => {
     expect(await ws.exists("verdict.md")).toBe(false);
     await expect(ws.remove("verdict.md")).resolves.toBeUndefined();
   });
+
+  // New test for edge case: empty plan.md file
+  it("hasPlan() returns true when plan.md exists but is empty", async () => {
+    const ws = new ComposeWorkspace("goal-empty", tmpBase);
+    await ws.write("plan.md", "");
+    expect(await ws.hasPlan()).toBe(true);
+  });
 });
