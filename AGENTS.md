@@ -80,7 +80,7 @@ git worktree prune
 | Init wrappers | Create wrapper scripts for built-in agents (`at init`) | `src/init/index.ts`, `src/commands/init.ts` |
 | MCP server | stdio server: `run_prompt`, `list_agents`, `get_status` tools | `src/mcp/server.ts`, `src/mcp/tools.ts` |
 | TUI | No-arg `at` on TTY → two-column menu TUI (Dashboard / New Task / Run Details / Settings) built on opentui/solid (needs Bun); run list joins project `.at/` + `~/.at/` like `at status` | `src/tui/`, `src/cli.ts`, `src/tui-entry.ts` |
-| Compose | Multi-agent goal pipeline: arch → dev → test → review stages | `src/compose/` |
+| Compose | Multi-agent goal pipeline: arch → dev → test → review stages; `--task <id>` / `--loop` / `--board <file>` run kanban tasks (adapter `compose/kanban-source.ts`, board mutated only under the kanban file lock; goalId = lowercase task id, resume implicit) | `src/compose/` |
 | CodeGraph index | Wrap `codegraph` CLI for semantic code graph (`at index`) | `src/commands/codegraph.ts` |
 | Kanban board | Markdown task board mutated only via `at kanban` (AST, not regex): `list`/`next`/`show`/`add`/`status`/`remove`/`clean`/`lint`/`guard`/`init` | `src/kanban/`, `src/commands/kanban.ts`, `docs/kanban.md` |
 | Normka mock agents | Tier-4 `mock`/`mock-long` Go binaries; `#NORMKA` / `// normka:on` / `--normka` trigger JSON step specs (lorem, file, http, sse, discuss) | `mock-agent/`, `src/agents/normka-flag.ts`, `bin/mock-agent`, `bin/mock-long-agent` |

@@ -344,7 +344,7 @@ describe('runCompose — discuss questions reach the brain', () => {
 })
 
 describe('runCompose — CHECK forces FAIL when tests fail', () => {
-  it('forces FAIL and appends findings when reviewer says PASS but exit code != 0', async () => {
+  it('forces FAIL by rewriting the first line when reviewer says PASS but exit code != 0', async () => {
     const f = makeDeps(ws, {
       verdicts: ['PASS\n\nall good\n'],
       cmd: async cmd => (cmd === 'git diff' ? { code: 0, output: 'diff' } : { code: 1, output: 'FAIL 3 tests' }),
@@ -353,6 +353,8 @@ describe('runCompose — CHECK forces FAIL when tests fail', () => {
 
     expect(res.state).toBe('FAILED')
     const verdict = await ws.read('verdict.md')
+    expect(verdict.split('\n')[0]).toBe('FAIL')
+    expect(verdict).toContain('all good')
     expect(verdict).toContain('tests failing')
     expect(verdict).toMatch(/forced to FAIL/i)
   })
