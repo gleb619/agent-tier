@@ -15,10 +15,10 @@ automatic retry.
 ## Install
 
 ```bash
-npm install
-npm run build
+pnpm install
+pnpm run build
 # Binary is at dist/cli.js, or install globally:
-npm link
+pnpm link
 ```
 
 ## Quick start
@@ -81,10 +81,10 @@ Long-form docs live in [`docs/`](docs/):
 ## Development
 
 ```bash
-npm run dev          # run without building (ts-node)
-npm run build        # compile to dist/
-npm test             # vitest
-npm run test:watch   # vitest --watch
+pnpm run dev          # run without building (ts-node)
+pnpm run build        # compile to dist/
+pnpm test             # vitest
+pnpm run test:watch   # vitest --watch
 npx vitest tests/runner.test.ts   # single file
 ```
 

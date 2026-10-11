@@ -66,7 +66,7 @@ Deterministic stand-ins used by the test-suite and for smoke runs.
 | `mock`       | `MOCK_BIN` → `~/.local/bin/mock-agent`         | echoes prompt, exits 0; normka mode when triggered |
 | `mock-long`  | `MOCK_LONG_BIN` → `~/.local/bin/mock-long-agent` | streams mock output for `MOCK_LONG_DURATION` ms (default 30000); normka mode when triggered |
 
-Both are Go binaries built from `mock-agent/` (`npm run build:mock`). Without a trigger they mimic the legacy shell mocks.
+Both are Go binaries built from `mock-agent/` (`pnpm run build:mock`). Without a trigger they mimic the legacy shell mocks.
 
 **Normka mode** activates when any of these is present (OR):
 

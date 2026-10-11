@@ -62,9 +62,9 @@ describe('ci workflow file', () => {
     expect(wf).toMatch(/^\s{2}publish:/m);
   });
 
-  it('build job runs npm ci and npm run build', () => {
-    expect(wf).toMatch(/npm ci/);
-    expect(wf).toMatch(/npm run build/);
+  it('build job runs pnpm install --frozen-lockfile and pnpm run build', () => {
+    expect(wf).toMatch(/pnpm install --frozen-lockfile/);
+    expect(wf).toMatch(/pnpm run build/);
   });
 });
 

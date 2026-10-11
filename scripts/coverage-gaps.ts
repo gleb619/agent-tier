@@ -2,7 +2,7 @@
 
 /**
  * Coverage Gap Analysis — finds untested files/functions
- * Usage: npm run test:gaps
+ * Usage: pnpm run test:gaps
  *
  * Runs vitest with coverage, then parses the output to find
  * files and functions with no test coverage.
@@ -68,7 +68,7 @@ function analyze(): FileResult[] {
   const finalPath = path.join(projectRoot, 'coverage', 'coverage-final.json');
 
   if (!fs.existsSync(summaryPath)) {
-    console.error(`${C.red}No coverage data. Run "npm run test:coverage" first.${C.reset}`);
+    console.error(`${C.red}No coverage data. Run "pnpm run test:coverage" first.${C.reset}`);
     process.exit(1);
   }
 

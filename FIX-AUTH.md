@@ -58,7 +58,7 @@ Attempted and rejected alternatives:
 - Token resolution order (`resolveZaiApiKey`): `$ZAI_API_KEY` (if not a
   placeholder) → `$ANTHROPIC_AUTH_TOKEN` → `~/.cline/data/secrets.json`
   `openAiApiKey`. If none found, falls back to the old `-P cline` behavior.
-- `npm run build` required before the fix takes effect via `dist/`.
+- `pnpm run build` required before the fix takes effect via `dist/`.
 
 **Manual steps only if you want the real Cline account back (optional):**
 ```bash

@@ -25,7 +25,7 @@ Invoke before any work:
 - Never `git commit`, `git push`, `git reset`, or edit `~/.at/*` by hand. Use the
   `at feedback` CLI for all queue and log changes.
 - Never remove an entry before the fix is verified.
-- Use `node dist/cli.js` (after `npm run build`) or `npx ts-node src/cli.ts` if `at` is
+- Use `node dist/cli.js` (after `pnpm run build`) or `npx ts-node src/cli.ts` if `at` is
   not on PATH.
 - **Who writes code** (decided in TRIAGE):
   - **SMALL** (≤5 files, one concern, obvious fix, <~100 lines): you, the loop agent,

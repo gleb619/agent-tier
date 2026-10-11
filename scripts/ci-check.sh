@@ -59,8 +59,9 @@ if [ "$SKIP_DOCKER" -eq 0 ]; then
       -e HOME=/tmp \
       -v "$ROOT":/work -w /work \
       -e npm_config_update_notifier=false \
+      -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
       "$IMAGE" \
-      sh -c 'npm ci --no-audit --no-fund && npm run build && node dist/cli.js --help >/dev/null'; then
+      sh -c 'corepack pnpm@9.15.9 install --frozen-lockfile --config.confirmModulesPurge=false && corepack pnpm@9.15.9 run build && node dist/cli.js --help >/dev/null'; then
     echo "OK: project builds in docker"
   else
     echo "FAIL: docker build check failed" >&2
