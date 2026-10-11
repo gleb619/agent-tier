@@ -107,7 +107,7 @@ async function save(): Promise<void> {
           <Input id="state-dir" label="State dir" bind:value={form.stateDir} placeholder="~/.at" disabled={saving} />
         </div>
       </div>
-      <p class="text-xs text-gray-400">SSE port: 1-{MAX_SSE_PORT}. Empty advanced fields clear the stored value.</p>
+      <p class="text-xs text-gray-500">SSE port: 1-{MAX_SSE_PORT}. Empty advanced fields clear the stored value.</p>
     </div>
   </Card>
 
@@ -115,7 +115,7 @@ async function save(): Promise<void> {
     <Card>
       <div class="flex flex-col gap-2">
         <h3 class="text-sm font-semibold text-gray-900">Other stored settings</h3>
-        <p class="text-xs text-gray-400">Read-only keys written by other clients (e.g. state/config paths).</p>
+        <p class="text-xs text-gray-500">Read-only keys written by other clients (e.g. state/config paths).</p>
         <dl class="flex flex-col gap-1">
           {#each extras as [key, value] (key)}
             <div class="flex items-baseline gap-2 text-sm" data-testid="settings-extra">
@@ -130,6 +130,6 @@ async function save(): Promise<void> {
 
   <div class="flex items-center gap-3">
     <Button label={saving ? "Saving…" : "Save settings"} type="submit" disabled={saving} onClick={() => void save()} />
-    <span class="text-xs text-gray-400">Defaults are used by New Task. Retries: 0-{MAX_RETRIES}.</span>
+    <span class="text-xs text-gray-500">Defaults are used by New Task. Retries: 0-{MAX_RETRIES}.</span>
   </div>
 </div>

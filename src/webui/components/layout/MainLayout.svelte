@@ -1,6 +1,12 @@
 <script lang="ts">
+import { get } from "svelte/store";
+import { deleteRun, listRuns, retryRun } from "../../api/runs";
+import { refreshDashboard } from "$stores/dashboard";
+import { runs, selectRun, selectedRun, selectedRunId, setRuns } from "$stores/runs";
+import { showToast } from "$stores/toast";
 import { currentView, setCurrentView } from "$stores/ui";
 import type { ViewType } from "$types/index";
+import { handleKeydown, neighborRunId, type KeyboardHandlers } from "$utils/keyboard";
 import Toasts from "$components/common/Toasts.svelte";
 import DashboardView from "$components/dashboard/DashboardView.svelte";
 import NewTaskView from "$components/newtask/NewTaskView.svelte";
@@ -16,19 +22,59 @@ const views: { id: ViewType; heading: string; hint: string }[] = [
   { id: "settings", heading: "Settings", hint: "Defaults persisted to the backend." },
 ];
 
-function isFormField(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement
-  );
+function errText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
+async function retrySelected(): Promise<void> {
+  const run = get(selectedRun);
+  if (!run) return;
+  try {
+    await retryRun(run.runId);
+    showToast("Retry started", "success");
+  } catch (err) {
+    showToast(errText(err), "error");
+  }
+}
+
+async function killSelected(): Promise<void> {
+  const run = get(selectedRun);
+  if (!run) return;
+  if (!window.confirm(`Kill run ${run.runId}?`)) return;
+  try {
+    await deleteRun(run.runId);
+    showToast("Run killed", "success");
+  } catch (err) {
+    showToast(errText(err), "error");
+  }
+}
+
+async function refreshData(): Promise<void> {
+  try {
+    setRuns(await listRuns());
+  } catch (err) {
+    showToast(errText(err), "error");
+  }
+  void refreshDashboard().catch(() => {});
+}
+
+const handlers: KeyboardHandlers = {
+  navigateTo: setCurrentView,
+  selectNextRun: () => selectRun(neighborRunId($runs, $selectedRunId, 1)),
+  selectPreviousRun: () => selectRun(neighborRunId($runs, $selectedRunId, -1)),
+  openSelectedRun: () => {
+    if ($selectedRunId) setCurrentView("run-details");
+  },
+  retrySelectedRun: () => void retrySelected(),
+  killSelectedRun: () => void killSelected(),
+  showPrompt: () => window.dispatchEvent(new CustomEvent("at:run-prompt")),
+  focusFilter: () => document.querySelector<HTMLInputElement>("#run-filter")?.focus(),
+  clearFocus: () => selectRun(null),
+  refreshData: () => void refreshData(),
+};
+
 function onKeydown(event: KeyboardEvent): void {
-  if (isFormField(event.target)) return;
-  const index = Number.parseInt(event.key, 10) - 1;
-  const view = views[index];
-  if (view) setCurrentView(view.id);
+  handleKeydown(event, handlers);
 }
 
 $: activeView = $currentView;
@@ -36,11 +82,18 @@ $: activeView = $currentView;
 
 <svelte:window on:keydown={onKeydown} />
 
+<a
+  href="#main"
+  class="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-700 focus:ring-2 focus:ring-primary-500"
+>
+  Skip to content
+</a>
+
 <div class="flex min-h-screen flex-col bg-gray-50 font-sans text-gray-900">
   <Header />
   <div class="flex flex-1">
     <Sidebar />
-    <main class="flex-1 p-6">
+    <main id="main" tabindex="-1" class="flex-1 p-6 focus:outline-none">
       {#if activeView === "dashboard"}
         <h2 class="mb-4 text-lg font-semibold text-gray-900">Dashboard</h2>
         <DashboardView />

@@ -23,6 +23,7 @@ const items: { id: ViewType; label: string; shortcut: string; icon: typeof Layou
         aria-current={active ? "page" : undefined}
         class={clsx(
           "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm",
+          "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500",
           active ? "bg-primary-50 font-medium text-primary-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900",
           !$sidebarOpen && "max-md:justify-start md:justify-center md:px-0",
         )}
@@ -32,7 +33,7 @@ const items: { id: ViewType; label: string; shortcut: string; icon: typeof Layou
         {#if $sidebarOpen}
           <span class="flex-1 text-left">{item.label}</span>
           <kbd
-            class="rounded border border-gray-200 bg-gray-50 px-1 font-mono text-[10px] text-gray-400"
+            class="rounded border border-gray-200 bg-gray-50 px-1 font-mono text-[10px] text-gray-500"
             aria-hidden="true">{item.shortcut}</kbd
           >
         {/if}

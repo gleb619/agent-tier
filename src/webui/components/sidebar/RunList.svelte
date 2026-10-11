@@ -49,7 +49,7 @@ function pick(run: ApiRun): void {
 <div class="flex h-full flex-col gap-2" data-testid="run-list">
   <FilterInput />
   {#if rows.length === 0}
-    <p class="px-1 py-4 text-center text-sm text-gray-400" data-testid="run-list-empty">
+    <p class="px-1 py-4 text-center text-sm text-gray-500" data-testid="run-list-empty">
       No runs match the current filter.
     </p>
   {:else if virtual}
@@ -58,7 +58,7 @@ function pick(run: ApiRun): void {
         {#each visible as { row, index } (row.key)}
           <div class="absolute left-0 right-0" style="top: {offsets[index]}px;">
             {#if row.kind === "header"}
-              <h3 class="px-1 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400" data-testid="group-header">
+              <h3 class="px-1 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-500" data-testid="group-header">
                 {row.group.label}
               </h3>
             {:else}
@@ -70,7 +70,7 @@ function pick(run: ApiRun): void {
     </div>
   {:else}
     {#each groups as group (group.key)}
-      <h3 class="px-1 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400" data-testid="group-header">
+      <h3 class="px-1 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-500" data-testid="group-header">
         {group.label}
       </h3>
       {#each group.runs as run (run.runId)}

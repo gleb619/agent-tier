@@ -15,6 +15,7 @@ $: agents = [...new Set($runs.map((run) => run.agent))].sort();
 
 <div class="flex flex-col gap-2" data-testid="filter-input">
   <input
+    id="run-filter"
     type="search"
     aria-label="Filter runs"
     placeholder="Filter runs…"

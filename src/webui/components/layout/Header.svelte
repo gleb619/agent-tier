@@ -9,7 +9,7 @@ import StatusBar from "./StatusBar.svelte";
     type="button"
     aria-label="Toggle sidebar"
     aria-expanded={$sidebarOpen}
-    class="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+    class="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
     on:click={() => sidebarOpen.set(!$sidebarOpen)}
   >
     <PanelLeft size={18} aria-hidden="true" />

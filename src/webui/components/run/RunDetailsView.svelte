@@ -24,8 +24,19 @@ $: if (run && (!session || session.runId !== run.runId)) {
 }
 
 onDestroy(() => {
+  window.removeEventListener("at:run-prompt", onShowPrompt);
   session?.close();
 });
+
+// Opened via the `p` keyboard shortcut. Registered at init (not onMount:
+// lifecycle hooks are noop under the SSR-ish vitest runtime — see SettingsView).
+function onShowPrompt(): void {
+  if (run) showPrompt = true;
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("at:run-prompt", onShowPrompt);
+}
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

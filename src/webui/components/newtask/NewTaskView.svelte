@@ -101,7 +101,7 @@ function onPromptKeydown(event: KeyboardEvent): void {
       <div class="flex flex-col gap-1">
         <div class="flex items-baseline justify-between">
           <label for="prompt" class="text-sm font-medium text-gray-700">Prompt</label>
-          <span class="text-xs text-gray-400" data-testid="prompt-count">{prompt.length} / {MAX_PROMPT_CHARS}</span>
+          <span class="text-xs text-gray-500" data-testid="prompt-count">{prompt.length} / {MAX_PROMPT_CHARS}</span>
         </div>
         <textarea
           id="prompt"
@@ -133,7 +133,7 @@ function onPromptKeydown(event: KeyboardEvent): void {
           disabled={submitting}
           onClick={() => void submit()}
         />
-        <span class="text-xs text-gray-400">Retries: 0-{MAX_RETRIES}. Mode applies to future CLI runs.</span>
+        <span class="text-xs text-gray-500">Retries: 0-{MAX_RETRIES}. Mode applies to future CLI runs.</span>
       </div>
     </div>
   </Card>
