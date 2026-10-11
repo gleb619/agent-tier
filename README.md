@@ -66,7 +66,7 @@ Options:
 
 Commands:
   line show|add|rm|move    Manage the line-mode queue (no -t = line mode, default t3→t2→t1)
-  status, stop, enable, disable, config sign, feedback, discuss, events, serve, mcp, index, compose
+  status, stop, enable, disable, config sign, feedback, discuss, events, serve, mcp, index, compose, web
 ```
 
 ## Documentation
@@ -78,6 +78,7 @@ Long-form docs live in [`docs/`](docs/):
 - [docs/kanban.md](docs/kanban.md) — Markdown task board schema, compose + kanban orchestration
 - [docs/agents.md](docs/agents.md) — tiers, agent tables, binary resolution, plugins, configuration
 - [docs/architecture.md](docs/architecture.md) — source map, design points, state locking, adding agents
+- [docs/webui.md](docs/webui.md) — WebUI: `at web` server, API endpoints, dev + Docker
 
 ## Development
 

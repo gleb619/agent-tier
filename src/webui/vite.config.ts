@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import preprocess from "svelte-preprocess";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 // WebUI lives in src/webui of the at repo; this config is the Vite root.
 // Dev server proxies /api to the `at web` API server (default port 7800).

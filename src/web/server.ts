@@ -25,6 +25,8 @@ export interface WebServerOptions {
   hub: Hub;
   /** Listen port; 0 (default) = random free port. */
   port?: number;
+  /** Bind address (default 127.0.0.1; use 0.0.0.0 for containers). */
+  host?: string;
   /** WebUI build output dir; absent/missing → static routes 404. */
   staticDir?: string;
   /**
@@ -36,6 +38,26 @@ export interface WebServerOptions {
 }
 
 const DEFAULT_LOG_TAIL_LINES = 200;
+const DEFAULT_HOST = "127.0.0.1";
+
+/**
+ * Default WebUI build dir: <package root>/src/webui/dist. The compiled server
+ * lives at dist/web/server.js, so two levels up is the package root.
+ */
+export function defaultWebUiStaticDir(rootDir: string = path.resolve(__dirname, "..", "..")): string {
+  return path.join(rootDir, "src", "webui", "dist");
+}
+
+/**
+ * Resolve which static dir `at web` serves: the explicit `--static` value if
+ * given, else the built WebUI (src/webui/dist) when present, else undefined
+ * (API-only mode).
+ */
+export function resolveWebUiStaticDir(explicit?: string, rootDir?: string): string | undefined {
+  if (explicit) return path.resolve(explicit);
+  const dir = defaultWebUiStaticDir(rootDir);
+  return existsSync(dir) ? dir : undefined;
+}
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -201,7 +223,10 @@ function hubJsonRequest(
         port: hubPort,
         path: hubPath,
         method,
-        headers: payload === undefined ? undefined : { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+        headers:
+          payload === undefined
+            ? undefined
+            : { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
       },
       (upstreamRes) => {
         let data = "";
@@ -216,10 +241,10 @@ function hubJsonRequest(
   });
 }
 
-function listen(server: http.Server, port: number): Promise<number> {
+function listen(server: http.Server, port: number, host: string): Promise<number> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(port, "127.0.0.1", () => {
+    server.listen(port, host, () => {
       const addr = server.address();
       resolve(typeof addr === "object" && addr ? addr.port : port);
     });
@@ -497,7 +522,7 @@ export function startWebServer(options: WebServerOptions): Promise<WebServer> {
     sendError(res, 404, "not found");
   }
 
-  return listen(server, options.port ?? 0).then((port) => ({
+  return listen(server, options.port ?? 0, options.host ?? DEFAULT_HOST).then((port) => ({
     port,
     requestedPort: options.port ?? 0,
     close: () =>

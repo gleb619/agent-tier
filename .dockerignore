@@ -1,0 +1,10 @@
+.git
+node_modules
+**/node_modules
+dist
+src/webui/dist
+coverage
+.pw-browsers
+.at
+*.log
+env.local.sh

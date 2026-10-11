@@ -7,7 +7,7 @@
     "at": "./dist/cli.js"
   },
   "scripts": {
-    "build": "[ -f env.local.sh ] && . ./env.local.sh; tsc",
+    "build": "[ -f env.local.sh ] && . ./env.local.sh; tsc && npm run web:build",
     "dev": "[ -f env.local.sh ] && . ./env.local.sh; ts-node src/cli.ts",
     "test": "[ -f env.local.sh ] && . ./env.local.sh; vitest run",
     "test:watch": "[ -f env.local.sh ] && . ./env.local.sh; vitest",
@@ -27,7 +27,7 @@
     "format:check": "biome format .",
     "ci:check": "bash scripts/ci-check.sh",
     "web:dev": "pnpm -C src/webui dev",
-    "web:build": "pnpm -C src/webui build",
+    "web:build": "npm --prefix src/webui run build",
     "web:check": "pnpm -C src/webui check"
   },
   "dependencies": {
@@ -64,6 +64,9 @@
       "*types*",
       "*eslint*",
       "*prettier*"
-    ]
+    ],
+    "overrides": {
+      "vite": "5.4.21"
+    }
   }
 }

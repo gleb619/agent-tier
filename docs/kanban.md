@@ -17,23 +17,23 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 
 ## Task Board
 
-| ID  | Status  | Title                     | Description                                                | Priority | Owner | Blocks | Blocked By        | Plan File                             |
-| :-- | :------ | :------------------------ | :--------------------------------------------------------- | :------- | :---- | :----- | :---------------- | :------------------------------------ |
-| T1  | Done    | kanban core module        | src/kanban: mdast mutator, selection, lint, guard          | Medium   | loop  | T2     | -                 | -                                     |
-| T2  | Done    | at kanban CLI             | src/commands/kanban.ts subcommands wired into root program | Medium   | loop  | T3     | T1                | -                                     |
-| T3  | Done    | kanban test suite         | tests/kanban: parse, select, board, ops, lint, guard, cli  | Medium   | loop  | -      | T2                | -                                     |
-| T4  | Done    | WebUI API server          | at web: REST+static+SSE over run-store/health/settings     | High     | loop  | -      | -                 | docs/plans/webui-01-api-server.md     |
-| T5  | Done    | WebUI scaffold            | Vite+Svelte+Tailwind at src/webui, types, build scripts    | High     | loop  | -      | -                 | docs/plans/webui-02-scaffold.md       |
-| T6  | Done    | API client + SSE + stores | fetch client, SSE reconnect manager, svelte stores         | High     | loop  | -      | T4,T5             | docs/plans/webui-03-api-sse-stores.md |
-| T7  | Done    | Layout + nav + common UI  | shell, sidebar nav, common components, badges              | Medium   | loop  | -      | T5                | docs/plans/webui-04-layout-nav.md     |
-| T8  | Done    | Sidebar run list + filter | RunList/RunItem/FilterInput, date groups, virtual list     | Medium   | loop  | -      | T6,T7             | docs/plans/webui-05-run-list.md       |
-| T9  | Done    | Dashboard view            | QuickStats, ActiveRuns, Recent, AgentsPanel                | Medium   | loop  | -      | T6,T7             | docs/plans/webui-06-dashboard.md      |
-| T10 | Done    | New Task view             | prompt form, tier/agent/mode/retries, submit               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-07-new-task.md       |
-| T11 | Done    | Run Details + LogViewer   | RunMeta, live log viewer, retry/kill/discuss               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-08-run-details.md    |
-| T12 | Done    | Settings view             | defaults form persisted to backend state                   | Low      | loop  | -      | T6,T7             | docs/plans/webui-09-settings.md       |
-| T13 | Done    | Keyboard shortcuts + a11y | TUI-mirroring keys, ARIA, contrast                         | Low      | loop  | -      | T8,T9,T10,T11,T12 | docs/plans/webui-10-keyboard.md       |
-| T14 | Done    | E2E + integration tests   | Playwright vs at web with mock agents                      | Medium   | loop  | -      | T13               | docs/plans/webui-11-e2e-tests.md      |
-| T15 | Backlog | WebUI build, Docker, docs | build wiring, Dockerfile, docs/webui.md, ci:check          | Low      | loop  | -      | T14               | docs/plans/webui-12-build-docs.md     |
+| ID  | Status | Title                     | Description                                                | Priority | Owner | Blocks | Blocked By        | Plan File                             |
+| :-- | :----- | :------------------------ | :--------------------------------------------------------- | :------- | :---- | :----- | :---------------- | :------------------------------------ |
+| T1  | Done   | kanban core module        | src/kanban: mdast mutator, selection, lint, guard          | Medium   | loop  | T2     | -                 | -                                     |
+| T2  | Done   | at kanban CLI             | src/commands/kanban.ts subcommands wired into root program | Medium   | loop  | T3     | T1                | -                                     |
+| T3  | Done   | kanban test suite         | tests/kanban: parse, select, board, ops, lint, guard, cli  | Medium   | loop  | -      | T2                | -                                     |
+| T4  | Done   | WebUI API server          | at web: REST+static+SSE over run-store/health/settings     | High     | loop  | -      | -                 | docs/plans/webui-01-api-server.md     |
+| T5  | Done   | WebUI scaffold            | Vite+Svelte+Tailwind at src/webui, types, build scripts    | High     | loop  | -      | -                 | docs/plans/webui-02-scaffold.md       |
+| T6  | Done   | API client + SSE + stores | fetch client, SSE reconnect manager, svelte stores         | High     | loop  | -      | T4,T5             | docs/plans/webui-03-api-sse-stores.md |
+| T7  | Done   | Layout + nav + common UI  | shell, sidebar nav, common components, badges              | Medium   | loop  | -      | T5                | docs/plans/webui-04-layout-nav.md     |
+| T8  | Done   | Sidebar run list + filter | RunList/RunItem/FilterInput, date groups, virtual list     | Medium   | loop  | -      | T6,T7             | docs/plans/webui-05-run-list.md       |
+| T9  | Done   | Dashboard view            | QuickStats, ActiveRuns, Recent, AgentsPanel                | Medium   | loop  | -      | T6,T7             | docs/plans/webui-06-dashboard.md      |
+| T10 | Done   | New Task view             | prompt form, tier/agent/mode/retries, submit               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-07-new-task.md       |
+| T11 | Done   | Run Details + LogViewer   | RunMeta, live log viewer, retry/kill/discuss               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-08-run-details.md    |
+| T12 | Done   | Settings view             | defaults form persisted to backend state                   | Low      | loop  | -      | T6,T7             | docs/plans/webui-09-settings.md       |
+| T13 | Done   | Keyboard shortcuts + a11y | TUI-mirroring keys, ARIA, contrast                         | Low      | loop  | -      | T8,T9,T10,T11,T12 | docs/plans/webui-10-keyboard.md       |
+| T14 | Done   | E2E + integration tests   | Playwright vs at web with mock agents                      | Medium   | loop  | -      | T13               | docs/plans/webui-11-e2e-tests.md      |
+| T15 | Done   | WebUI build, Docker, docs | build wiring, Dockerfile, docs/webui.md, ci:check          | Low      | loop  | -      | T14               | docs/plans/webui-12-build-docs.md     |
 
 ## Compose + Kanban
 

@@ -1,12 +1,12 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startHub } from "../src/notify/hub";
 import { type RunRecord, saveRuns } from "../src/run-store";
-import { startWebServer, type WebServer } from "../src/web/server";
+import { resolveWebUiStaticDir, startWebServer, type WebServer } from "../src/web/server";
 
 function makeRun(overrides: Partial<RunRecord> = {}): RunRecord {
   return {
@@ -320,6 +320,24 @@ describe("web server", () => {
       rmSync(staticDir, { recursive: true, force: true });
       rmSync(secret, { force: true });
     }
+  });
+
+  it("resolveWebUiStaticDir: explicit dir wins; falls back to built webui; undefined when absent", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "at-web-root-"));
+    try {
+      expect(resolveWebUiStaticDir("/some/dir")).toBe(path.resolve("/some/dir"));
+      expect(resolveWebUiStaticDir(undefined, root)).toBeUndefined();
+      mkdirSync(path.join(root, "src", "webui", "dist"), { recursive: true });
+      expect(resolveWebUiStaticDir(undefined, root)).toBe(path.join(root, "src", "webui", "dist"));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("listens on the requested host", async () => {
+    hub = await startHub({ stateDir, port: 0 });
+    server = await startWebServer({ stateDirs: [stateDir], hub, port: 0, host: "0.0.0.0" });
+    expect((await get("/api/runs")).status).toBe(200);
   });
 });
 
