@@ -14,6 +14,9 @@ src/run-watch.ts    detached supervisor: poll pid, name run, finalise record, ve
 src/agents/registry.ts  AgentDef[] — name, tier, bin(), buildArgs(), buildEnv(), promptMode
 src/agents/generic-loader.ts  discover plugins from ~/.at/*/generic.js
 src/config.ts            load ~/.at/config.json with HMAC verification
+src/atomic-write.ts      writeFileAtomic(Sync): temp file + same-dir rename (no half-written reads)
+src/compose/task-source.ts   TaskSource iface (claim/onPhase/onFinish) + taskGoal() for external queues
+src/compose/kanban-source.ts kanban-backed TaskSource: claim/finish the board via mutateBoard
 src/feedback-store.ts  feedback.jsonl CRUD, autoclean, and file locking
 src/commands/feedback.ts  `at feedback` subcommands: add, list, show, update, resolve, rm, clear, prune
 src/notify/types.ts     NotifyEvent / NotifyAdapter iface
@@ -60,6 +63,22 @@ All write operations on shared state files use file-based mutex to prevent TOCTO
 - `pickAgent()` in `scheduler.ts` — round-robin index read→increment→write
 - `recordResult()` `setDeactivated()` `resetAgent()` in `health.ts` — agent health read→modify→write
 - `addRun()` `updateRun()` `pruneRuns()` in `run-store.ts` — runs index read→modify→write
+- `mutateBoard()` in `kanban/board.ts` — whole-board read→mutate→write (used by every `at kanban`
+  mutating op and by compose's kanban source claim/finish)
+- `saveState()` in `compose/state.ts` — compose `state.json` write per phase transition
+
+## Locking & atomic writes
+
+Three shared files are protected, all via `src/lock.ts` (`withLock` file mutex, stale-lock steal):
+
+| What | Locked by | Written via |
+|------|-----------|-------------|
+| runs / scheduler / health state (`<stateDir>/`) | `lock.ts` per file | `src/atomic-write.ts` where applicable |
+| kanban board (`docs/kanban.md`) | `mutateBoard` → `withLock` | `writeFileAtomicSync` (temp + rename) |
+| compose `state.json` (`~/.at/compose/<id>/`) | `saveState` → `withLock` | `ComposeWorkspace.write` → `writeFileAtomic` |
+
+`src/atomic-write.ts` lands content in a sibling temp file, then a same-directory rename swaps it
+in — a reader never sees a half-written file, and a crash mid-write leaves only the temp file.
 
 **Module:** `src/lock.ts` — exports `acquireLock` `releaseLock` `withLock`
 

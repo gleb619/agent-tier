@@ -132,19 +132,75 @@ Tier 1 plans and judges; tier 2 only implements.
 at compose -p "add retry to the resolver" --test-cmd 'npm test'
 at compose --goal "..." --max-rounds 5 --max-nodes 40
 at compose -p "..." --resume <goalId>     # continue a saved run
+at compose --task T7                      # compose one kanban task (claims it)
+at compose --loop --stop-on-fail          # drain the board until nothing is executable
 ```
 
-States: `INVESTIGATE` (`at index init` when `.codegraph` is missing, then `at index sync`, codegraph
-context → `context.md`) → `PLAN` (tier 1 writes `plan.md`: requirements, design notes, `- [ ] N. task`
-checklist) → `IMPLEMENT` (tier 2 per unchecked task, ticked on exit 0, first failure stops the run) →
-`CHECK` (runs `--test-cmd` locally, then tier 1 reads the plan, `git diff` and the test tail and writes
-`verdict.md`). `PASS` → `DONE` (exit 0). `FAIL` re-plans with the verdict findings appended as new
-unchecked tasks; after `--max-rounds` (default 3) the run ends `FAILED` (exit 1). A verdict whose first
-line is neither `PASS` nor `FAIL` counts as `FAIL`.
+### Flags
 
-Artifacts and `state.json` (`{ goal, state, round, testCmd, maxRounds }`, saved after every transition)
-live in `~/.at/compose/<goalId>/`. A missing `plan.md`/`verdict.md` or a non-zero agent exit aborts with
-the failing state named in the message and exit 1.
+| Flag                   | Behavior                                                                                                      |
+|------------------------|---------------------------------------------------------------------------------------------------------------|
+| `-p, --prompt` / `--goal` | Goal text. Required unless `--task`/`--loop` (mutually exclusive with them).                                |
+| `--task <id>`          | Compose one kanban task by id: claims it (`Backlog` → `In Progress`) first. Unknown id → exit 1.              |
+| `--loop`               | Claim + compose board tasks until no executable task remains (per-task: DONE → skip, FAILED → Blocked).       |
+| `--board <file>`       | Board file for `--task`/`--loop` (default: resolved project board — see [kanban.md](kanban.md)).              |
+| `--stop-on-fail`       | With `--loop`: stop after the first FAILED run (default: mark Blocked, keep going).                           |
+| `--max-questions <n>`  | Max brain answers per agent run during IMPLEMENT (default 5) — see [progress.md](progress.md#brain--hands-m2m-discuss). |
+| `--test-cmd <cmd>`     | Test command run during CHECK (default `npm test`).                                                           |
+| `--max-rounds <n>`     | Re-plan rounds before FAILED (default 3).                                                                     |
+| `--max-nodes <n>`      | Max codegraph nodes in the PLAN context (default 30).                                                         |
+| `--resume <id>`        | Resume a saved goal by id (continues from its `state.json`).                                                   |
+
+### State machine
+
+```
+              FAIL verdict, round < --max-rounds
+   ┌────────────────────────────────────────────┐
+   │                                            │
+   ▼                                            │
+INVESTIGATE ──► PLAN ──► IMPLEMENT ──► CHECK ───┼──► DONE (exit 0)
+                                │               │
+                                │               ├──► FAILED (exit 1): FAIL verdict at round >= max-rounds
+                                │               └──► FAILED (exit 1): test exit != 0 forces verdict FAIL
+                                └─ IMPLEMENT agent non-zero exit → abort (exit 1)
+```
+
+- **INVESTIGATE** — `at index init` when `.codegraph` is missing, then `at index sync`; codegraph
+  context → `context.md`.
+- **PLAN** — tier 1 writes `plan.md`: requirements, design notes, `- [ ] N. task` checklist. On
+  re-plan (round > 1) the previous `verdict.md` findings are attached and the plan is append-only.
+- **IMPLEMENT** — tier 2 per unchecked task, ticked on exit 0, first failure stops the run. Each
+  question the implementer asks on the discuss channel is answered by the tier-1 brain (capped by
+  `--max-questions`).
+- **CHECK** — runs `--test-cmd` and `git diff` locally, then tier 1 reads the plan, test tail and
+  diff and writes `verdict.md` (first line `PASS` or `FAIL`; anything else counts as `FAIL`).
+  **A non-zero test exit forces `FAIL`** even when tier 1 wrote `PASS` — the orchestrator rewrites
+  the verdict line and appends a note. `PASS` → `DONE`; `FAIL` re-plans (round + 1); rounds
+  exhausted → `FAILED`.
+
+### Detached runs + resume
+
+Agent calls are detached (`at -t <tier> --state-dir <dir> -p <prompt>`, no `-s`); compose polls
+`runs.jsonl` every 2 s (`waitRun`) and answers discuss questions while a run is in flight. Before
+spawning a tier-2 implementer, its runId is persisted into `state.json`
+(`runs: [{ phase, item, runId }]`), so a crashed compose **reattaches to the in-flight run** instead
+of spawning a duplicate; the entry is dropped once the run finishes.
+
+Resume: `--resume <id>` (or `--task <id>`, where **goalId = lowercase task id**) reloads
+`~/.at/compose/<id>/state.json` and continues from the saved phase. A terminal `state.json`
+(`DONE`/`FAILED`) is never re-run — the board task is just re-finalized.
+
+### Artifacts, state, exit codes
+
+Artifacts and `state.json` (`{ goal, state, round, testCmd, maxRounds, runs? }`, saved under the
+state-file lock after every transition) live in `~/.at/compose/<goalId>/`. Exit code: **0** when the
+goal reaches `DONE` (or a `--loop` finished with no task FAILED); **1** otherwise — `ComposeError`
+(abort named after the failing phase: missing `plan.md`/`verdict.md`, non-zero agent exit), corrupt
+`state.json`, unknown `--task <id>`, or any FAILED task under `--loop`.
+
+Board integration (status mapping, locking, human edits) is described in
+[kanban.md](kanban.md#compose--kanban); the brain↔hands discuss channel in
+[progress.md](progress.md#brain--hands-m2m-discuss).
 
 ## Kanban board (`at kanban`)
 
@@ -196,9 +252,11 @@ In CI, check out with `fetch-depth: 0` and run it on `pull_request` before any b
 - run: node dist/cli.js kanban guard "${{ github.event.pull_request.base.sha }}"
 ```
 
-**Known limitation:** whole-file rewrite with no locking, so concurrent writers clobber each other.
-Safe under the single-writer assumption of a serial loop; parallel agents need `flock` or one board
-per worktree.
+**Concurrency:** every mutating op (`next --start`, `add`, `status`, `remove`, `clean`, and compose
+claims/finishes) runs through `mutateBoard` — load → mutate → save under the kanban file lock, with
+the write landed atomically (temp file + same-dir rename, `src/atomic-write.ts`). Concurrent `at`
+processes serialize instead of clobbering; a human editing the file by hand mid-rewrite can still
+race (last writer wins), so prefer `at kanban` even for manual tweaks.
 
 ## TUI
 

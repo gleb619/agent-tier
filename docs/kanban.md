@@ -37,9 +37,9 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 
 ## Compose + Kanban
 
-`at compose` can drive the board directly. Compose stays kanban-free except for
-one adapter (`src/compose/kanban-source.ts`); the board is still human-edited and
-every adapter op re-loads it under the kanban file lock.
+The board is the human-readable durable backlog; `at compose` is the machine that works it. All
+compose run detail (state machine, rounds, in-flight runIds) lives outside the board in
+`~/.at/compose/<goalId>/` — only the `Status` / `Plan File` cells are ever touched.
 
 ```bash
 at compose --task T7                 # claim T7 (Backlog -> In Progress) and compose it
@@ -51,8 +51,21 @@ at compose --loop --board <file>     # use a non-default board
 * Goal text comes from the task's Title + Description (+ `Plan File` content when set).
 * goalId is the task id lowercased (`T7` -> `~/.at/compose/t7/`), so re-running is an
   implicit `--resume`: a non-terminal `state.json` continues, a terminal one is skipped.
-* DONE -> `Done`; FAILED -> `Blocked` + an `outcome.md` in the goal dir, and `Plan File`
-  is set (only when still `-`) to the compose plan. The loop then continues with the
-  next executable task (`Blocked By` dependencies gate on `Done`).
-* Exit code: 0 when no task FAILED, 1 otherwise.
-* `--prompt`/`--goal` still work as before and need no board.
+* Status mapping (configurable via `statusMap` in `createKanbanSource`):
+
+  | Compose event        | Board status  |
+  |----------------------|---------------|
+  | claim (`--task`/`--loop`) | `In Progress` |
+  | run DONE             | `Done`        |
+  | run FAILED           | `Blocked` (+ `outcome.md` in the goal dir; `Plan File` set to the compose plan only when still `-`) |
+
+  The loop then continues with the next executable task (`Blocked By` dependencies gate on `Done`).
+  A status missing from the board's legend is warned about and the row is left unchanged.
+* **Locking:** every board op (claim, finish) goes through `mutateBoard` (`src/kanban/board.ts`) —
+  load → mutate → save inside the `withLock` file mutex, written atomically via
+  `src/atomic-write.ts` (temp file + same-dir rename). Nothing caches board state between ops, so
+  **humans may edit the board concurrently**: the next compose op re-loads their changes instead of
+  clobbering them.
+* Exit code: 0 when no task FAILED, 1 otherwise (also 1 for an unknown `--task <id>`).
+* `--prompt`/`--goal` still work as before and need no board. Full flag/state-machine reference:
+  [cli.md#compose-plan--implement--check](cli.md#compose-plan--implement--check).

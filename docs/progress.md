@@ -161,3 +161,40 @@ at milestones.
 ```
 
 The log adapter keeps its legacy `at notify <runId>` line in addition, so log-fallback agents see both old and new wording.
+
+## Brain & hands (m2m discuss)
+
+During `at compose` IMPLEMENT, the same channel becomes agent-to-agent: the tier-2 implementer
+(hands) asks blocking questions on `discuss ask`, and compose (the tier-1 brain) answers them
+machine-to-machine. The implementer's prompt tells it to ask instead of guessing:
+
+```
+$AT_BIN discuss ask "<question>" -o A -o B   # blocks until answered, follows the answer
+```
+
+Compose polls each run's thread (`waitRun`, every 2 s alongside the `runs.jsonl` poll). For every
+unanswered question it fires a short **blocking tier-1 call** (`askBrain`: `at -t 1 -s`) seeded with
+goal + plan + question; the first non-empty output line becomes the answer, posted back as
+`{ from: "host", kind: "answer", replyTo: <qid> }`. Caps and fallback:
+
+- `--max-questions <n>` (default 5) caps brain answers **per agent run**; beyond it compose stays
+  silent so the asker's own `--default`/`--timeout` applies.
+- If the brain call fails or answers empty, same fallback: the question's `--default`/timeout wins.
+
+A host human can still jump in first — `at discuss answer ... -R <runId>` posts to the same thread,
+and compose only answers questions that are still unanswered when its poll ticks.
+
+```
+hands (tier 2, detached)          compose (waitRun poll)            brain (tier 1, blocking)
+────────────────────────          ──────────────────────            ─────────────────────────
+discuss ask "A or B?" ──────────► thread gets m1 (unanswered)
+(blocked on answer)               unansweredQuestions(runId)
+                                  cap < --max-questions?
+                                  yes ──► at -t 1 -s (askBrain) ──► goal+plan+question → one line
+                                  answer ◄───────────────────────── "A"
+discuss ask returns "A" ◄───────── post {from:host, answer, replyTo:m1}
+keeps implementing
+```
+
+Implementation: `waitRun`/`askBrain` in `src/compose/cli.ts`, `answerQuestion` in
+`src/compose/machine.ts`, question prompt in `buildBrainPrompt` (`src/compose/prompts.ts`).

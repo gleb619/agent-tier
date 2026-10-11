@@ -133,6 +133,7 @@ Line order is stored in `~/.at/config.json` (`"line": ["agent", ...]`, HMAC-sign
 
 - [docs/cli.md](docs/cli.md) — prompts, output modes, retry, `--verify`, JSON mode
 - [docs/progress.md](docs/progress.md) — SSE events, adapters, discuss channel
+- [docs/kanban.md](docs/kanban.md) — task board schema, compose + kanban orchestration
 - [docs/agents.md](docs/agents.md) — agent tables, binary resolution, plugins, configuration
 
 ## Formatting & lint
