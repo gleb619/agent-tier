@@ -1,5 +1,6 @@
 import { For, Show, createEffect, createMemo } from 'solid-js';
 import type { JSX } from 'solid-js';
+import type { MouseEvent } from '@opentui/core';
 import { selectedRunId, setSelectedRunId } from '../../tui/store/sessions';
 import { filteredSessions2 } from '../store/filtered-sessions';
 import {
@@ -18,8 +19,8 @@ import {
   buildRowModel,
   groupRunsByDate as groupRunsByDateImpl,
   moveSelection,
+  preserveSidebarIndex,
   runLabel as runLabelImpl,
-  selectableRowIndices,
   SIDEBAR_MENU_ITEMS,
   type Row,
   type RunGroup,
@@ -117,7 +118,6 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
 
   if (props.row.kind === 'filter') {
     const row = props.row;
-    const editing = (): boolean => focusZone() === 'sidebar-filter';
     // The filter row carries one blank line below it (marginBottom 1) so the
     // divider beneath sits at most one line under the input, never more.
     const filterBox = {
@@ -132,9 +132,33 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
       backgroundColor: SELECTION,
       marginBottom: 1,
     };
-    if (editing()) {
-      return (
-        <box {...filterBoxSelected}>
+    const editing = (): boolean => focusZone() === 'sidebar-filter';
+    const hintText = (): string => (row.filter ? truncate(row.filter, 12) : '');
+    // Mouse events bubble up through the scrollbox and the sidebar wrapper,
+    // whose handlers reset the focus zone to 'sidebar-list'. Stopping the
+    // bubble is what makes a click on the filter row stick (and keeps a click
+    // inside the input from blurring it on the same click).
+    const activate = (e: MouseEvent): void => {
+      e.stopPropagation();
+      setSidebarIndex(props.index);
+      if (!editing()) setFocusZone('sidebar-filter');
+    };
+    // The editing branch must swap reactively: a plain `if (editing())` in the
+    // component body runs once when For creates the row, so the input would
+    // never mount on a later focus change. <Show> mounts/unmounts the input
+    // with the focus zone (and `focused` puts the caret in it).
+    return (
+      <Show
+        when={editing()}
+        fallback={
+          <box {...(selected() ? filterBoxSelected : filterBox)} onMouseDown={activate}>
+            <text fg={ACTIVE}>{'/  '}</text>
+            <text fg={selected() ? NORMAL : DIM}>{'Filter runs…'}</text>
+            <text fg={HINT}>{'  '}{hintText()}</text>
+          </box>
+        }
+      >
+        <box {...filterBoxSelected} onMouseDown={activate}>
           <text fg={ACTIVE}>{'/  '}</text>
           <input
             value={sidebarFilter()}
@@ -144,19 +168,7 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
             width="100%"
           />
         </box>
-      );
-    }
-    const hintText = (): string => (row.filter ? truncate(row.filter, 12) : '');
-    const activate = (): void => {
-      setSidebarIndex(props.index);
-      setFocusZone('sidebar-filter');
-    };
-    return (
-      <box {...(selected() ? filterBoxSelected : filterBox)} onMouseDown={activate}>
-        <text fg={ACTIVE}>{'/  '}</text>
-        <text fg={selected() ? NORMAL : DIM}>{'Filter runs…'}</text>
-        <text fg={HINT}>{'  '}{hintText()}</text>
-      </box>
+      </Show>
     );
   }
 
@@ -224,20 +236,20 @@ export function Sidebar(): JSX.Element {
       activeView: activeView(),
     }),
   );
-  const selectable = createMemo(() => selectableRowIndices(rows()));
 
-  // Whenever the row list shrinks (runs filtered out), snap the cursor back
-  // onto the first selectable row instead of leaving it on a now-vanished row.
+  // Keep the cursor on the row the user is actually looking at when the list
+  // is rebuilt (runs progress/finish, new runs land at the top, filtered rows
+  // drop out): a cursor sitting on a run row follows that run id, anything
+  // else keeps its index while it stays selectable. The helper returns the
+  // input index unchanged for a no-op rebuild, so this effect only writes the
+  // signal when something really moved — no per-poll churn.
+  let prevRows = rows();
   createEffect(() => {
-    const sel = selectable();
+    const nextRows = rows();
     const idx = sidebarIndex();
-    if (sel.length === 0) {
-      if (idx !== -1) setSidebarIndex(-1);
-      return;
-    }
-    if (idx < 0 || !sel.includes(idx)) {
-      setSidebarIndex(sel[0]);
-    }
+    const next = preserveSidebarIndex(prevRows, idx, nextRows);
+    prevRows = nextRows;
+    if (next !== idx) setSidebarIndex(next);
   });
 
   return (
@@ -255,7 +267,7 @@ export function Sidebar(): JSX.Element {
             blank line between every adjacent pair, breathing but not gappy.
             filter row     marginBottom 1  → one blank line above separator
             separator      marginTop 0 /
-                            marginBottom 1 → tight above (gap comes from
+                            marginBottom 1  → tight above (gap comes from
                                               the preceding row), 1 blank
                                               below; rule is a hairline
                                               border-top stretching the
@@ -264,7 +276,7 @@ export function Sidebar(): JSX.Element {
                                               the last menu's margin also
                                               feeds the gap to separator
             group header   marginTop 0 /
-                            marginBottom 1 → tight below the closing
+                            marginBottom 1  → tight below the closing
                                               separator, one blank before
                                               the group's first run
             run rows       marginBottom 1  → one blank line between runs */}

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { batch } from 'solid-js';
 import {
+  runsEqual,
   sessions,
   setSessions,
   selectedRunId,
@@ -24,6 +25,9 @@ vi.mock('child_process', () => ({
   spawn: vi.fn(),
 }));
 
+/** Fixed startedAt so two calls in the same ms don't drift apart. */
+const FIXED_START = new Date('2024-01-01T00:00:00.000Z').toISOString();
+
 const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord => ({
   runId,
   agent: 'test',
@@ -31,7 +35,7 @@ const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord =
   pid: 99999,
   prompt: 'test prompt',
   logFile: '/tmp/test.log',
-  startedAt: new Date().toISOString(),
+  startedAt: FIXED_START,
   finishedAt: null,
   exitCode: null,
   status: 'running',
@@ -96,6 +100,48 @@ describe('sessions store', () => {
 
       setSelectedRunId('run2');
       expect(computeSelectedSession()).toEqual(s2);
+    });
+  });
+
+  describe('runsEqual', () => {
+    it('treats identical data as equal even with fresh object identities', () => {
+      // refreshRuns re-parses runs.jsonl on every poll, so identity never
+      // matches — this is what lets the store skip a signal write per tick.
+      const a = [mockRun('run1'), mockRun('run2')];
+      const b = [mockRun('run1'), mockRun('run2')];
+      expect(runsEqual(a, b)).toBe(true);
+      expect(runsEqual(a, a)).toBe(true);
+    });
+
+    it('detects a length change', () => {
+      expect(runsEqual([mockRun('run1')], [mockRun('run1'), mockRun('run2')])).toBe(false);
+      expect(runsEqual([], [mockRun('run1')])).toBe(false);
+      expect(runsEqual([], [])).toBe(true);
+    });
+
+    it('detects a reordering', () => {
+      const runs = [mockRun('run1'), mockRun('run2')];
+      expect(runsEqual(runs, [runs[1], runs[0]])).toBe(false);
+    });
+
+    it('detects a status transition (running → done)', () => {
+      const before = [mockRun('run1', { status: 'running' })];
+      const after = [
+        mockRun('run1', { status: 'done', exitCode: 0, finishedAt: new Date().toISOString() }),
+      ];
+      expect(runsEqual(before, after)).toBe(false);
+    });
+
+    it('detects the namer renaming a run', () => {
+      const before = [mockRun('run1', { name: 'unnamed' })];
+      const after = [mockRun('run1', { name: 'Fix kanban lint' })];
+      expect(runsEqual(before, after)).toBe(false);
+    });
+
+    it('compares every field, not just the run id', () => {
+      const before = [mockRun('run1', { agent: 'mm-code', pid: 1, prompt: 'a', logFile: '/a.log' })];
+      const after = [mockRun('run1', { agent: 'mm-code', pid: 2, prompt: 'a', logFile: '/a.log' })];
+      expect(runsEqual(before, after)).toBe(false);
     });
   });
 });

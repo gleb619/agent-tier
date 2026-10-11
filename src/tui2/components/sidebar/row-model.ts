@@ -185,3 +185,28 @@ export function moveSelection(rows: Row[], current: number, delta: 1 | -1): numb
   const next = Math.max(0, Math.min(sel.length - 1, cursor + delta));
   return sel[next];
 }
+
+/**
+ * Map a cursor onto a rebuilt row list so a refresh never yanks the
+ * selection somewhere else. New runs land at the top of the list and old runs
+ * get pruned, so a raw index would silently slide onto a neighbour:
+ *  - cursor on a run row  → follow that run id when it still exists
+ *  - cursor on filter/menu → keep the index while it stays selectable
+ *  - cursor gone (-1)      → land on the first selectable row
+ *  - nothing selectable    → -1
+ * Unchanged input must return the input index untouched, so an effect that
+ * writes only on difference stays silent across no-op polls.
+ */
+export function preserveSidebarIndex(oldRows: Row[], oldIndex: number, newRows: Row[]): number {
+  const sel = selectableRowIndices(newRows);
+  if (sel.length === 0) return -1;
+
+  const old = oldIndex >= 0 ? oldRows[oldIndex] : undefined;
+  if (old && old.kind === 'run') {
+    const kept = newRows.findIndex((r) => r.kind === 'run' && r.runId === old.runId);
+    if (kept !== -1) return kept;
+  } else if (oldIndex >= 0 && sel.includes(oldIndex)) {
+    return oldIndex;
+  }
+  return sel[0];
+}

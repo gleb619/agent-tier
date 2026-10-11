@@ -8,21 +8,16 @@ import { PromptBar, type PromptSubmitOpts } from "./components/PromptBar";
 import { HotkeyBar } from "./components/HotkeyBar";
 import { filteredSessions, selectedSession, selectedRunId, setSelectedRunId, refreshSessions, killSession, retrySession, showDashboard, setShowDashboard, loadSessionState, saveSessionState } from "./store/sessions";
 import { scrollOffset, setScrollOffset, filteredLines, autoRefresh, refreshLog, goToHead, goToTail, setAutoRefresh, setCurrentLogFile, loadLogFile, setLogLines, VISIBLE_LINES, showPrompt, setShowPrompt } from "./store/log";
+import { startSessionAutoRefresh } from "./store/auto-refresh";
 import { cycleTier, cycleAgent, cycleMode, cycleRetries, loadSettings } from "./store/settings";
 import { focusZone, setFocusZone, loadUIState, saveUIState } from "./store/ui";
 import { submitPrompt } from "./launch";
 
 export function App(): JSX.Element {
-  // Auto-refresh timer
-  createEffect(() => {
-    if (autoRefresh()) {
-      const id = setInterval(() => {
-        refreshSessions();
-        refreshLog();
-      }, 5000);
-      onCleanup(() => clearInterval(id));
-    }
-  });
+  // Shared auto-refresh loop (same cadence/poller as tui2 — see
+  // src/tui/store/auto-refresh.ts); stopped when the component unmounts.
+  const stopSessionAutoRefresh = startSessionAutoRefresh();
+  onCleanup(stopSessionAutoRefresh);
 
   // Load log file when selected session changes
   createEffect(() => {

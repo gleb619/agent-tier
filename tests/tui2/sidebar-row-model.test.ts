@@ -5,6 +5,7 @@ import {
   buildRowModel,
   isSelectable,
   moveSelection,
+  preserveSidebarIndex,
   selectableRowIndices,
   type Row,
 } from '../../src/tui2/components/sidebar/row-model';
@@ -14,6 +15,8 @@ const NOW = new Date();
 /** A timestamp pinned to today's date so day buckets never depend on run time. */
 const at = (hour: number, minute = 0): string =>
   new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate(), hour, minute, 0).toISOString();
+
+const YEARS_AGO = new Date(NOW.getTime() - 400 * 24 * 60 * 60 * 1000).toISOString();
 
 const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord => ({
   runId,
@@ -173,6 +176,80 @@ describe('tui2 sidebar row model', () => {
         { kind: 'group-header', label: 'Today' },
       ];
       expect(moveSelection(empty, -1, 1)).toBe(-1);
+    });
+  });
+
+  describe('preserveSidebarIndex', () => {
+    /** rows: 0 filter, 1 sep, 2..5 menu, 6 sep, 7 header, 8 run r1, 9 run r2. */
+    const rowsFor = (runs: RunRecord[]): Row[] =>
+      buildRowModel({
+        groups: groupRunsByDate(runs),
+        filter: '',
+        activeView: 'dashboard',
+      });
+
+    const r1 = mockRun('r1', { startedAt: at(10) });
+    const r2 = mockRun('r2', { startedAt: at(11) });
+    const base = rowsFor([r1, r2]);
+    const runRowIndex = (rows: Row[], runId: string): number =>
+      rows.findIndex((r) => r.kind === 'run' && r.runId === runId);
+
+    it('returns the same index for an unchanged list (no-op rebuild)', () => {
+      // A poll that reads back identical data must not move the cursor — this
+      // is what keeps the Sidebar effect silent between ticks.
+      expect(preserveSidebarIndex(base, 2, base)).toBe(2);
+      expect(preserveSidebarIndex(base, 8, base)).toBe(8);
+      expect(preserveSidebarIndex(base, 9, base)).toBe(9);
+    });
+
+    it('follows a run row when a newer run is prepended above it', () => {
+      const withNew = rowsFor([mockRun('r0', { startedAt: at(12) }), r1, r2]);
+      // r1 moved from 8 to 9, r2 from 9 to 10.
+      expect(preserveSidebarIndex(base, 8, withNew)).toBe(runRowIndex(withNew, 'r1'));
+      expect(preserveSidebarIndex(base, 9, withNew)).toBe(runRowIndex(withNew, 'r2'));
+    });
+
+    it('follows a run row when the rows shift by a new group header', () => {
+      const withOtherDay = rowsFor([
+        mockRun('r0', { startedAt: YEARS_AGO }),
+        r1,
+        r2,
+      ]);
+      const next = preserveSidebarIndex(base, 9, withOtherDay);
+      expect(next).toBe(runRowIndex(withOtherDay, 'r2'));
+    });
+
+    it('keeps the cursor on filter and menu rows while they stay selectable', () => {
+      const withNew = rowsFor([mockRun('r0', { startedAt: at(12) }), r1, r2]);
+      expect(preserveSidebarIndex(base, 0, withNew)).toBe(0); // filter
+      expect(preserveSidebarIndex(base, 3, withNew)).toBe(3); // menu row
+    });
+
+    it('falls back to the first selectable row when the run vanished', () => {
+      // The selected run was pruned/filtered away — snap to the top instead of
+      // leaving the cursor pointing at a different run.
+      const withoutR2 = rowsFor([r1]);
+      expect(preserveSidebarIndex(base, 9, withoutR2)).toBe(selectableRowIndices(withoutR2)[0]);
+    });
+
+    it('falls back to the first selectable row when a menu row is filtered out', () => {
+      const filtered = buildRowModel({
+        groups: groupRunsByDate([r1, r2]),
+        filter: 'retries', // hides every menu row except Settings
+        activeView: 'dashboard',
+      });
+      expect(preserveSidebarIndex(base, 3, filtered)).toBe(selectableRowIndices(filtered)[0]);
+    });
+
+    it('lands a -1 cursor on the first selectable row once one exists', () => {
+      expect(preserveSidebarIndex(base, -1, base)).toBe(0);
+      const empty: Row[] = [{ kind: 'separator' }, { kind: 'group-header', label: 'Today' }];
+      expect(preserveSidebarIndex(empty, -1, empty)).toBe(-1);
+    });
+
+    it('returns -1 when nothing is selectable', () => {
+      const empty: Row[] = [{ kind: 'separator' }];
+      expect(preserveSidebarIndex(base, 8, empty)).toBe(-1);
     });
   });
 

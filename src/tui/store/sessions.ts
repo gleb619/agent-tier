@@ -37,21 +37,66 @@ export const filteredSessions: Accessor<RunRecord[]> = createMemo(() => {
   );
 });
 
+/**
+ * Field-by-field equality of a run record. Deliberately explicit rather than
+ * `JSON.stringify` comparison: the run store rebuilds running entries as new
+ * objects on every refresh, and key order is not a meaningful difference.
+ */
+function runEqual(a: RunRecord, b: RunRecord): boolean {
+  return (
+    a.runId === b.runId &&
+    a.agent === b.agent &&
+    a.tier === b.tier &&
+    a.pid === b.pid &&
+    a.prompt === b.prompt &&
+    a.logFile === b.logFile &&
+    a.startedAt === b.startedAt &&
+    a.finishedAt === b.finishedAt &&
+    a.exitCode === b.exitCode &&
+    a.status === b.status &&
+    a.name === b.name
+  );
+}
+
+/**
+ * Do two run snapshots carry the same data in the same order?
+ *
+ * `refreshRuns` hands back freshly parsed objects every poll, so identity is
+ * never stable — this is what lets the TUIs skip signal writes (and the
+ * re-render/flicker that follows) when nothing actually changed.
+ */
+export function runsEqual(a: RunRecord[], b: RunRecord[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (!runEqual(a[i], b[i])) return false;
+  }
+  return true;
+}
+
 export function refreshSessions(): void {
   // Atomic prune+detect under the runs-file lock; the old fire-and-forget
   // pruneRuns() + loadRuns() pair rendered a snapshot from before the prune.
-  void refreshRuns(stateDir).then((updated) => {
-    setSessions(updated);
-
-    const currentId = selectedRunId();
-    if (!currentId || !updated.find((s) => s.runId === currentId)) {
-      if (updated.length > 0) {
-        setSelectedRunId(updated[0].runId);
-      } else {
-        setSelectedRunId(null);
+  void refreshRuns(stateDir)
+    .then((updated) => {
+      // Only publish when the snapshot actually moved: the poll re-reads
+      // runs.jsonl every few seconds, and pushing an identical array would
+      // invalidate every downstream memo (sidebar rows, dashboard counters)
+      // and re-render the list for nothing.
+      if (!runsEqual(sessions(), updated)) {
+        setSessions(updated);
       }
-    }
-  });
+
+      const currentId = selectedRunId();
+      if (!currentId || !updated.find((s) => s.runId === currentId)) {
+        const next = updated.length > 0 ? updated[0].runId : null;
+        if (next !== currentId) setSelectedRunId(next);
+      }
+    })
+    .catch(() => {
+      // Lock contention or a transient read error: keep the last good snapshot
+      // and let the next poll try again.
+    });
 }
 
 export function killSession(runId: string): void {

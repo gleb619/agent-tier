@@ -26,7 +26,9 @@ import {
   VISIBLE_LINES,
 } from '../tui/store/log';
 import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, loadSettings, mode, tier } from '../tui/store/settings';
+import { startSessionAutoRefresh } from '../tui/store/auto-refresh';
 import { filteredSessions2 } from './store/filtered-sessions';
+import { isFilterHotkey } from './hotkeys';
 import {
   activeView,
   cycleZone,
@@ -49,8 +51,6 @@ import { SETTING_ACTIONS, clampRow } from './components/Settings';
 import { buildRowModel, groupRunsByDate, type Row } from './components/sidebar/row-model';
 import { formatClock, truncate } from './format';
 
-const AUTO_REFRESH_MS = 5000;
-
 const VIEW_LABELS: Record<ActiveView, string> = {
   dashboard: 'dashboard',
   'new-task': 'new task',
@@ -60,13 +60,6 @@ const VIEW_LABELS: Record<ActiveView, string> = {
 
 export function App(): JSX.Element {
   const renderer = useRenderer();
-  let refreshTimer: ReturnType<typeof setInterval> | null = null;
-
-  function stopAutoRefresh(): void {
-    if (refreshTimer === null) return;
-    clearInterval(refreshTimer);
-    refreshTimer = null;
-  }
 
   // Must mirror Ctrl+C's built-in path: destroy(), not stop(). stop() leaves raw mode
   // and the ref'd interval in place, so the CLI process never returns to the shell.
@@ -75,17 +68,9 @@ export function App(): JSX.Element {
     renderer.destroy();
   }
 
-  createEffect(() => {
-    if (autoRefresh()) {
-      stopAutoRefresh();
-      refreshTimer = setInterval(() => {
-        refreshSessions();
-        refreshLog();
-      }, AUTO_REFRESH_MS);
-    } else {
-      stopAutoRefresh();
-    }
-  });
+  // One shared poll loop for both TUIs — src/tui/store/auto-refresh.ts owns the
+  // cadence so classic and experimental refreshes can never drift apart.
+  const stopAutoRefresh = startSessionAutoRefresh();
 
   onCleanup(stopAutoRefresh);
 
@@ -161,6 +146,17 @@ export function App(): JSX.Element {
     if (menuRowIndex >= 0) setSidebarIndex(menuRowIndex);
   }
 
+  /**
+   * Hotkey target: put the sidebar cursor on the filter row and focus it
+   * ('/' and Ctrl+F). Works from every focus zone because the filter row is
+   * part of the unified sidebar row list in all views.
+   */
+  function jumpToFilter(): void {
+    const filterIndex = currentRows().findIndex((r) => r.kind === 'filter');
+    if (filterIndex >= 0) setSidebarIndex(filterIndex);
+    setFocusZone('sidebar-filter');
+  }
+
   /** Enter on the highlighted row: filter row → edit, menu row → switch view, run row → open details. */
   function activateSidebarRow(idx: number): void {
     const row = currentRows()[idx];
@@ -217,6 +213,10 @@ export function App(): JSX.Element {
         case 'd':
           if (view === 'run-details') jumpLog();
           return;
+        case 'f':
+          // Ctrl+F reaches the filter even while a text field owns the keyboard.
+          jumpToFilter();
+          return;
       }
       return;
     }
@@ -249,6 +249,7 @@ export function App(): JSX.Element {
       const menuRowIndex = rows.findIndex((r) => r.kind === 'menu' && r.view === targetView);
       jumpToView(targetView, menuRowIndex);
     }
+    else if (isFilterHotkey(key)) jumpToFilter();
     else if (name === 'q') quit();
     else if (zone === 'settings') {
       if (name === 'up' || name === 'k') setSettingsRow(clampRow(settingsRow() - 1));
