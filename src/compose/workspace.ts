@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { writeFileAtomic } from "../atomic-write";
 
 export const PLAN_FILE = "plan.md";
 export const VERDICT_FILE = "verdict.md";
@@ -26,7 +27,7 @@ export class ComposeWorkspace {
 
   async write(name: string, content: string): Promise<void> {
     await this.ensure();
-    await fs.writeFile(this.filePath(name), content, "utf8");
+    await writeFileAtomic(this.filePath(name), content);
   }
 
   async read(name: string): Promise<string> {

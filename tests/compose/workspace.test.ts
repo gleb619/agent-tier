@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -32,6 +32,15 @@ describe("ComposeWorkspace", () => {
     await ws.write("plan.md", "# Plan\n- [ ] 1. Do thing\n");
     const content = await ws.read("plan.md");
     expect(content).toContain("Do thing");
+  });
+
+  it("write leaves no temp files behind", async () => {
+    const ws = new ComposeWorkspace("goal-abc", tmpBase);
+    await ws.write("a.md", "first");
+    await ws.write("a.md", "second");
+    const entries = await readdir(ws.goalDir);
+    expect(entries).toEqual(["a.md"]);
+    expect(await ws.read("a.md")).toBe("second");
   });
 
   it("exists() returns correct values", async () => {

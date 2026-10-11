@@ -1,9 +1,12 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { Root, Table, TableRow } from "mdast";
+import { writeFileAtomicSync } from "../atomic-write";
+import { withLock } from "../lock";
 import { findProjectRoot } from "../state-dir";
 import { parseLegend } from "./legend";
-import { cellText, type Processor, parseBoardText, stringifyBoard } from "./parse";
+import { cellText, parseBoardText, stringifyBoard, type Processor } from "./parse";
+import type { OpResult } from "./ops";
 import { DEFAULT_BOARD_REL, FALLBACK_STATUSES, type Task } from "./types";
 
 export interface BoardDoc {
@@ -38,7 +41,29 @@ export function loadBoard(file: string): BoardDoc {
 }
 
 export function saveBoard(doc: BoardDoc): void {
-  writeFileSync(doc.file, stringifyBoard(doc.processor, doc.tree), "utf8");
+  writeFileAtomicSync(doc.file, stringifyBoard(doc.processor, doc.tree));
+}
+
+/**
+ * Read-modify-write the board under the file lock: loadBoard -> fn -> saveBoard
+ * (only when the op reports a change). Concurrent mutations serialize, so every
+ * writer sees the previous writer's board and no add/remove is lost.
+ */
+export async function mutateBoard(
+  file: string,
+  fn: (doc: BoardDoc) => OpResult,
+  timeoutMs?: number,
+): Promise<OpResult> {
+  return withLock(
+    file,
+    () => {
+      const doc = loadBoard(file);
+      const result = fn(doc);
+      if (result.changed) saveBoard(doc);
+      return result;
+    },
+    timeoutMs,
+  );
 }
 
 export function dataRows(doc: BoardDoc): TableRow[] {

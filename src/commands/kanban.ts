@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Command } from "commander";
-import { loadBoard, resolveBoardFile, saveBoard, toTasks } from "../kanban/board";
+import { loadBoard, mutateBoard, resolveBoardFile, toTasks } from "../kanban/board";
 import { guardKanban } from "../kanban/guard";
 import { lintBoard } from "../kanban/lint";
 import {
@@ -47,6 +47,19 @@ function run(fn: () => number): void {
   }
 }
 
+/** Async sibling of {@link run} for the locked mutateBoard path. */
+function runAsync(fn: () => Promise<number>): void {
+  fn().then(
+    (code) => {
+      if (code !== 0) process.exit(code);
+    },
+    (err) => {
+      console.error(`[at] error: ${(err as Error).message}`);
+      process.exit(1);
+    },
+  );
+}
+
 export function registerKanbanCommand(program: Command): void {
   const kanban = program.command("kanban").description("Markdown kanban board for agent task tracking");
 
@@ -72,13 +85,22 @@ export function registerKanbanCommand(program: Command): void {
     .option("--start", "mark the selected task In Progress")
     .option("--json", "emit JSON instead of text")
     .action((file: string | undefined, opts: BoardOpts & { start?: boolean }) => {
-      run(() => {
-        const p = boardPath(file, opts);
-        const doc = loadBoard(p);
-        const r = opNext(doc, { start: opts.start });
-        if (r.changed) saveBoard(doc);
+      const p = boardPath(file, opts);
+      const print = (r: OpResult): void => {
         if (opts.json) printJson({ file: p, selection: r.data, warnings: r.warnings });
         else printText(r);
+      };
+      // Read-only unless --start; the mutation goes through the lock so a
+      // concurrent add/remove can't be clobbered between load and save.
+      if (opts.start) {
+        runAsync(async () => {
+          print(await mutateBoard(p, (doc) => opNext(doc, { start: true })));
+          return 0;
+        });
+        return;
+      }
+      run(() => {
+        print(opNext(loadBoard(p)));
         return 0;
       });
     });
@@ -127,9 +149,8 @@ export function registerKanbanCommand(program: Command): void {
           description?: string;
         },
       ) => {
-        run(() => {
+        runAsync(async () => {
           const p = boardPath(file, opts);
-          const doc = loadBoard(p);
           const addOpts: AddOptions = {
             id: opts.id,
             title: opts.title,
@@ -140,8 +161,7 @@ export function registerKanbanCommand(program: Command): void {
             plan: opts.plan,
             description: opts.description,
           };
-          const r = opAdd(doc, addOpts);
-          if (r.changed) saveBoard(doc);
+          const r = await mutateBoard(p, (doc) => opAdd(doc, addOpts));
           if (opts.json) printJson({ file: p, ...(r.data as object), warnings: r.warnings });
           else printText(r);
           return 0;
@@ -155,11 +175,9 @@ export function registerKanbanCommand(program: Command): void {
     .option("--board <path>", "board file")
     .option("--json", "emit JSON instead of text")
     .action((id: string, status: string, file: string | undefined, opts: BoardOpts) => {
-      run(() => {
+      runAsync(async () => {
         const p = boardPath(file, opts);
-        const doc = loadBoard(p);
-        const r = opStatus(doc, id, status);
-        if (r.changed) saveBoard(doc);
+        const r = await mutateBoard(p, (doc) => opStatus(doc, id, status));
         if (opts.json) printJson({ file: p, ...(r.data as object), warnings: r.warnings });
         else printText(r);
         return 0;
@@ -173,11 +191,9 @@ export function registerKanbanCommand(program: Command): void {
     .option("--board <path>", "board file")
     .option("--json", "emit JSON instead of text")
     .action((id: string, file: string | undefined, opts: BoardOpts) => {
-      run(() => {
+      runAsync(async () => {
         const p = boardPath(file, opts);
-        const doc = loadBoard(p);
-        const r = opRemove(doc, id);
-        if (r.changed) saveBoard(doc);
+        const r = await mutateBoard(p, (doc) => opRemove(doc, id));
         if (opts.json) printJson({ file: p, ...(r.data as object), warnings: r.warnings });
         else printText(r);
         return 0;
@@ -190,11 +206,9 @@ export function registerKanbanCommand(program: Command): void {
     .option("--board <path>", "board file")
     .option("--json", "emit JSON instead of text")
     .action((file: string | undefined, opts: BoardOpts) => {
-      run(() => {
+      runAsync(async () => {
         const p = boardPath(file, opts);
-        const doc = loadBoard(p);
-        const r = opClean(doc);
-        if (r.changed) saveBoard(doc);
+        const r = await mutateBoard(p, (doc) => opClean(doc));
         if (opts.json) printJson({ file: p, ...(r.data as object), warnings: r.warnings });
         else printText(r);
         return 0;
