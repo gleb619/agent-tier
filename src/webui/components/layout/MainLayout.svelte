@@ -2,14 +2,16 @@
 import { currentView, setCurrentView } from "$stores/ui";
 import type { ViewType } from "$types/index";
 import Card from "$components/common/Card.svelte";
+import Toasts from "$components/common/Toasts.svelte";
 import DashboardView from "$components/dashboard/DashboardView.svelte";
+import NewTaskView from "$components/newtask/NewTaskView.svelte";
 import Header from "./Header.svelte";
 import Sidebar from "./Sidebar.svelte";
 
 const views: { id: ViewType; heading: string; hint: string }[] = [
   { id: "dashboard", heading: "Dashboard", hint: "Run overview." },
-  { id: "new-task", heading: "New Task", hint: "Prompt composer lands in T9." },
-  { id: "run-details", heading: "Run Details", hint: "Log viewer lands in T10." },
+  { id: "new-task", heading: "New Task", hint: "Prompt composer." },
+  { id: "run-details", heading: "Run Details", hint: "Log viewer lands in T11." },
   { id: "settings", heading: "Settings", hint: "Settings editor lands in T11." },
 ];
 
@@ -41,8 +43,11 @@ $: activeView = $currentView;
       {#if activeView === "dashboard"}
         <h2 class="mb-4 text-lg font-semibold text-gray-900">Dashboard</h2>
         <DashboardView />
+      {:else if activeView === "new-task"}
+        <h2 class="mb-4 text-lg font-semibold text-gray-900">New Task</h2>
+        <NewTaskView />
       {:else}
-        {#each views.filter((v) => v.id !== "dashboard") as view (view.id)}
+        {#each views.filter((v) => v.id !== "dashboard" && v.id !== "new-task") as view (view.id)}
           {#if view.id === activeView}
             <Card>
               <h2 class="text-lg font-semibold text-gray-900">{view.heading}</h2>
@@ -53,4 +58,5 @@ $: activeView = $currentView;
       {/if}
     </main>
   </div>
+  <Toasts />
 </div>
