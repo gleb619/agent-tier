@@ -39,7 +39,7 @@ Everyday feature work, bug fixes, tests, and refactors.
 | `mm-code`  | `MM_CODE_BIN` → `~/.local/bin/mm-code`     | `mm-code -p "prompt" --dangerously-skip-permissions`   |
 | `opencode` | `OPENCODE_BIN` → `~/.nvm/.../bin/opencode` | `opencode run --dangerously-skip-permissions "prompt"` |
 | `qwen`     | `QWEN_BIN` → `~/.nvm/.../bin/qwen`         | `qwen -y "prompt"`                                     |
-| `pi`       | `PI_BIN` → `~/.nvm/.../bin/pi`             | `pi -p --model openrouter/free "prompt"` (OpenRouter free model; key from `~/.at/secrets.json` `openrouter` or `OPENROUTER_API_KEY`; `-m` overrides) |
+| `pi`       | `PI_BIN` → `~/.nvm/.../bin/pi`             | `pi -p --model openrouter/free "prompt"` (auth from pi's own `auth.json`; `-m` or `PI_MODEL` overrides) |
 | `cline`    | `CLINE_BIN` → `~/.nvm/.../bin/cline`       | `cline --auto-approve true --json --cwd <cwd> --timeout 600 "prompt"` |
 
 Round-robin order: mm-code → opencode → qwen → pi → cline → mm-code → …
