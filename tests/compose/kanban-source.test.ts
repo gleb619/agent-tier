@@ -1,14 +1,44 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs';
+import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import os from 'os';
 import path from 'path';
 import { createKanbanSource, type KanbanSource } from '../../src/compose/kanban-source';
 import { loadBoard, toTasks } from '../../src/kanban/board';
+import { getLockDir, pathToLockName } from '../../src/lock';
+import { isPidAlive } from '../../src/process-utils';
 import { makeTmpDir, cleanupTmpDirs, writeBoard, row } from '../kanban/helpers';
 
 let dir: string;
 let boardFile: string;
 let logs: string[];
+let children: ChildProcess[] = [];
+
+/** Where lock.ts puts the per-task claim lease for `id` on this board. */
+function leaseOf(board: string, id: string): string {
+  return path.join(getLockDir(board), pathToLockName(`${board}.claim-${id}`));
+}
+
+function writeLease(board: string, id: string, pid: number): string {
+  const file = leaseOf(board, id);
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify({ pid, hostname: os.hostname(), startedAt: new Date().toISOString(), stateFile: board }));
+  return file;
+}
+
+/** spawnSync waits for and reaps the child, so its pid is certainly dead. */
+function deadPid(): number {
+  const pid = spawnSync(process.execPath, ['-e', '']).pid!;
+  expect(isPidAlive(pid)).toBe(false);
+  return pid;
+}
+
+function livePid(): number {
+  const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
+  children.push(child);
+  expect(isPidAlive(child.pid!)).toBe(true);
+  return child.pid!;
+}
 
 function statusOf(id: string): string {
   const task = toTasks(loadBoard(boardFile)).find(t => t.ID === id);
@@ -30,6 +60,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const child of children) child.kill();
+  children = [];
   cleanupTmpDirs();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -44,6 +76,7 @@ describe('kanban source — claim', () => {
     expect(task?.title).toBe('first');
     expect(statusOf('T1')).toBe('In Progress');
     expect(statusOf('T2')).toBe('Backlog');
+    expect(JSON.parse(readFileSync(leaseOf(boardFile, 'T1'), 'utf8')).pid).toBe(process.pid);
   });
 
   it('resumes an In Progress task when nothing else is executable', async () => {
@@ -95,6 +128,126 @@ describe('kanban source — claim', () => {
     const task = await sourceFor(boardFile).claim();
 
     expect(task?.planFile).toBe(path.join(dir, 'docs', 'plans', 't1.md'));
+  });
+});
+
+describe('kanban source — per-task claim lease', () => {
+  const info = { goalDir: '', round: 1 };
+
+  beforeEach(() => {
+    info.goalDir = path.join(dir, 'goal');
+  });
+
+  it('resumes an abandoned In Progress task before a higher-priority Backlog task', async () => {
+    boardFile = writeBoard(dir, [
+      row('T1', 'In Progress', 'crashed run', { priority: 'Low' }),
+      row('T2', 'Backlog', 'fresh work', { priority: 'High' }),
+    ]);
+
+    const task = await sourceFor(boardFile).claim();
+
+    expect(task?.id).toBe('T1');
+    expect(statusOf('T1')).toBe('In Progress');
+    expect(statusOf('T2')).toBe('Backlog');
+    expect(JSON.parse(readFileSync(leaseOf(boardFile, 'T1'), 'utf8')).pid).toBe(process.pid);
+  });
+
+  it('steals a lease whose pid is dead and resumes that task', async () => {
+    boardFile = writeBoard(dir, [
+      row('T1', 'In Progress', 'crashed run', { priority: 'Low' }),
+      row('T2', 'Backlog', 'fresh work', { priority: 'High' }),
+    ]);
+    writeLease(boardFile, 'T1', deadPid());
+
+    expect(await sourceFor(boardFile).claim()).toMatchObject({ id: 'T1' });
+    expect(statusOf('T2')).toBe('Backlog');
+  });
+
+  it('never hands a live-leased task to a second claim', async () => {
+    boardFile = writeBoard(dir, [row('T1', 'Backlog', 'one', { priority: 'High' }), row('T2', 'Backlog', 'two')]);
+    const src = sourceFor(boardFile);
+
+    expect((await src.claim())?.id).toBe('T1');
+    expect((await src.claim())?.id).toBe('T2');
+    // Both are In Progress and leased by this process: nothing left to claim.
+    expect(await src.claim()).toBeNull();
+  });
+
+  it('skips a Backlog task leased by another live process', async () => {
+    boardFile = writeBoard(dir, [
+      row('T1', 'Backlog', 'one', { priority: 'High' }),
+      row('T2', 'Backlog', 'two'),
+    ]);
+    writeLease(boardFile, 'T1', livePid());
+
+    const task = await sourceFor(boardFile).claim();
+
+    expect(task?.id).toBe('T2');
+    expect(statusOf('T1')).toBe('Backlog');
+  });
+
+  it('claims five distinct tasks from five concurrent claims', async () => {
+    boardFile = writeBoard(dir, [
+      row('T1', 'Backlog', 'a'),
+      row('T2', 'Backlog', 'b'),
+      row('T3', 'Backlog', 'c'),
+      row('T4', 'Backlog', 'd'),
+      row('T5', 'Backlog', 'e'),
+    ]);
+    const src = sourceFor(boardFile);
+
+    const tasks = await Promise.all([src.claim(), src.claim(), src.claim(), src.claim(), src.claim()]);
+
+    expect(tasks).toHaveLength(5);
+    expect(tasks.filter(t => t === null)).toHaveLength(0);
+    expect(new Set(tasks.map(t => t?.id)).size).toBe(5);
+  });
+
+  it('onFinish releases the lease on DONE and FAILED', async () => {
+    boardFile = writeBoard(dir, [row('T1', 'Backlog', 'one'), row('T2', 'Backlog', 'two')]);
+    const src = sourceFor(boardFile);
+
+    const first = (await src.claim())!;
+    await src.onFinish(first, 'DONE', info);
+    expect(existsSync(leaseOf(boardFile, 'T1'))).toBe(false);
+
+    const second = (await src.claim())!;
+    await src.onFinish(second, 'FAILED', info);
+    expect(existsSync(leaseOf(boardFile, 'T2'))).toBe(false);
+    expect(statusOf('T2')).toBe('Blocked');
+  });
+
+  it('releases the lease even when the mapped status is missing from the legend', async () => {
+    boardFile = writeBoard(dir, [row('T1', 'Backlog', 'one')]);
+    const src = sourceFor(boardFile, { DONE: 'Nonexistent' });
+
+    const task = (await src.claim())!;
+    await src.onFinish(task, 'DONE', info);
+
+    expect(existsSync(leaseOf(boardFile, 'T1'))).toBe(false);
+  });
+
+  it('claimId on a live-leased task returns null and warns with the holder pid', async () => {
+    boardFile = writeBoard(dir, [row('T1', 'Backlog', 'one')]);
+    const pid = livePid();
+    writeLease(boardFile, 'T1', pid);
+
+    expect(await sourceFor(boardFile).claimId('T1')).toBeNull();
+    expect(logs.some(m => m.includes(`task T1 is claimed by pid ${pid}`))).toBe(true);
+    expect(statusOf('T1')).toBe('Backlog');
+  });
+
+  it('claimId takes the lease, onFinish frees it for the next claimId', async () => {
+    boardFile = writeBoard(dir, [row('T1', 'Backlog', 'one')]);
+    const src = sourceFor(boardFile);
+
+    const task = (await src.claimId('T1'))!;
+    expect(await src.claimId('T1')).toBeNull();
+
+    await src.onFinish(task, 'DONE', info);
+
+    expect((await src.claimId('T1'))?.id).toBe('T1');
+    expect(statusOf('T1')).toBe('In Progress');
   });
 });
 

@@ -47,18 +47,20 @@ export function saveBoard(doc: BoardDoc): void {
 /**
  * Read-modify-write the board under the file lock: loadBoard -> fn -> saveBoard
  * (only when the op reports a change). Concurrent mutations serialize, so every
- * writer sees the previous writer's board and no add/remove is lost.
+ * writer sees the previous writer's board and no add/remove is lost. An op may be
+ * async — the lock is held until its promise settles, so work done inside it
+ * (e.g. taking a claim lease) stays serialized with the board write.
  */
 export async function mutateBoard(
   file: string,
-  fn: (doc: BoardDoc) => OpResult,
+  fn: (doc: BoardDoc) => OpResult | Promise<OpResult>,
   timeoutMs?: number,
 ): Promise<OpResult> {
-  return withLock(
+  return withLock<OpResult>(
     file,
-    () => {
+    async () => {
       const doc = loadBoard(file);
-      const result = fn(doc);
+      const result = await fn(doc);
       if (result.changed) saveBoard(doc);
       return result;
     },

@@ -1,5 +1,8 @@
+import { readFileSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
+import { acquireLock, getLockDir, pathToLockName, releaseLock, type LockInfo } from '../lock'
+import { isPidAlive } from '../process-utils'
 import {
   findRowById,
   headerIndex,
@@ -9,16 +12,8 @@ import {
 } from '../kanban/board'
 import { resolvePlanPath, type OpResult } from '../kanban/ops'
 import { setCellText } from '../kanban/parse'
-import { isUnblocked, nextExecutable } from '../kanban/select'
-import {
-  DEFAULT_STATUS,
-  IN_PROGRESS,
-  PRIORITY_ORDER,
-  UNKNOWN_PRIORITY,
-  blank,
-  numericId,
-  type Task,
-} from '../kanban/types'
+import { backlogCandidates } from '../kanban/select'
+import { IN_PROGRESS, blank, type Task } from '../kanban/types'
 import type { ComposeTask, TaskFinishInfo, TaskSource } from './task-source'
 
 /**
@@ -48,6 +43,70 @@ export interface KanbanSource extends TaskSource {
 
 const DEFAULT_MAP: KanbanStatusMap = { claim: IN_PROGRESS, DONE: 'Done', FAILED: 'Blocked' }
 
+/**
+ * Lease wait bound: the lease is probed before it is taken and claims serialize on the
+ * board lock, so this only covers the microsecond race where two claimers probe the same
+ * free task at once. Long enough to lose cleanly, short enough to never stall a loop.
+ */
+const LEASE_TIMEOUT_MS = 250
+
+/**
+ * Per-task claim lease on lock.ts's own naming scheme: the lease "state file" is
+ * `<boardFile>.claim-<ID>`, so the lock lands in `<boardDir>/locks/` — the directory board
+ * mutations already use, derived from the board path so it works for any board (`--board`,
+ * another project, a temp file) — and the name carries the whole board path plus the task
+ * id, so leases of different boards or tasks never collide with each other, nor with the
+ * board's own mutation lock (which comes from `<boardFile>` alone).
+ *
+ * The compose process that claims a task holds its lease until `onFinish`; while the file
+ * names a live pid nobody else may take the task, and when that process dies the pid is
+ * dead, lock.ts's stale-lock steal frees it, and the next claim resumes the task.
+ */
+function leaseFile(boardFile: string, id: string): string {
+  return path.join(getLockDir(boardFile), pathToLockName(`${boardFile}.claim-${id}`))
+}
+
+/** Live pid owning the lease, or null when free (absent, dead pid or unreadable). */
+function leaseHolder(lease: string): number | null {
+  try {
+    const info = JSON.parse(readFileSync(lease, 'utf8')) as LockInfo
+    return typeof info?.pid === 'number' && isPidAlive(info.pid) ? info.pid : null
+  } catch {
+    return null
+  }
+}
+
+function leaseFree(boardFile: string, id: string): boolean {
+  return leaseHolder(leaseFile(boardFile, id)) === null
+}
+
+/**
+ * Take the lease for `id`. Returns null when it is ours now, otherwise the holder's pid
+ * (0 when the acquire timed out on a live lock we could not read a pid from).
+ */
+async function takeLease(boardFile: string, id: string): Promise<number | null> {
+  const lease = leaseFile(boardFile, id)
+  const holder = leaseHolder(lease)
+  if (holder !== null) return holder
+  try {
+    await acquireLock(`${boardFile}.claim-${id}`, LEASE_TIMEOUT_MS)
+    return null
+  } catch {
+    return leaseHolder(lease) ?? 0
+  }
+}
+
+/** Drop the lease, but only when this process owns it — never free another claimer's task. */
+function releaseLease(boardFile: string, id: string): void {
+  const lease = leaseFile(boardFile, id)
+  try {
+    if ((JSON.parse(readFileSync(lease, 'utf8')) as LockInfo).pid !== process.pid) return
+  } catch {
+    return
+  }
+  releaseLock(lease)
+}
+
 function noopResult(data: unknown = null): OpResult {
   return { messages: [], warnings: [], changed: false, data }
 }
@@ -63,12 +122,13 @@ function toComposeTask(doc: BoardDoc, task: Task): ComposeTask {
 }
 
 /**
- * opNext start semantics, with one deliberate difference: an In Progress task
- * is only resumed when no Backlog task is executable. opNext returns the
- * current task first, which would hand the same task to two concurrent claims;
- * here the lock + backlog-first order guarantees a fresh claim never collides.
+ * Claim order, deliberately the mirror of opNext: an already-claimed task is resumed first
+ * (crashed run or human hand-off), so `--loop` never starts new work while a task sits
+ * abandoned mid-flight. Exclusivity comes from the per-task lease, not from preferring
+ * Backlog — a task whose lease names a live pid is skipped entirely, so two concurrent
+ * claimers can never be handed the same row. Runs inside mutateBoard's board lock.
  */
-function opClaim(doc: BoardDoc, claimStatus: string, wantId?: string): OpResult {
+async function opClaim(doc: BoardDoc, claimStatus: string, wantId?: string): Promise<OpResult> {
   if (!doc.statuses.includes(claimStatus)) {
     return {
       ...noopResult(),
@@ -84,29 +144,33 @@ function opClaim(doc: BoardDoc, claimStatus: string, wantId?: string): OpResult 
   let task: Task | undefined
   let mark = false
   if (wantId) {
-    task = tasks.find(t => t.ID === wantId)
-    if (!task) return { ...noopResult(), warnings: [`[kanban-source] task ${wantId} not found`] }
+    const wanted = tasks.find(t => t.ID === wantId)
+    if (!wanted) return { ...noopResult(), warnings: [`[kanban-source] task ${wantId} not found`] }
+    const holder = await takeLease(doc.file, wantId)
+    if (holder !== null) {
+      return { ...noopResult(), warnings: [`[kanban-source] task ${wantId} is claimed by pid ${holder}`] }
+    }
+    task = wanted
     mark = task.Status !== claimStatus
   } else {
-    const candidates = tasks.filter(t => t.Status === DEFAULT_STATUS && isUnblocked(t, tasks))
-    if (candidates.length > 0) {
-      candidates.sort((a, b) => {
-        const pa = PRIORITY_ORDER[a.Priority] ?? UNKNOWN_PRIORITY
-        const pb = PRIORITY_ORDER[b.Priority] ?? UNKNOWN_PRIORITY
-        return pa !== pb ? pa - pb : numericId(a.ID) - numericId(b.ID)
-      })
-      task = candidates[0]
-      mark = true
-    } else {
-      // Crash resume: nothing else to do, continue the interrupted task.
-      task = tasks.find(t => t.Status === IN_PROGRESS)
-      if (!task) return noopResult()
+    // (a) resume an unleased task in the claim status, (b) else the best unblocked Backlog
+    // task — both skip any row a live process has leased. Row order keeps (a) deterministic.
+    task = tasks.find(t => t.Status === claimStatus && leaseFree(doc.file, t.ID))
+    if (!task) {
+      task = backlogCandidates(tasks).find(t => leaseFree(doc.file, t.ID))
+      mark = task !== undefined
     }
+    if (!task) return noopResult()
+    // Only reachable if another process leased it between the probe and here: lose cleanly.
+    if ((await takeLease(doc.file, task.ID)) !== null) return noopResult()
   }
 
   if (mark) {
     const rowIdx = findRowById(doc, task.ID)
-    if (rowIdx === -1) return { ...noopResult(), warnings: [`[kanban-source] task ${task.ID} row not found`] }
+    if (rowIdx === -1) {
+      releaseLease(doc.file, task.ID)
+      return { ...noopResult(), warnings: [`[kanban-source] task ${task.ID} row not found`] }
+    }
     setCellText(doc.table.children[rowIdx].children[statusIdx], claimStatus)
     task = { ...task, Status: claimStatus }
   }
@@ -149,15 +213,21 @@ export function createKanbanSource(opts: KanbanSourceOptions): KanbanSource {
     claim: () => claimWith(),
     claimId: id => claimWith(id),
     async onFinish(task, outcome, info) {
-      if (outcome === 'FAILED') {
-        await mkdir(info.goalDir, { recursive: true })
-        await writeFile(
-          path.join(info.goalDir, 'outcome.md'),
-          `# ${task.id} — FAILED\n\nCompose run failed after round ${info.round}. See plan.md / verdict.md in this directory.\n`,
-        )
+      // Release even when the artifact write or the board op throws: the run is over, and a
+      // leased row nobody is working would block the next claim's resume path forever.
+      try {
+        if (outcome === 'FAILED') {
+          await mkdir(info.goalDir, { recursive: true })
+          await writeFile(
+            path.join(info.goalDir, 'outcome.md'),
+            `# ${task.id} — FAILED\n\nCompose run failed after round ${info.round}. See plan.md / verdict.md in this directory.\n`,
+          )
+        }
+        const r = await mutateBoard(boardFile, doc => opFinish(doc, task.id, map[outcome], info.goalDir))
+        for (const w of r.warnings) log(w)
+      } finally {
+        releaseLease(boardFile, task.id)
       }
-      const r = await mutateBoard(boardFile, doc => opFinish(doc, task.id, map[outcome], info.goalDir))
-      for (const w of r.warnings) log(w)
     },
   }
 }

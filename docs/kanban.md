@@ -61,9 +61,15 @@ at compose --loop --board <file>     # use a non-default board
 
   The loop then continues with the next executable task (`Blocked By` dependencies gate on `Done`).
   A status missing from the board's legend is warned about and the row is left unchanged.
+* **Claim lease:** every claim takes a per-task pid lock (`src/lock.ts`, written to `<boardDir>/locks/`
+  under the name of `<boardFile>.claim-<ID>`) and holds it until `onFinish` releases it; a lock whose pid
+  died is stale-stolen, so a crashed run frees its own task. `claim()` resumes the first **unleased** task
+  already in the claim status (crash or human hand-off) before taking the best unblocked `Backlog` row, and
+  skips any row leased by a live pid — two claimers can never be handed the same task.
 * **Locking:** every board op (claim, finish) goes through `mutateBoard` (`src/kanban/board.ts`) —
   load → mutate → save inside the `withLock` file mutex, written atomically via
-  `src/atomic-write.ts` (temp file + same-dir rename). Nothing caches board state between ops, so
+  `src/atomic-write.ts` (temp file + same-dir rename). The lease is taken inside that same mutex, so the
+  lease and the `Status` cell land together. Nothing caches board state between ops, so
   **humans may edit the board concurrently**: the next compose op re-loads their changes instead of
   clobbering them.
 * Exit code: 0 when no task FAILED, 1 otherwise (also 1 for an unknown `--task <id>`).

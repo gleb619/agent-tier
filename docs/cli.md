@@ -190,6 +190,11 @@ Resume: `--resume <id>` (or `--task <id>`, where **goalId = lowercase task id**)
 `~/.at/compose/<id>/state.json` and continues from the saved phase. A terminal `state.json`
 (`DONE`/`FAILED`) is never re-run — the board task is just re-finalized.
 
+Board claims take a **per-task lease**: a `src/lock.ts` pid lock under `<boardDir>/locks/` keyed by board
+path + task id, held until the run finalizes. `--loop` therefore resumes the first **unleased** `In Progress`
+task (crashed or human-marked) before starting new `Backlog` work, and skips rows leased by a live pid, so two
+claimers never share a task. `--task <id>` on a leased task warns (`task T7 is claimed by pid N`) and exits 1.
+
 ### Artifacts, state, exit codes
 
 Artifacts and `state.json` (`{ goal, state, round, testCmd, maxRounds, runs? }`, saved under the
