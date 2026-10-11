@@ -22,7 +22,7 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T1  | Done    | kanban core module        | src/kanban: mdast mutator, selection, lint, guard          | Medium   | loop  | T2     | -                 | -                                     |
 | T2  | Done    | at kanban CLI             | src/commands/kanban.ts subcommands wired into root program | Medium   | loop  | T3     | T1                | -                                     |
 | T3  | Done    | kanban test suite         | tests/kanban: parse, select, board, ops, lint, guard, cli  | Medium   | loop  | -      | T2                | -                                     |
-| T4  | Backlog | WebUI API server          | at web: REST+static+SSE over run-store/health/settings     | High     | loop  | -      | -                 | docs/plans/webui-01-api-server.md     |
+| T4  | Done    | WebUI API server          | at web: REST+static+SSE over run-store/health/settings     | High     | loop  | -      | -                 | docs/plans/webui-01-api-server.md     |
 | T5  | Backlog | WebUI scaffold            | Vite+Svelte+Tailwind at src/webui, types, build scripts    | High     | loop  | -      | -                 | docs/plans/webui-02-scaffold.md       |
 | T6  | Backlog | API client + SSE + stores | fetch client, SSE reconnect manager, svelte stores         | High     | loop  | -      | T4,T5             | docs/plans/webui-03-api-sse-stores.md |
 | T7  | Backlog | Layout + nav + common UI  | shell, sidebar nav, common components, badges              | Medium   | loop  | -      | T5                | docs/plans/webui-04-layout-nav.md     |

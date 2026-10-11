@@ -15,6 +15,7 @@ import { registerNotifyCommand } from "./notify";
 import { registerServeCommand } from "./serve";
 import { registerStatusCommand } from "./status";
 import { registerStopCommand } from "./stop";
+import { registerWebCommand } from "./web";
 
 export function registerCommands(program: Command): void {
   registerDefaultCommand(program);
@@ -32,5 +33,6 @@ export function registerCommands(program: Command): void {
   registerNotifyCommand(program);
   registerEventsCommand(program);
   registerServeCommand(program);
+  registerWebCommand(program);
   registerDiscussCommand(program);
 }
