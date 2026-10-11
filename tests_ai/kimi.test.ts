@@ -1,8 +1,9 @@
+import { describeLive } from "./live";
 import { spawn } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { agentBinExists, cleanupSandbox, createSandbox, DEFAULT_TIMEOUT, getCliPath, type Sandbox } from "./setup";
 
-describe("kimi agent", () => {
+describeLive("kimi agent", () => {
   let sandbox: Sandbox;
 
   beforeEach(() => {

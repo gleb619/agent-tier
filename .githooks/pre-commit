@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Fast pre-commit guard: default test path must stay unit-only.
+# Enable with: npm run hooks:install   (= git config core.hooksPath .githooks)
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+exec bash "$ROOT/scripts/test-guard.sh" check

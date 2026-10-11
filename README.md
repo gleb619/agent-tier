@@ -84,9 +84,12 @@ Long-form docs live in [`docs/`](docs/):
 ```bash
 pnpm run dev          # run without building (ts-node)
 pnpm run build        # compile to dist/
-pnpm test             # vitest
+pnpm test             # vitest — unit suite (tests/**) only
 pnpm run test:watch   # vitest --watch
 npx vitest tests/runner.test.ts   # single file
+pnpm run test:agents  # LIVE real-agent suite (tests_ai/**) — opt-in, burns real agent quota
+pnpm run test:all     # unit + live suite (costly)
+pnpm run test:guard   # verify the default test path stays unit-only
 ```
 
 ## Contributing rules

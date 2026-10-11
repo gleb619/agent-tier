@@ -25,11 +25,16 @@ cd ../agent-tier-<short-name>
 # 3. Run guardrails — ALL must pass before merging
 npx biome ci .        # lint + format drift fails the merge
 npx tsc --noEmit
-npx vitest run        # full suite; pre-existing tests_ai/glm-code fail is allowed, nothing else
+npx vitest run        # unit suite (tests/**) ONLY — never run the full live suite;
+                      # live/real agents are opt-in via `npm run test:agents` on explicit request
 
 # CI guardrail — run in the worktree BEFORE merging whenever any of these changed:
 #   .github/workflows/*, scripts/ci-check.sh, or package.json "ci:check"
-pnpm run ci:check       # wrkflw dry-run validate + docker build check (skip parts: --skip-docker / --skip-validate)
+pnpm run ci:check       # wrkflw dry-run validate + docker build check + test-guard (skip parts: --skip-docker / --skip-validate / --skip-guard)
+
+# Worktree cleanup — kill orphan `dist/cli.js -s -a` processes before removing:
+bash scripts/test-guard.sh worktree-clean ../agent-tier-<short-name>
+git worktree remove ../agent-tier-<short-name>
 
 # 4. Commit on the branch (conventional-commits style). One commit per phase is fine,
 #    one big commit is fine. NEVER include Co-Authored-By trailers.
@@ -90,9 +95,13 @@ git worktree prune
 ```bash
 pnpm run build       # tsc → dist/
 pnpm run dev         # ts-node src/cli.ts (run without building)
-pnpm test            # vitest run (all tests in tests/)
+pnpm test            # vitest run — unit suite (tests/**) only
 pnpm run test:watch  # vitest (watch mode)
-pnpm run test:agents # vitest run tests_ai/
+pnpm run test:agents # LIVE real-agent suite (tests_ai/**, AT_LIVE_AGENTS=1) — opt-in, costly, on explicit request only
+pnpm run test:all    # test then test:agents (documented as costly)
+pnpm run test:guard  # scripts/test-guard.sh check — unit-only default path + CI live-gate
+pnpm run test:orphans # list orphan `dist/cli.js -s -a` processes for this worktree
+pnpm run hooks:install # enable .githooks/pre-commit (runs test-guard check)
 
 # Run a single test file
 npx vitest tests/resolver.test.ts

@@ -1,3 +1,4 @@
+import { describeLive } from "./live";
 import { execSync, spawn } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { agentBinExists, cleanupSandbox, createSandbox, getCliPath, type Sandbox } from "./setup";
@@ -11,7 +12,7 @@ function chopAvailable(): boolean {
   }
 }
 
-describe("chop stream integration", () => {
+describeLive("chop stream integration", () => {
   let sandbox: Sandbox;
 
   beforeEach(() => {
