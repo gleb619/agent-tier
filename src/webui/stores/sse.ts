@@ -46,3 +46,23 @@ export function createSseConnection(url: string, options: Partial<SseManagerOpti
     },
   };
 }
+
+/** Event types that change which runs exist / how they are labeled. */
+const REFRESH_EVENT_TYPES = new Set(["start", "done", "error", "rename"]);
+
+/**
+ * Wire the app-wide `/api/events` stream: status folding (createSseConnection
+ * glue) plus a refetch for events that introduce or relabel runs — a run
+ * started elsewhere (CLI, API POST) is not yet in the store, and folding only
+ * updates existing entries.
+ */
+export function startGlobalEvents(refetch: () => void, options: Partial<SseManagerOptions> = {}): SseConnection {
+  return createSseConnection("/api/events", {
+    onEvent: (event) => {
+      lastEventTime.set(new Date());
+      applySseEvent(event);
+      if (REFRESH_EVENT_TYPES.has(event.type)) refetch();
+    },
+    ...options,
+  });
+}

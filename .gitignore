@@ -17,3 +17,4 @@ env.local.sh
 /docs/tasks/*
 /.at/
 /coverage/
+/.pw-browsers/

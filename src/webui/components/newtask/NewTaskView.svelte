@@ -1,25 +1,26 @@
 <script lang="ts">
 import { onMount } from "svelte";
 import { get } from "svelte/store";
-import { listRuns, createRun } from "../../api/runs";
+import Button from "$components/common/Button.svelte";
+import Card from "$components/common/Card.svelte";
+import Input from "$components/common/Input.svelte";
+import Select from "$components/common/Select.svelte";
 import { agents, refreshDashboard } from "$stores/dashboard";
 import { runs, selectRun, setRuns } from "$stores/runs";
 import { settings } from "$stores/settings";
 import { showToast } from "$stores/toast";
 import { setCurrentView } from "$stores/ui";
+import type { ApiRun } from "$types/api";
 import {
-  MAX_PROMPT_CHARS,
-  MAX_RETRIES,
-  RUN_MODES,
   buildCreateRunInput,
   clampRetries,
   isRunMode,
+  MAX_PROMPT_CHARS,
+  MAX_RETRIES,
+  RUN_MODES,
   validateNewTask,
 } from "$utils/newtask";
-import Button from "$components/common/Button.svelte";
-import Card from "$components/common/Card.svelte";
-import Input from "$components/common/Input.svelte";
-import Select from "$components/common/Select.svelte";
+import { createRun, listRuns } from "../../api/runs";
 
 // Defaults come from the settings store (plan step 4); read once at init.
 let prompt = "";
@@ -42,6 +43,10 @@ $: agentOptions = [
 
 const modeOptions = RUN_MODES.map((m) => ({ value: m, label: m }));
 
+/** Post-submit refetch budget: the detached spawn records the run within ~1s. */
+const RUN_POLL_ATTEMPTS = 20;
+const RUN_POLL_INTERVAL_MS = 250;
+
 // Agent list is normally warm from the dashboard; fetch it if the view is entered first.
 onMount(() => {
   if ($agents.length === 0) void refreshDashboard();
@@ -56,7 +61,10 @@ async function submit(): Promise<void> {
     mode,
     retries: Number(retries),
   };
-  error = validateNewTask(form, $agents.map((a) => a.name));
+  error = validateNewTask(
+    form,
+    $agents.map((a) => a.name),
+  );
   if (error) return;
 
   submitting = true;
@@ -72,10 +80,20 @@ async function submit(): Promise<void> {
 
   showToast("Run started", "success");
   prompt = "";
-  // The new run appears in the run store on refetch; open it when visible.
+  // The detached spawn records the run asynchronously; the first refetch is
+  // usually too early. Poll briefly until the submitted prompt shows up (or
+  // the budget runs out), then open the newest run.
   try {
-    setRuns(await listRuns());
-    const newest = get(runs)[0];
+    let matched: ApiRun | undefined;
+    for (let attempt = 0; attempt < RUN_POLL_ATTEMPTS; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, RUN_POLL_INTERVAL_MS));
+      const list = await listRuns();
+      setRuns(list);
+      matched = get(runs).find((r) => form.prompt.trim() !== "" && r.prompt.includes(form.prompt));
+      // Stop as soon as anything is visible — matched run preferred, else newest.
+      if (matched || get(runs).length > 0) break;
+    }
+    const newest = matched ?? get(runs)[0];
     if (newest) {
       selectRun(newest.runId);
       setCurrentView("run-details");

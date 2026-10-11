@@ -37,3 +37,30 @@ func TestDetect_FencedJSON(t *testing.T) {
 		t.Fatal("expected activated by fenced block")
 	}
 }
+
+func TestDetect_CLIFlagWithHashDirective(t *testing.T) {
+	// The at CLI appends "--normka" after the prompt; the flag form must still
+	// extract the spec from a "#NORMKA"-style prompt instead of JSON-parsing
+	// the whole prompt.
+	prompt := "#NORMKA\n{\"version\":1,\"steps\":[]}"
+	ok, body := Detect("--normka", prompt)
+	if !ok {
+		t.Fatal("expected activated by CLI flag")
+	}
+	if body != "{\"version\":1,\"steps\":[]}" {
+		t.Fatalf("body=%q", body)
+	}
+}
+
+func TestDetect_HashDirectiveNotFirstLine(t *testing.T) {
+	// Consistent with the at CLI's multiline #NORMKA detection: the directive
+	// may appear after leading text (e.g. a prepended global prompt).
+	prompt := "some preamble\n\n#NORMKA\n{\"version\":1,\"steps\":[]}"
+	ok, body := Detect("", prompt)
+	if !ok {
+		t.Fatal("expected activated by #NORMKA after preamble")
+	}
+	if body != "{\"version\":1,\"steps\":[]}" {
+		t.Fatalf("body=%q", body)
+	}
+}

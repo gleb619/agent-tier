@@ -32,7 +32,7 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T11 | Done    | Run Details + LogViewer   | RunMeta, live log viewer, retry/kill/discuss               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-08-run-details.md    |
 | T12 | Done    | Settings view             | defaults form persisted to backend state                   | Low      | loop  | -      | T6,T7             | docs/plans/webui-09-settings.md       |
 | T13 | Done    | Keyboard shortcuts + a11y | TUI-mirroring keys, ARIA, contrast                         | Low      | loop  | -      | T8,T9,T10,T11,T12 | docs/plans/webui-10-keyboard.md       |
-| T14 | Backlog | E2E + integration tests   | Playwright vs at web with mock agents                      | Medium   | loop  | -      | T13               | docs/plans/webui-11-e2e-tests.md      |
+| T14 | Done    | E2E + integration tests   | Playwright vs at web with mock agents                      | Medium   | loop  | -      | T13               | docs/plans/webui-11-e2e-tests.md      |
 | T15 | Backlog | WebUI build, Docker, docs | build wiring, Dockerfile, docs/webui.md, ci:check          | Low      | loop  | -      | T14               | docs/plans/webui-12-build-docs.md     |
 
 ## Compose + Kanban

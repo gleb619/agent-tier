@@ -1,5 +1,5 @@
-// Package trigger detects normka-mode activation in a prompt and
-// returns the leftover JSON spec text (or "" if not activated).
+// Package trigger detects normka-mode activation in a prompt
+// and returns the leftover JSON spec text (or "" if not activated).
 package trigger
 
 import (
@@ -20,12 +20,26 @@ var fenceRe = regexp.MustCompile("(?s)```json\\s*\\n(// normka:on.*?)\\n```")
 //
 // Forms:
 //  1. CLI flag "--normka" present in cliFlagMarker.
-//  2. Prompt first non-blank line equals "#NORMKA" (case-insensitive).
+//  2. Prompt contains a line equal to "#NORMKA" (case-insensitive).
 //  3. Prompt contains a ```json fenced block with a "// normka:on" line.
+//
+// Form 1 uses the same extraction as forms 2/3 when the prompt carries a
+// directive, so callers may pass "--normka" alongside (before OR after)
+// a "#NORMKA"-style prompt and still get a clean JSON body.
 func Detect(cliFlagMarker, prompt string) (bool, string) {
 	if strings.Contains(cliFlagMarker, "--normka") {
+		if ok, body := detectBody(prompt); ok {
+			return true, body
+		}
 		return true, prompt
 	}
+	return detectBody(prompt)
+}
+
+// detectBody locates a normka JSON spec inside a prompt: the hash directive
+// form (a line equal to "#NORMKA"; everything after that line is the spec)
+// or the ```json fenced-block form.
+func detectBody(prompt string) (bool, string) {
 	lines := strings.Split(prompt, "\n")
 	for _, line := range lines {
 		trim := strings.TrimSpace(line)
@@ -40,7 +54,6 @@ func Detect(cliFlagMarker, prompt string) (bool, string) {
 			rest := prompt[idx+len(line):]
 			return true, strings.TrimSpace(rest)
 		}
-		break
 	}
 	if m := fenceRe.FindStringSubmatch(prompt); len(m) >= 2 {
 		body := m[1]

@@ -1,17 +1,19 @@
 <script lang="ts">
+import { onMount } from "svelte";
 import { get } from "svelte/store";
-import { deleteRun, listRuns, retryRun } from "../../api/runs";
-import { refreshDashboard } from "$stores/dashboard";
-import { runs, selectRun, selectedRun, selectedRunId, setRuns } from "$stores/runs";
-import { showToast } from "$stores/toast";
-import { currentView, setCurrentView } from "$stores/ui";
-import type { ViewType } from "$types/index";
-import { handleKeydown, neighborRunId, type KeyboardHandlers } from "$utils/keyboard";
 import Toasts from "$components/common/Toasts.svelte";
 import DashboardView from "$components/dashboard/DashboardView.svelte";
 import NewTaskView from "$components/newtask/NewTaskView.svelte";
 import RunDetailsView from "$components/run/RunDetailsView.svelte";
 import SettingsView from "$components/settings/SettingsView.svelte";
+import { refreshDashboard } from "$stores/dashboard";
+import { runs, selectedRun, selectedRunId, selectRun, setRuns } from "$stores/runs";
+import { startGlobalEvents } from "$stores/sse";
+import { showToast } from "$stores/toast";
+import { currentView, setCurrentView } from "$stores/ui";
+import type { ViewType } from "$types/index";
+import { handleKeydown, type KeyboardHandlers, neighborRunId } from "$utils/keyboard";
+import { deleteRun, listRuns, retryRun } from "../../api/runs";
 import Header from "./Header.svelte";
 import Sidebar from "./Sidebar.svelte";
 
@@ -78,6 +80,16 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 $: activeView = $currentView;
+
+// Initial load: the run list + dashboard start empty until the first fetch.
+// The global event stream keeps them live: runs started elsewhere (CLI, API)
+// land in the store via the refetch hook, status changes fold in directly.
+onMount(() => {
+  void refreshData();
+  const events = startGlobalEvents(() => void refreshData());
+  events.connect();
+  return () => events.close();
+});
 </script>
 
 <svelte:window on:keydown={onKeydown} />

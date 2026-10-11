@@ -6,7 +6,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -18,15 +17,25 @@ import (
 )
 
 func main() {
-	normka := flag.Bool("normka", false, "activate normka mode")
-	flag.Parse()
+	// Scan argv manually: flag.Parse stops at the first non-flag arg, so a
+	// "--normka" appended AFTER the prompt (how the at CLI forwards it) would
+	// never register. The flag is accepted in any position.
+	normka := false
+	rest := make([]string, 0, len(os.Args)-1)
+	for _, arg := range os.Args[1:] {
+		if arg == "--normka" {
+			normka = true
+			continue
+		}
+		rest = append(rest, arg)
+	}
 
-	prompt := strings.Join(flag.Args(), " ")
+	prompt := strings.Join(rest, " ")
 	if stdin, _ := io.ReadAll(os.Stdin); len(stdin) > 0 {
 		prompt = strings.TrimSpace(prompt + "\n" + string(stdin))
 	}
 	cliMarker := ""
-	if *normka {
+	if normka {
 		cliMarker = "--normka"
 	}
 	ok, body := trigger.Detect(cliMarker, prompt)

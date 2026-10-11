@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { get } from "svelte/store";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 
 /** Tiny localStorage double (tests run in node env). */
 function stubLocalStorage(): Map<string, string> {
@@ -54,7 +54,9 @@ describe("settings store", () => {
   });
 
   it("save PUTs the merged settings and reflects the response", async () => {
-    fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse(200, { defaultTier: 2, defaultAgent: "pi" }));
+    fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(jsonResponse(200, { defaultTier: 2, defaultAgent: "pi" }));
     const { settings, saveSettings } = await import("../stores/settings");
     await saveSettings({ defaultAgent: "pi" });
     const call = fetchSpy.mock.calls[0];
@@ -173,7 +175,11 @@ describe("filters store", () => {
     agentFilter.set("all");
 
     searchQuery.set("DOCS");
-    expect(get(filteredRuns).map((r) => r.runId).sort()).toEqual(["r2", "r3"]);
+    expect(
+      get(filteredRuns)
+        .map((r) => r.runId)
+        .sort(),
+    ).toEqual(["r2", "r3"]);
     searchQuery.set("login");
     expect(get(filteredRuns).map((r) => r.runId)).toEqual(["r1"]);
   });
@@ -181,7 +187,12 @@ describe("filters store", () => {
 
 describe("sse stores + glue", () => {
   /** Minimal EventSource double wired through createSseConnection's options. */
-  let lastSource: { listeners: Map<string, ((ev: { data: string; lastEventId: string }) => void)[]>; onopen: (() => void) | null; onerror: (() => void) | null; readyState: number } | null = null;
+  let lastSource: {
+    listeners: Map<string, ((ev: { data: string; lastEventId: string }) => void)[]>;
+    onopen: (() => void) | null;
+    onerror: (() => void) | null;
+    readyState: number;
+  } | null = null;
 
   beforeEach(() => {
     vi.resetModules();
@@ -215,9 +226,18 @@ describe("sse stores + glue", () => {
 
     const conn = createSseConnection("/api/events", {
       createSource: () => {
-        const src = { listeners: new Map<string, ((ev: { data: string; lastEventId: string }) => void)[]>(), onopen: null as (() => void) | null, onerror: null as (() => void) | null, readyState: 1 };
+        const src = {
+          listeners: new Map<string, ((ev: { data: string; lastEventId: string }) => void)[]>(),
+          onopen: null as (() => void) | null,
+          onerror: null as (() => void) | null,
+          readyState: 1,
+        };
         // minimal SseSource surface the manager uses
-        (src as unknown as { addEventListener: (t: string, cb: (ev: { data: string; lastEventId: string }) => void) => void }).addEventListener = (t, cb) => {
+        (
+          src as unknown as {
+            addEventListener: (t: string, cb: (ev: { data: string; lastEventId: string }) => void) => void;
+          }
+        ).addEventListener = (t, cb) => {
           src.listeners.set(t, [...(src.listeners.get(t) ?? []), cb]);
         };
         (src as unknown as { close: () => void }).close = () => {
@@ -249,10 +269,83 @@ describe("sse stores + glue", () => {
   it("connectionError carries the message from onStatus", async () => {
     stubLocalStorage();
     const { connectionError, createSseConnection } = await import("../stores/sse");
-    const conn = createSseConnection("/api/events", { createSource: () => ({ readyState: 2, onopen: null, onerror: null, addEventListener: () => {}, close: () => {} }) });
+    const conn = createSseConnection("/api/events", {
+      createSource: () => ({ readyState: 2, onopen: null, onerror: null, addEventListener: () => {}, close: () => {} }),
+    });
     conn.fail("hub down");
     expect(get(connectionError)).toBe("hub down");
     conn.close();
     expect(get(connectionError)).toBeNull();
+  });
+
+  it("startGlobalEvents refetches on status-bearing events only and folds events into the runs store", async () => {
+    stubLocalStorage();
+    const { SSE_CLOSED } = await import("../api/sse");
+    const { startGlobalEvents } = await import("../stores/sse");
+    const { runs } = await import("../stores/runs");
+
+    const listeners = new Map<string, ((ev: { data: string; lastEventId: string }) => void)[]>();
+    let refetches = 0;
+    const conn = startGlobalEvents(
+      () => {
+        refetches += 1;
+      },
+      {
+        createSource: () => {
+          const src = {
+            listeners,
+            onopen: null as (() => void) | null,
+            onerror: null as (() => void) | null,
+            readyState: 1,
+            addEventListener: (t: string, cb: (ev: { data: string; lastEventId: string }) => void) => {
+              listeners.set(t, [...(listeners.get(t) ?? []), cb]);
+            },
+            close: () => {
+              src.readyState = SSE_CLOSED;
+            },
+          };
+          return src as unknown as import("../api/sse").SseSource;
+        },
+      },
+    );
+    conn.connect();
+
+    const dispatch = (type: string, data: unknown) => {
+      for (const cb of listeners.get(type) ?? []) cb({ data: JSON.stringify(data), lastEventId: "" });
+    };
+    const event = (type: string) => ({ runId: "r1", agent: "mock", ts: "t", seq: 1, type }) as const;
+
+    dispatch("message", event("message"));
+    expect(refetches).toBe(0);
+
+    dispatch("start", event("start"));
+    expect(refetches).toBe(1);
+
+    dispatch("done", event("done"));
+    expect(refetches).toBe(2);
+
+    dispatch("rename", event("rename"));
+    expect(refetches).toBe(3);
+
+    // Status folding still applies (base glue runs before the refetch hook).
+    runs.set([
+      {
+        runId: "r1",
+        agent: "mock",
+        tier: 4,
+        pid: 1,
+        prompt: "p",
+        logFile: "/tmp/r1.log",
+        startedAt: "2026-10-11T10:00:00.000Z",
+        finishedAt: null,
+        exitCode: null,
+        status: "running",
+        name: "UNNAMED",
+      },
+    ]);
+    dispatch("done", { runId: "r1", agent: "mock", ts: "t", seq: 2, type: "done" });
+    expect(get(runs)[0]?.status).toBe("done");
+
+    conn.close();
   });
 });

@@ -6,7 +6,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
-    exclude: [],
+    // WebUI E2E (Playwright vs a real `at web`) runs only via `pnpm run test:e2e`
+    // (vitest.e2e.config.ts) — needs built dist + chromium.
+    exclude: ["tests/e2e/webui/**"],
     testTimeout: 360000,
     hookTimeout: 360000,
     globals: true,

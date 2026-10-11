@@ -4,7 +4,7 @@ import { get } from "svelte/store";
 import { beforeEach, describe, expect, it } from "vitest";
 import NewTaskView from "../components/newtask/NewTaskView.svelte";
 import { agents } from "../stores/dashboard";
-import { runs, selectRun, selectedRunId, setRuns } from "../stores/runs";
+import { runs, selectedRunId, selectRun, setRuns } from "../stores/runs";
 import { DEFAULT_SETTINGS, settings } from "../stores/settings";
 import { toasts } from "../stores/toast";
 import { currentView } from "../stores/ui";
@@ -210,7 +210,34 @@ describe("NewTaskView", () => {
     render(NewTaskView);
     await fireEvent.input(screen.getByTestId("prompt-input"), { target: { value: "go" } });
     await fireEvent.click(screen.getByRole("button", { name: /start run/i }));
-    await vi.waitFor(() => expect(get(currentView)).toBe("dashboard"));
+    await vi.waitFor(() => expect(get(currentView)).toBe("dashboard"), { timeout: 8000 });
     expect(get(runs)).toHaveLength(0);
-  });
+  }, 10_000);
+
+  it("picks up the run on a later refetch when the detached spawn records it late", async () => {
+    // First list fetch (immediately after POST) is too early; the second one
+    // sees the recorded run. Prompt carries the submitted text (no global
+    // prefix in tests).
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: unknown, init?: RequestInit) => {
+        const url = String(input);
+        if (url === "/api/agents") return new Response(JSON.stringify([]), { status: 200 });
+        if (url === "/api/runs" && (init?.method ?? "GET") === "GET") {
+          calls += 1;
+          return new Response(JSON.stringify(calls >= 2 ? [makeRun("late", { prompt: "fix the bug" })] : []), {
+            status: 200,
+          });
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 202 });
+      }),
+    );
+    render(NewTaskView);
+    await fireEvent.input(screen.getByTestId("prompt-input"), { target: { value: "fix the bug" } });
+    await fireEvent.click(screen.getByRole("button", { name: /start run/i }));
+    await vi.waitFor(() => expect(get(currentView)).toBe("run-details"), { timeout: 8000 });
+    expect(get(selectedRunId)).toBe("late");
+    expect(get(runs).map((r) => r.runId)).toEqual(["late"]);
+  }, 10_000);
 });
