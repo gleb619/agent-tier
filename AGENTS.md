@@ -9,7 +9,6 @@ Invoke before any work:
 - `caveman` — compressed communication throughout all sessions
 - `i-have-adhd` — shape output for minimal token consumption
 - `codegraph` — codebase exploration; never grep when `codegraph_*` tools are available
-- `delegate-with-at` — delegate code writing to subagents via the `at` CLI
 
 ## Workflow
 

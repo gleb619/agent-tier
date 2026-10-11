@@ -242,7 +242,7 @@ export function Sidebar(): JSX.Element {
 
   return (
     <box
-      title="at — tui2"
+      title="Sidebar"
       border
       borderStyle="single"
       borderColor={focusZone().startsWith('sidebar') ? '#00aaff' : '#555555'}
