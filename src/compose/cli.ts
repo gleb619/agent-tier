@@ -271,6 +271,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
         process.exit(1);
         return;
       }
+      }
 
       const goalId = args.resume ?? newGoalId();
       log(`[compose] goal ${goalId}`);

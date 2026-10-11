@@ -27,32 +27,6 @@ export interface AtConfig {
    * JSON `globalPrompt`, which overrides config `globalPrompt`.
    */
   globalPrompt?: string;
-  /**
-   * Global chop kill-switch. When `chop.enabled` is `false`, log chop
-   * compression is disabled by default for every entry point. CLI `--chop` /
-   * `--no-chop` flags override this config value; config does not override
-   * an explicit flag. Inside the HMAC-signed config block — no separate
-   * signing needed.
-   */
-  chop?: { enabled?: boolean };
-}
-
-/**
- * Resolve whether chop compression should be disabled for a given invocation.
- *
- * Precedence (highest first):
- *   - `explicit === true`  (user passed `--no-chop`) → `true` (disable chop)
- *   - `explicit === false` (user passed `--chop`)    → `false` (enable chop)
- *   - `explicit === undefined`                        → falls back to
- *     `config?.chop?.enabled === false` (i.e. only opt-out, never opt-in via
- *     config — `true` and missing both mean "default on").
- *
- * Pure: no IO, no globals — trivially unit-testable.
- */
-export function resolveNoChop(config: AtConfig | null, explicit?: boolean): boolean {
-  if (explicit === true) return true;
-  if (explicit === false) return false;
-  return config?.chop?.enabled === false;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), ".at");

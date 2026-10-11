@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { loadGenericAgents } from "../agents/generic-loader";
 import { AGENTS } from "../agents/registry";
-import { applyTierOverrides, loadConfig, resolveNoChop } from "../config";
+import { applyTierOverrides, loadConfig } from "../config";
 import { readPromptFile } from "../prompt-file";
 import type { RunOptions } from "../resolver";
 import { mergeJsonDefaults, parseJsonInput, resolveFromArgs } from "../resolver";
@@ -15,21 +15,6 @@ async function readStdin(): Promise<string> {
     process.stdin.on("data", (chunk) => (data += chunk));
     process.stdin.on("end", () => resolve(data.trim()));
   });
-}
-
-/**
- * Did the user pass an explicit chop flag? Returns `true` for `--no-chop`,
- * `false` for `--chop`, `undefined` when neither was passed.
- *
- * Commander collapses "no flag" and "explicitly enabled" into
- * `opts.chop === true`, so the raw argv is the only source that tells them
- * apart — same argv-level trick as `src/cli.ts`. `--no-chop` wins when both
- * flags are present, matching the CLI-flag-over-config precedence.
- */
-function explicitChopFlag(argv: string[] = process.argv): boolean | undefined {
-  if (argv.includes("--no-chop")) return true;
-  if (argv.includes("--chop")) return false;
-  return undefined;
 }
 
 export function registerDefaultCommand(program: Command): void {
@@ -53,8 +38,7 @@ export function registerDefaultCommand(program: Command): void {
       "After a successful run, verify the agent with a real `at` sandbox test in /tmp (also enabled by sandbox.enabled in config)",
       false,
     )
-    .option("--no-chop", "Disable chop output-log compression in stream mode (default: enabled unless chop.enabled=false in config)")
-    .option("--chop", "Force-enable chop output-log compression, overriding chop.enabled=false in config")
+    .option("--no-chop", "Disable chop output-log compression in stream mode (default: enabled when chop is available)")
     .option(
       "-r, --retries <number>",
       "Max extra retry attempts with next agent in tier (default: 0). Total attempts = min(retries+1, agents-in-tier). Named agents never retry",
@@ -91,10 +75,6 @@ export function registerDefaultCommand(program: Command): void {
       try {
         let runOptions: RunOptions;
         const config = loadConfig();
-        // Global chop kill-switch lives in the (HMAC-signed) config; an
-        // explicit --no-chop / --chop flag on the argv still wins. The second
-        // load is quiet so a missing/unsigned config is not reported twice.
-        const noChop = resolveNoChop(loadConfig({ quiet: true }), explicitChopFlag());
         const effectiveAgents = applyTierOverrides([...AGENTS, ...loadGenericAgents()], config);
         let filePrompt = "";
         if (opts.promptFile) {
@@ -134,7 +114,7 @@ export function registerDefaultCommand(program: Command): void {
             stateDir: opts.stateDir as string | undefined,
             retries: opts.retries,
             logDir: opts.logDir,
-            noChop,
+            noChop: !(opts.chop as boolean),
             timeout: opts.timeout,
             callback: parsed.callback ?? opts.callback,
             verify: parsed.verify ?? opts.verify,
@@ -164,7 +144,7 @@ export function registerDefaultCommand(program: Command): void {
             stateDir: opts.stateDir as string | undefined,
             retries: opts.retries,
             logDir: opts.logDir,
-            noChop,
+            noChop: !(opts.chop as boolean),
             timeout: opts.timeout,
             callback: opts.callback,
             verify: opts.verify as string | undefined,
