@@ -3,7 +3,14 @@
 `at` is a thin CLI that routes a coding prompt to one of many AI agent binaries via round-robin scheduling and
 automatic retry.
 
-![image.png](image.png)
+![new-tui.jpg](new-tui.jpg)  
+<details>
+  <summary>Click to expand</summary>
+  
+  ![new-tui-2.jpg](new-tui-2.jpg)
+  ![new-tui-4.jpg](new-tui-4.jpg)
+  ![new-tui-3.jpg](new-tui-3.jpg)
+</details>
 
 ## Install
 
