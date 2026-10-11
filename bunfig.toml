@@ -1,2 +1,11 @@
 [run]
 preload = ["@opentui/solid/preload"]
+
+# Without these overrides Bun's built-in JSX transform rewrites <box ... /> to
+# `react/jsx-dev-runtime`, which then throws "Cannot find module
+# 'react/jsx-dev-runtime'" before the user file even parses. Pin the JSX
+# runtime to the opentui/solid client runtime so the JSX hits the same
+# reconciler the real tui2 entry already uses.
+[jsx]
+runtime = "automatic"
+importSource = "@opentui/solid"

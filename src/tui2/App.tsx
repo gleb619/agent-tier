@@ -341,8 +341,13 @@ export function App(): JSX.Element {
   });
 
   return (
-    <box width="100%" height="100%" flexDirection="column">
-      <box flexDirection="row" gap={2} paddingX={1}>
+    // Root column: the renderer root sets the absolute frame, so we let this
+    // box inherit it (no `height="100%"`) and give the middle row the only
+    // flexGrow. Without `flexShrink={0}` on the header/footer the grow row
+    // can swallow their natural height in a 24-line terminal — pinning both
+    // here keeps them visible at every typical terminal size.
+    <box width="100%" flexDirection="column">
+      <box flexDirection="row" gap={2} paddingX={1} flexShrink={0}>
         <For each={headerFields()}>
           {(field, i) => (
             <text
@@ -353,7 +358,7 @@ export function App(): JSX.Element {
         </For>
       </box>
 
-      <box flexDirection="row" flexGrow={1}>
+      <box flexDirection="row" flexGrow={1} flexShrink={1}>
         <box width="28%" flexDirection="column" onMouseDown={() => setFocusZone('sidebar-list')}>
           <Sidebar />
         </box>
@@ -366,7 +371,7 @@ export function App(): JSX.Element {
         </box>
       </box>
 
-      <box flexDirection="row" paddingX={1}>
+      <box flexDirection="row" paddingX={1} flexShrink={0}>
         <text content={footerLine()} fg="#484f58" />
       </box>
     </box>
