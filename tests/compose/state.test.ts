@@ -84,11 +84,37 @@ describe("saveState/loadState", () => {
       await ws.write(STATE_FILE, JSON.stringify({ ...SAMPLE, maxRounds }));
       await expect(loadState(ws)).rejects.toThrow(/corrupt state.json/);
     }
-  });
-
   it("loadState rejects a testCmd that is not a string", async () => {
     await ws.write(STATE_FILE, JSON.stringify({ ...SAMPLE, testCmd: 7 }));
     await expect(loadState(ws)).rejects.toThrow(/corrupt state.json/);
+  });
+
+  it("loadState rejects a malformed runs list", async () => {
+    for (const runs of [
+      "nope",
+      [{ phase: "WORKING", runId: "r1" }],
+      [{ phase: "IMPLEMENT", runId: 3 }],
+      [{ runId: "r1" }],
+    ]) {
+      await ws.write(STATE_FILE, JSON.stringify({ ...SAMPLE, runs }));
+      await expect(loadState(ws)).rejects.toThrow(/corrupt state.json/);
+    }
+  });
+
+  it("roundtrips a state with a runs list", async () => {
+    const withRuns: ComposeState = {
+      ...SAMPLE,
+      runs: [{ phase: "IMPLEMENT", item: 2, runId: "abc" }],
+    };
+    await saveState(ws, withRuns);
+    expect(await loadState(ws)).toEqual(withRuns);
+  });
+
+  it("loadState still accepts a state without runs (backward compatible)", async () => {
+    await saveState(ws, SAMPLE);
+    const loaded = await loadState(ws);
+    expect(loaded).toEqual(SAMPLE);
+    expect(loaded?.runs).toBeUndefined();
   });
 
   it("saveState leaves no temp or lock files in the goal dir", async () => {

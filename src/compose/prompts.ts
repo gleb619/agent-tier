@@ -87,6 +87,8 @@ export function buildImplementPrompt(input: ImplementPromptInput): string {
     `- The plan lives at ${planPath}. Do not edit it — do not tick checkboxes or add tasks; the orchestrator tracks that.`,
     "- Change only what this task needs. Follow the conventions already in the repo.",
     "- Run the tests that cover the files you touched before you finish.",
+    '- If you are blocked or the task is ambiguous, run `$AT_BIN discuss ask "<question>" -o A -o B`',
+    "  and follow the answer; do not guess.",
   ].join("\n");
 }
 
@@ -120,5 +122,35 @@ export function buildCheckPrompt(input: CheckPromptInput): string {
     "After that line, list your findings: what is missing, wrong, or untested, with file:line",
     "references. On FAIL the findings are handed back to the architect for re-planning, so make",
     "them concrete and actionable.",
+    "If the test exit code above is not 0, the verdict CANNOT be PASS — use FAIL and explain.",
   ].join("\n");
+}
+
+export interface BrainPromptInput {
+  goal: string;
+  plan: string;
+  question: string;
+  options?: string[];
+}
+
+/** Short tier-1 prompt that answers one implementer question. Reply = one line. */
+export function buildBrainPrompt(input: BrainPromptInput): string {
+  const sections = [
+    "You are the orchestrator brain (architect). An implementing agent asked a question.",
+    "Reply with exactly one line: the answer only, no explanation, no preamble.",
+    "",
+    "## Goal",
+    input.goal,
+    "",
+    "## Plan",
+    input.plan.trim() || "(no plan)",
+    "",
+    "## Question",
+    input.question,
+    "",
+  ];
+  if (input.options && input.options.length) {
+    sections.push("## Options", input.options.map((o) => `- ${o}`).join("\n"), "");
+  }
+  return sections.join("\n");
 }

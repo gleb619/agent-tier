@@ -1,4 +1,4 @@
-import type { ListItem, Paragraph, Root, Text } from "mdast";
+import type { ListItem, Paragraph, PhrasingContent, Root } from "mdast";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
@@ -21,6 +21,27 @@ function buildStringifier() {
   return unified().use(remarkGfm).use(remarkStringify);
 }
 
+/** Full text of inline content: text, inlineCode, emphasis, strong, links, ... */
+function inlineText(nodes: PhrasingContent[]): string {
+  return nodes
+    .map(node => {
+      switch (node.type) {
+        case 'text':
+        case 'inlineCode':
+          return node.value
+        case 'break':
+          return ' '
+        case 'image':
+          return node.alt ?? ''
+        case 'html':
+          return ''
+        default:
+          return 'children' in node && Array.isArray(node.children) ? inlineText(node.children) : ''
+      }
+    })
+    .join('')
+}
+
 export function parseChecklist(markdown: string): ChecklistItem[] {
   const tree = buildProcessor().parse(markdown) as Root;
   const items: ChecklistItem[] = [];
@@ -28,8 +49,7 @@ export function parseChecklist(markdown: string): ChecklistItem[] {
   visit(tree, "listItem", (node: ListItem) => {
     if (node.checked === null || node.checked === undefined) return;
     const para = node.children[0] as Paragraph | undefined;
-    const textNode = para?.children.find((c) => c.type === "text") as Text | undefined;
-    items.push({ index: index++, text: textNode?.value?.trim() ?? "", checked: node.checked });
+    items.push({ index: index++, text: inlineText(para?.children ?? []).trim(), checked: node.checked });
   });
   return items;
 }

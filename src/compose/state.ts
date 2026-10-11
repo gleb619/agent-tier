@@ -3,12 +3,21 @@ import type { ComposeWorkspace } from "./workspace";
 
 export type ComposePhase = "INVESTIGATE" | "PLAN" | "IMPLEMENT" | "CHECK" | "DONE" | "FAILED";
 
+export interface ComposeRunRef {
+  phase: ComposePhase;
+  /** Checklist index, for IMPLEMENT runs. */
+  item?: number;
+  runId: string;
+}
+
 export interface ComposeState {
   goal: string;
   state: ComposePhase;
   round: number;
   testCmd: string;
   maxRounds: number;
+  /** In-flight agent runs, so resume can reattach instead of restarting. */
+  runs?: ComposeRunRef[];
 }
 
 export const STATE_FILE = "state.json";
@@ -41,6 +50,20 @@ function parseState(raw: unknown, ws: ComposeWorkspace): ComposeState {
     throw corruptState(ws, '"maxRounds" must be a positive integer');
   }
   if (typeof s.testCmd !== "string") throw corruptState(ws, '"testCmd" must be a string');
+  if (s.runs !== undefined) {
+    if (!Array.isArray(s.runs)) throw corruptState(ws, '"runs" must be an array');
+    for (const r of s.runs) {
+      if (typeof r !== "object" || r === null) throw corruptState(ws, '"runs" entries must be objects');
+      const run = r as Record<string, unknown>;
+      if (typeof run.runId !== "string") throw corruptState(ws, '"runs" entries need a string runId');
+      if (typeof run.phase !== "string" || !KNOWN_PHASES.includes(run.phase as ComposePhase)) {
+        throw corruptState(ws, `"runs" entry has unknown phase ${JSON.stringify(run.phase)}`);
+      }
+      if (run.item !== undefined && !(typeof run.item === "number" && Number.isInteger(run.item) && run.item >= 0)) {
+        throw corruptState(ws, '"runs" entry "item" must be a non-negative integer');
+      }
+    }
+  }
   return s as unknown as ComposeState;
 }
 

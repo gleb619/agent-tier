@@ -1,8 +1,17 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import type { DiscussEntry } from "../notify/types";
+import { loadRuns } from "../run-store";
 import { parseVerdict, pendingItems, setChecked } from "./md-state";
-import { buildCheckPrompt, buildImplementPrompt, buildPlanPrompt } from "./prompts";
-import { type ComposePhase, type ComposeState, createState, DEFAULT_MAX_NODES, loadState, saveState } from "./state";
+import { buildBrainPrompt, buildCheckPrompt, buildImplementPrompt, buildPlanPrompt } from "./prompts";
+import {
+  type ComposePhase,
+  type ComposeState,
+  createState,
+  DEFAULT_MAX_NODES,
+  loadState,
+  saveState,
+} from "./state";
 import { CONTEXT_FILE, type ComposeWorkspace, PLAN_FILE, VERDICT_FILE } from "./workspace";
 
 export interface CommandResult {
@@ -10,9 +19,21 @@ export interface CommandResult {
   output: string;
 }
 
+export interface WaitRunOptions {
+  /** Called for each unanswered discuss question; return text to answer it. */
+  onQuestion(q: DiscussEntry): Promise<string | undefined>;
+}
+
 export interface ComposeDeps {
   workspace: ComposeWorkspace;
-  runAt(tier: number, prompt: string, cwd: string): Promise<CommandResult>;
+  /** `at` state dir: run-store polling + discuss threads live here. */
+  stateDir: string;
+  /** Detached start: returns the child runId (parsed from the `at` report). */
+  startAt(tier: number, prompt: string, cwd: string): Promise<{ runId: string }>;
+  /** Poll a run until done/failed, answering discuss questions along the way. */
+  waitRun(runId: string, opts: WaitRunOptions): Promise<CommandResult>;
+  /** Blocking tier-1 call that answers one question (first line of output). */
+  askBrain(prompt: string): Promise<string>;
   runCmd(cmd: string, cwd: string): Promise<CommandResult>;
   codegraph(goal: string, maxNodes: number): Promise<string>;
 }
@@ -23,6 +44,8 @@ export interface ComposeOptions {
   testCmd?: string;
   maxRounds?: number;
   maxNodes?: number;
+  /** Max brain answers per agent run (default 5). */
+  maxQuestions?: number;
 }
 
 export interface ComposeResult {
@@ -45,12 +68,14 @@ interface Ctx {
   deps: ComposeDeps;
   cwd: string;
   maxNodes: number;
+  maxQuestions: number;
   state: ComposeState;
 }
 
 const MAX_TEST_OUTPUT = 4000;
 const MAX_DIFF = 8000;
 const MAX_AGENT_ERROR = 500;
+const DEFAULT_MAX_QUESTIONS = 5;
 
 function isTerminal(phase: ComposePhase): boolean {
   return phase === "DONE" || phase === "FAILED";
@@ -76,8 +101,41 @@ async function fail(ctx: Ctx, phase: ComposePhase, detail: string): Promise<neve
   throw new ComposeError(phase, detail);
 }
 
+function isRunInFlight(ctx: Ctx, runId: string): boolean {
+  return loadRuns(ctx.deps.stateDir).find((r) => r.runId === runId)?.status === "running";
+}
+
+/**
+ * Brain answer policy: forward goal + plan + question to a short tier-1 call.
+ * First line of the brain output is the answer. Beyond the per-run cap, or on
+ * brain failure, return undefined so the asker's --default/timeout applies.
+ */
+async function answerQuestion(
+  ctx: Ctx,
+  counter: { count: number },
+  q: DiscussEntry,
+): Promise<string | undefined> {
+  if (counter.count >= ctx.maxQuestions) return undefined;
+  counter.count++;
+  try {
+    const plan = (await ctx.deps.workspace.exists(PLAN_FILE)) ? await ctx.deps.workspace.read(PLAN_FILE) : "";
+    const out = await ctx.deps.askBrain(
+      buildBrainPrompt({ goal: ctx.state.goal, plan, question: q.text, options: q.options }),
+    );
+    return out
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.length > 0);
+  } catch {
+    return undefined;
+  }
+}
+
+/** startAt + waitRun so phase callers stay simple. */
 async function runAgent(ctx: Ctx, phase: ComposePhase, tier: number, prompt: string): Promise<void> {
-  const res = await ctx.deps.runAt(tier, prompt, ctx.cwd);
+  const { runId } = await ctx.deps.startAt(tier, prompt, ctx.cwd);
+  const answers = { count: 0 };
+  const res = await ctx.deps.waitRun(runId, { onQuestion: (q) => answerQuestion(ctx, answers, q) });
   if (res.code !== 0) {
     await fail(ctx, phase, `tier ${tier} agent exited ${res.code}: ${tail(res.output, MAX_AGENT_ERROR)}`);
   }
@@ -122,10 +180,44 @@ async function implement(ctx: Ctx): Promise<void> {
       plan: planMd,
       workspaceDir: ws.goalDir,
     });
-    await runAgent(ctx, "IMPLEMENT", 2, prompt);
+    await runItemAgent(ctx, item.index, prompt);
     planMd = await readArtifact(ctx, PLAN_FILE, "IMPLEMENT");
     await ws.write(PLAN_FILE, setChecked(planMd, item.index, true));
   }
+}
+
+/**
+ * Start (or reattach to) the tier-2 agent for one checklist item. The runId is
+ * persisted into state.json BEFORE the agent starts, so a crashed compose can
+ * resume by waiting on the in-flight run instead of spawning a duplicate.
+ */
+async function runItemAgent(ctx: Ctx, itemIndex: number, prompt: string): Promise<void> {
+  const ws = ctx.deps.workspace;
+  const saved = (ctx.state.runs ?? []).find(
+    (r) => r.phase === "IMPLEMENT" && r.item === itemIndex && isRunInFlight(ctx, r.runId),
+  );
+
+  let runId: string;
+  if (saved) {
+    runId = saved.runId;
+  } else {
+    runId = (await ctx.deps.startAt(2, prompt, ctx.cwd)).runId;
+    ctx.state = {
+      ...ctx.state,
+      runs: [...(ctx.state.runs ?? []), { phase: "IMPLEMENT", item: itemIndex, runId }],
+    };
+    await saveState(ws, ctx.state);
+  }
+
+  const answers = { count: 0 };
+  const res = await ctx.deps.waitRun(runId, { onQuestion: (q) => answerQuestion(ctx, answers, q) });
+  if (res.code !== 0) {
+    await fail(ctx, "IMPLEMENT", `tier 2 agent exited ${res.code}: ${tail(res.output, MAX_AGENT_ERROR)}`);
+  }
+
+  const remaining = (ctx.state.runs ?? []).filter((r) => r.runId !== runId);
+  ctx.state = { ...ctx.state, runs: remaining.length > 0 ? remaining : undefined };
+  await saveState(ws, ctx.state);
 }
 
 async function check(ctx: Ctx): Promise<ComposeState> {
@@ -152,7 +244,15 @@ async function check(ctx: Ctx): Promise<ComposeState> {
     }),
   );
 
-  const verdict = parseVerdict(await readArtifact(ctx, VERDICT_FILE, "CHECK"));
+  let verdict = parseVerdict(await readArtifact(ctx, VERDICT_FILE, "CHECK"));
+  if (test.code !== 0 && verdict === "PASS") {
+    // Enforce the check rule in code: a PASS verdict cannot stand on failing tests.
+    await ws.write(
+      VERDICT_FILE,
+      `${await ws.read(VERDICT_FILE)}\n\n- tests failing (exit code ${test.code}) — verdict forced to FAIL by orchestrator\n`,
+    );
+    verdict = "FAIL";
+  }
   if (verdict === "PASS") return { ...state, state: "DONE" };
   if (state.round >= state.maxRounds) return { ...state, state: "FAILED" };
   return { ...state, state: "PLAN", round: state.round + 1 };
@@ -170,6 +270,7 @@ export async function runCompose(opts: ComposeOptions, deps: ComposeDeps): Promi
     deps,
     cwd: opts.cwd ?? process.cwd(),
     maxNodes: opts.maxNodes ?? DEFAULT_MAX_NODES,
+    maxQuestions: opts.maxQuestions ?? DEFAULT_MAX_QUESTIONS,
     state: saved ?? createState(opts.goal, { testCmd: opts.testCmd, maxRounds: opts.maxRounds }),
   };
 

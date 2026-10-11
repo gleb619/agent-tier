@@ -53,8 +53,19 @@ describe("buildImplementPrompt", () => {
   });
 
   it("forbids the implementer from ticking the checklist itself", () => {
-    const p = buildImplementPrompt({ goal: "add retry", task: "1. Add resolver", plan: PLAN, workspaceDir: DIR });
+    const p = buildImplementPrompt({
+      goal: "add retry",
+      task: "1. Add resolver",
+      plan: PLAN,
+      workspaceDir: DIR,
+    });
     expect(p).toMatch(/do not (edit|tick|modify)/i);
+  });
+
+  it("tells the implementer to ask the host via discuss instead of guessing", () => {
+    const p = buildImplementPrompt({ goal: "add retry", task: "1. Add resolver", plan: PLAN, workspaceDir: DIR });
+    expect(p).toContain("$AT_BIN discuss ask");
+    expect(p).toMatch(/do not guess/i);
   });
 });
 
@@ -92,5 +103,10 @@ describe("buildCheckPrompt", () => {
 
   it("reports a zero exit code as-is", () => {
     expect(buildCheckPrompt({ ...base, testExitCode: 0 })).toContain("exit code: 0");
+  });
+
+  it("forbids PASS when the test exit code is not zero", () => {
+    const p = buildCheckPrompt(base);
+    expect(p).toMatch(/cannot be PASS/i);
   });
 });
