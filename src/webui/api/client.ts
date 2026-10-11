@@ -1,4 +1,13 @@
-import type { ApiAgent, ApiRun, ApiRunLog, ApiSettings, ApiStats, CreateRunInput } from "$types/api";
+import type {
+  ApiAgent,
+  ApiDiscussEntry,
+  ApiRun,
+  ApiRunLog,
+  ApiSettings,
+  ApiStats,
+  CreateRunInput,
+  PostDiscussInput,
+} from "$types/api";
 
 /** HTTP error from the API server; `message` is the server's `error` field when present. */
 export class ApiError extends Error {
@@ -61,6 +70,17 @@ export class ApiClient {
   /** Kills the run's process (SIGTERM, SIGKILL with force) and marks it failed. */
   deleteRun(runId: string, opts: { force?: boolean } = {}): Promise<{ ok: true }> {
     return this.request("DELETE", `/api/runs/${encodeURIComponent(runId)}${opts.force ? "?force=1" : ""}`);
+  }
+
+  /** Discuss thread of a run; `pending` returns only unanswered questions. */
+  getRunDiscuss(runId: string, pending = false): Promise<ApiDiscussEntry[]> {
+    const query = pending ? "?pending=1" : "";
+    return this.request("GET", `/api/runs/${encodeURIComponent(runId)}/discuss${query}`);
+  }
+
+  /** Post a host entry (answer/say/note/question) to the run's discuss thread. */
+  postRunDiscuss(runId: string, input: PostDiscussInput): Promise<{ id: string }> {
+    return this.request("POST", `/api/runs/${encodeURIComponent(runId)}/discuss`, input);
   }
 
   getAgents(): Promise<ApiAgent[]> {

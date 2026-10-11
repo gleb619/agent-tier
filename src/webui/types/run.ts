@@ -1,4 +1,4 @@
-export type RunStatus = "pending" | "running" | "done" | "failed" | "killed";
+export type RunStatus = "pending" | "running" | "done" | "failed" | "killed" | "stuck";
 
 export interface Run {
   id: string;

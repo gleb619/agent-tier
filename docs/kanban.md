@@ -29,7 +29,7 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T8  | Done    | Sidebar run list + filter | RunList/RunItem/FilterInput, date groups, virtual list     | Medium   | loop  | -      | T6,T7             | docs/plans/webui-05-run-list.md       |
 | T9  | Done    | Dashboard view            | QuickStats, ActiveRuns, Recent, AgentsPanel                | Medium   | loop  | -      | T6,T7             | docs/plans/webui-06-dashboard.md      |
 | T10 | Done    | New Task view             | prompt form, tier/agent/mode/retries, submit               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-07-new-task.md       |
-| T11 | Backlog | Run Details + LogViewer   | RunMeta, live log viewer, retry/kill/discuss               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-08-run-details.md    |
+| T11 | Done    | Run Details + LogViewer   | RunMeta, live log viewer, retry/kill/discuss               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-08-run-details.md    |
 | T12 | Backlog | Settings view             | defaults form persisted to backend state                   | Low      | loop  | -      | T6,T7             | docs/plans/webui-09-settings.md       |
 | T13 | Backlog | Keyboard shortcuts + a11y | TUI-mirroring keys, ARIA, contrast                         | Low      | loop  | -      | T8,T9,T10,T11,T12 | docs/plans/webui-10-keyboard.md       |
 | T14 | Backlog | E2E + integration tests   | Playwright vs at web with mock agents                      | Medium   | loop  | -      | T13               | docs/plans/webui-11-e2e-tests.md      |

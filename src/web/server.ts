@@ -186,6 +186,36 @@ function proxyEvents(hubPort: number, hubPath: string, req: http.IncomingMessage
   req.on("error", () => upstream.destroy());
 }
 
+/** JSON request/response round-trip to the notify hub (used for discuss proxying). */
+function hubJsonRequest(
+  hubPort: number,
+  hubPath: string,
+  method: string,
+  body?: unknown,
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const payload = body === undefined ? undefined : JSON.stringify(body);
+    const req = http.request(
+      {
+        host: "127.0.0.1",
+        port: hubPort,
+        path: hubPath,
+        method,
+        headers: payload === undefined ? undefined : { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+      },
+      (upstreamRes) => {
+        let data = "";
+        upstreamRes.setEncoding("utf8");
+        upstreamRes.on("data", (chunk: string) => (data += chunk));
+        upstreamRes.on("end", () => resolve({ status: upstreamRes.statusCode ?? 502, body: data }));
+      },
+    );
+    req.on("error", reject);
+    if (payload !== undefined) req.write(payload);
+    req.end();
+  });
+}
+
 function listen(server: http.Server, port: number): Promise<number> {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -320,6 +350,66 @@ export function startWebServer(options: WebServerOptions): Promise<WebServer> {
       if (all[all.length - 1] === "") all.pop();
       sendJson(res, 200, { runId: target.run.runId, lines: all.slice(-lines) });
       return;
+    }
+
+    // --- Discuss proxy (hub owns the thread; SSE mirror stays on the hub) ---
+    const discussMatch = routePath.match(/^\/api\/runs\/([^/]+)\/discuss$/);
+    if (discussMatch) {
+      const target = findRun(stateDirs, decodeURIComponent(discussMatch[1] ?? ""));
+      if (!target) {
+        sendError(res, 404, "run not found");
+        return;
+      }
+      const hubPath = `/discuss/${encodeURIComponent(target.run.runId)}`;
+      if (method === "GET") {
+        const pending = /[?&]pending=1\b/.test(url);
+        try {
+          const upstream = await hubJsonRequest(hub.port, pending ? `${hubPath}?pending=1` : hubPath, "GET");
+          res.writeHead(upstream.status, { "Content-Type": "application/json" });
+          res.end(upstream.body);
+        } catch {
+          sendError(res, 502, "events hub unreachable");
+        }
+        return;
+      }
+      if (method === "POST") {
+        let body: unknown;
+        try {
+          body = await readJsonBody(req);
+        } catch {
+          sendError(res, 400, "invalid JSON");
+          return;
+        }
+        const input = body as { kind?: unknown; text?: unknown; options?: unknown; replyTo?: unknown };
+        const kind = input?.kind;
+        const text = typeof input?.text === "string" ? input.text : "";
+        if (!text || (kind !== "question" && kind !== "answer" && kind !== "say" && kind !== "note")) {
+          sendError(res, 400, "bad request");
+          return;
+        }
+        const options = Array.isArray(input.options)
+          ? input.options.filter((o): o is string => typeof o === "string")
+          : undefined;
+        const replyTo = typeof input?.replyTo === "string" ? input.replyTo : undefined;
+        try {
+          const upstream = await hubJsonRequest(hub.port, hubPath, "POST", {
+            from: "host",
+            kind,
+            text,
+            ...(options?.length ? { options } : {}),
+            ...(replyTo ? { replyTo } : {}),
+          });
+          if (upstream.status === 202) {
+            res.writeHead(202, { "Content-Type": "application/json" });
+            res.end(upstream.body);
+          } else {
+            sendError(res, upstream.status, "discuss hub rejected the entry");
+          }
+        } catch {
+          sendError(res, 502, "events hub unreachable");
+        }
+        return;
+      }
     }
 
     if (routePath === "/api/agents" && method === "GET") {

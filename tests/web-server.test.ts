@@ -322,3 +322,116 @@ describe("web server", () => {
     }
   });
 });
+
+describe("web server discuss proxy", () => {
+  let stateDir: string;
+  let hub: Awaited<ReturnType<typeof startHub>>;
+  let server: WebServer | undefined;
+
+  beforeEach(() => {
+    stateDir = mkdtempSync(path.join(tmpdir(), "at-web-discuss-"));
+  });
+
+  afterEach(async () => {
+    await server?.close();
+    await hub?.close();
+    rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  async function start() {
+    hub = await startHub({ stateDir, port: 0 });
+    server = await startWebServer({ stateDirs: [stateDir], hub, port: 0 });
+    return server;
+  }
+
+  /** Direct request against the hub (port differs from the web server). */
+  function hubRequest(method: string, hubPath: string, body?: unknown): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const data = body === undefined ? undefined : JSON.stringify(body);
+      const req = http.request(
+        `http://127.0.0.1:${hub.port}${hubPath}`,
+        {
+          method,
+          headers:
+            data !== undefined ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } : {},
+        },
+        (res) => {
+          let out = "";
+          res.on("data", (c: Buffer) => (out += c.toString()));
+          res.on("end", () => resolve({ status: res.statusCode ?? 0, body: out }));
+        },
+      );
+      req.on("error", reject);
+      if (data !== undefined) req.write(data);
+      req.end();
+    });
+  }
+
+  function request(method: string, apiPath: string, body?: unknown): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const data = body === undefined ? undefined : JSON.stringify(body);
+      const req = http.request(
+        `http://127.0.0.1:${server!.port}${apiPath}`,
+        {
+          method,
+          headers:
+            data !== undefined ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } : {},
+        },
+        (res) => {
+          let out = "";
+          res.on("data", (c: Buffer) => (out += c.toString()));
+          res.on("end", () => resolve({ status: res.statusCode ?? 0, body: out }));
+        },
+      );
+      req.on("error", reject);
+      if (data !== undefined) req.write(data);
+      req.end();
+    });
+  }
+
+  it("GET /api/runs/:id/discuss returns the thread and ?pending=1 only unanswered questions", async () => {
+    await start();
+    const run = makeRun({ runId: "discuss-1" });
+    saveRuns(stateDir, [run]);
+    // Seed a question + answer directly through the hub API.
+    await hubRequest("POST", "/discuss/discuss-1", { kind: "question", text: "which port?", from: "agent" });
+    await hubRequest("POST", "/discuss/discuss-1", { kind: "answer", text: "7800", replyTo: "m1", from: "host" });
+    await hubRequest("POST", "/discuss/discuss-1", { kind: "question", text: "which dir?", from: "agent" });
+
+    const thread = await request("GET", "/api/runs/discuss-1/discuss");
+    expect(thread.status).toBe(200);
+    const entries = JSON.parse(thread.body) as { kind: string; text: string }[];
+    expect(entries.map((e) => e.text)).toEqual(["which port?", "7800", "which dir?"]);
+
+    const pending = await request("GET", "/api/runs/discuss-1/discuss?pending=1");
+    expect(pending.status).toBe(200);
+    const pendingEntries = JSON.parse(pending.body) as { kind: string; text: string }[];
+    expect(pendingEntries.map((e) => e.text)).toEqual(["which dir?"]);
+  });
+
+  it("POST /api/runs/:id/discuss appends a host entry and answers stop being pending", async () => {
+    await start();
+    const run = makeRun({ runId: "discuss-2" });
+    saveRuns(stateDir, [run]);
+    const ask = await hubRequest("POST", "/discuss/discuss-2", { kind: "question", text: "continue?", from: "agent" });
+    expect(ask.status).toBe(202);
+
+    const bad = await request("POST", "/api/runs/discuss-2/discuss", { kind: "answer", text: "" });
+    expect(bad.status).toBe(400);
+
+    const res = await request("POST", "/api/runs/discuss-2/discuss", { kind: "answer", text: "yes", replyTo: "m1" });
+    expect(res.status).toBe(202);
+    expect(JSON.parse(res.body)).toEqual({ id: "m2" });
+
+    const pending = await request("GET", "/api/runs/discuss-2/discuss?pending=1");
+    expect(JSON.parse(pending.body)).toEqual([]);
+  });
+
+  it("discuss routes 404 on unknown run id (prefix match applies)", async () => {
+    await start();
+    saveRuns(stateDir, [makeRun({ runId: "abcdef123456" })]);
+    expect((await request("GET", "/api/runs/abc/discuss")).status).toBe(200);
+    expect((await request("GET", "/api/runs/nope/discuss")).status).toBe(404);
+    expect((await request("POST", "/api/runs/nope/discuss", { kind: "say", text: "hi" })).status).toBe(404);
+  });
+});

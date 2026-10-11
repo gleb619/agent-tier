@@ -55,6 +55,25 @@ export interface CreateRunInput {
 /** GET/PUT /api/settings payload — an arbitrary JSON object (backend stores it verbatim). */
 export type ApiSettings = Record<string, unknown>;
 
+/** One entry of the per-run discuss thread (src/notify/types.ts DiscussEntry). */
+export interface ApiDiscussEntry {
+  id: string;
+  from: "agent" | "host";
+  kind: "question" | "answer" | "say" | "note";
+  text: string;
+  options?: string[];
+  replyTo?: string;
+  ts: string;
+}
+
+/** POST /api/runs/:id/discuss input; the server stamps `from: "host"`. */
+export interface PostDiscussInput {
+  kind: "question" | "answer" | "say" | "note";
+  text: string;
+  options?: string[];
+  replyTo?: string;
+}
+
 /** SSE event pushed by the hub via /api/events (src/notify/types.ts). */
 export interface NotifyEvent {
   runId: string;

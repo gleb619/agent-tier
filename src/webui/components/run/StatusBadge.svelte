@@ -10,6 +10,7 @@ const colors: Record<RunStatus, "gray" | "blue" | "green" | "red" | "yellow"> = 
   done: "green",
   failed: "red",
   killed: "yellow",
+  stuck: "yellow",
 };
 </script>
 
