@@ -1,9 +1,11 @@
-import { For, Show, createEffect, createMemo } from 'solid-js';
-import type { JSX } from 'solid-js';
-import type { MouseEvent } from '@opentui/core';
-import { selectedRunId, setSelectedRunId } from '../../tui/store/sessions';
-import { filteredSessions2 } from '../store/filtered-sessions';
+import type { MouseEvent } from "@opentui/core";
+import type { JSX } from "solid-js";
+import { createEffect, createMemo, For, Show } from "solid-js";
+import { selectedRunId, setSelectedRunId } from "../../tui/store/sessions";
+import { formatDuration, statusColor, statusIcon, truncate } from "../format";
+import { filteredSessions2 } from "../store/filtered-sessions";
 import {
+  type ActiveView,
   activeView,
   focusZone,
   goToView,
@@ -12,19 +14,17 @@ import {
   setSidebarIndex,
   sidebarFilter,
   sidebarIndex,
-  type ActiveView,
-} from '../store/ui';
-import { formatDuration, statusColor, statusIcon, truncate } from '../format';
+} from "../store/ui";
 import {
   buildRowModel,
   groupRunsByDate as groupRunsByDateImpl,
   moveSelection,
   preserveSidebarIndex,
-  runLabel as runLabelImpl,
-  SIDEBAR_MENU_ITEMS,
   type Row,
   type RunGroup,
-} from './sidebar/row-model';
+  runLabel as runLabelImpl,
+  SIDEBAR_MENU_ITEMS,
+} from "./sidebar/row-model";
 
 /**
  * Public re-exports — older callers (and the row-model test) still import the
@@ -46,16 +46,19 @@ export function runLabel(run: Parameters<typeof runLabelImpl>[0]): string {
   return runLabelImpl(run);
 }
 
-const HINT = '#6e7681';
-const DIM = '#8b949e';
-const DIMMER = '#484f58';
-const SECTION_RULE = '#30363d';
-const ACTIVE = '#58a6ff';
-const SELECTION = '#1c2128';
-const NORMAL = '#c9d1d9';
+const HINT = "#6e7681";
+const DIM = "#8b949e";
+const DIMMER = "#484f58";
+const SECTION_RULE = "#30363d";
+const ACTIVE = "#58a6ff";
+const SELECTION = "#1c2128";
+const NORMAL = "#c9d1d9";
 
-function rowBox(selected: boolean, marginBottom: number): {
-  flexDirection: 'row' | 'column';
+function rowBox(
+  selected: boolean,
+  marginBottom: number,
+): {
+  flexDirection: "row" | "column";
   paddingX: 1;
   backgroundColor: string | undefined;
   marginBottom: number;
@@ -64,7 +67,7 @@ function rowBox(selected: boolean, marginBottom: number): {
   // (menu rows 0 = flush, run rows 1 = one blank line) so the vertical rhythm
   // is controlled here, not by a blanket parent gap.
   return {
-    flexDirection: 'row',
+    flexDirection: "row",
     paddingX: 1,
     backgroundColor: selected ? SELECTION : undefined,
     marginBottom,
@@ -75,7 +78,7 @@ function rowBox(selected: boolean, marginBottom: number): {
 function SidebarRow(props: { row: Row; index: number }): JSX.Element {
   const selected = (): boolean => props.index === sidebarIndex();
 
-  if (props.row.kind === 'separator') {
+  if (props.row.kind === "separator") {
     // Full-width hairline rule. Replaces the old hardcoded 22-cell dash
     // string, which only ever stretched to 22 cells and looked cramped
     // whenever the sidebar was wider than that. A border-top on a 1-row
@@ -90,7 +93,7 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
       <box
         width="100%"
         height={1}
-        border={['top']}
+        border={["top"]}
         borderStyle="single"
         borderColor={SECTION_RULE}
         marginTop={0}
@@ -99,7 +102,7 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
     );
   }
 
-  if (props.row.kind === 'group-header') {
+  if (props.row.kind === "group-header") {
     // Full-width row, flexDirection=row + justifyContent=center centers the
     // single text child along the row's main axis so the dashed
     // `── Today ──` label sits exactly in the visual middle of the sidebar
@@ -116,24 +119,24 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
     );
   }
 
-  if (props.row.kind === 'filter') {
+  if (props.row.kind === "filter") {
     const row = props.row;
     // The filter row carries one blank line below it (marginBottom 1) so the
     // divider beneath sits at most one line under the input, never more.
     const filterBox = {
-      flexDirection: 'row' as const,
+      flexDirection: "row" as const,
       paddingX: 1,
       backgroundColor: undefined as string | undefined,
       marginBottom: 1,
     };
     const filterBoxSelected = {
-      flexDirection: 'row' as const,
+      flexDirection: "row" as const,
       paddingX: 1,
       backgroundColor: SELECTION,
       marginBottom: 1,
     };
-    const editing = (): boolean => focusZone() === 'sidebar-filter';
-    const hintText = (): string => (row.filter ? truncate(row.filter, 12) : '');
+    const editing = (): boolean => focusZone() === "sidebar-filter";
+    const hintText = (): string => (row.filter ? truncate(row.filter, 12) : "");
     // Mouse events bubble up through the scrollbox and the sidebar wrapper,
     // whose handlers reset the focus zone to 'sidebar-list'. Stopping the
     // bubble is what makes a click on the filter row stick (and keeps a click
@@ -141,7 +144,7 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
     const activate = (e: MouseEvent): void => {
       e.stopPropagation();
       setSidebarIndex(props.index);
-      if (!editing()) setFocusZone('sidebar-filter');
+      if (!editing()) setFocusZone("sidebar-filter");
     };
     // The editing branch must swap reactively: a plain `if (editing())` in the
     // component body runs once when For creates the row, so the input would
@@ -152,14 +155,17 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
         when={editing()}
         fallback={
           <box {...(selected() ? filterBoxSelected : filterBox)} onMouseDown={activate}>
-            <text fg={ACTIVE}>{'/  '}</text>
-            <text fg={selected() ? NORMAL : DIM}>{'Filter runs…'}</text>
-            <text fg={HINT}>{'  '}{hintText()}</text>
+            <text fg={ACTIVE}>{"/  "}</text>
+            <text fg={selected() ? NORMAL : DIM}>{"Filter runs…"}</text>
+            <text fg={HINT}>
+              {"  "}
+              {hintText()}
+            </text>
           </box>
         }
       >
         <box {...filterBoxSelected} onMouseDown={activate}>
-          <text fg={ACTIVE}>{'/  '}</text>
+          <text fg={ACTIVE}>{"/  "}</text>
           <input
             value={sidebarFilter()}
             placeholder="filter runs…"
@@ -172,7 +178,7 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
     );
   }
 
-  if (props.row.kind === 'menu') {
+  if (props.row.kind === "menu") {
     const row = props.row;
     const activate = (): void => {
       setSidebarIndex(props.index);
@@ -197,30 +203,26 @@ function SidebarRow(props: { row: Row; index: number }): JSX.Element {
 
   // run
   const row = props.row;
-  if (row.kind !== 'run') {
+  if (row.kind !== "run") {
     return <box />;
   }
   const onClick = (): void => {
     setSelectedRunId(row.runId);
     setSidebarIndex(props.index);
-    goToView('run-details');
+    goToView("run-details");
   };
   const statusLine = (): string => {
-    const cursor = selected() ? '▶ ' : '  ';
+    const cursor = selected() ? "▶ " : "  ";
     return `${cursor}${statusIcon(row.run.status)} ${truncate(runLabel(row.run), 18)}`;
   };
   const subLabel = (): string => {
-    const indent = selected() ? '   ' : '    ';
+    const indent = selected() ? "   " : "    ";
     return `${indent}${row.run.agent} t${row.run.tier} · ${formatDuration(row.run)}`;
   };
   return (
     // Two-line run row: status line + agent/tier/duration sub-line.
     // marginBottom 1 keeps one blank line between consecutive run entries.
-    <box
-      {...rowBox(selected(), 1)}
-      flexDirection="column"
-      onMouseDown={onClick}
-    >
+    <box {...rowBox(selected(), 1)} flexDirection="column" onMouseDown={onClick}>
       <text fg={statusColor(row.run.status)}>{statusLine()}</text>
       <text fg={row.runId === selectedRunId() ? NORMAL : HINT}>{subLabel()}</text>
     </box>
@@ -257,12 +259,12 @@ export function Sidebar(): JSX.Element {
       title="Sidebar"
       border
       borderStyle="single"
-      borderColor={focusZone().startsWith('sidebar') ? '#00aaff' : '#555555'}
+      borderColor={focusZone().startsWith("sidebar") ? "#00aaff" : "#555555"}
       flexDirection="column"
       flexGrow={1}
       padding={1}
     >
-      <scrollbox flexGrow={1} onMouseDown={() => setFocusZone('sidebar-list')}>
+      <scrollbox flexGrow={1} onMouseDown={() => setFocusZone("sidebar-list")}>
         {/* Spacing map (per-row margins, parent gap=0). Target rhythm: one
             blank line between every adjacent pair, breathing but not gappy.
             filter row     marginBottom 1  → one blank line above separator
@@ -281,9 +283,7 @@ export function Sidebar(): JSX.Element {
                                               the group's first run
             run rows       marginBottom 1  → one blank line between runs */}
         <box flexDirection="column" gap={0}>
-          <For each={rows()}>
-            {(row, i) => <SidebarRow row={row} index={i()} />}
-          </For>
+          <For each={rows()}>{(row, i) => <SidebarRow row={row} index={i()} />}</For>
           <Show when={groups().length === 0}>
             <box paddingX={1}>
               <text fg={DIMMER} content="(no runs match)" />

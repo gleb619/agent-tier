@@ -1,10 +1,9 @@
-import { createSignal, createMemo, Accessor } from 'solid-js';
-import { spawn } from 'child_process';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { RunRecord } from '../../run-store';
-import { refreshRuns } from '../../run-store';
-import { joinRuns } from '../../status';
-import { resolveStatusDirs, getStateFilePath } from '../../state-dir';
+import { spawn } from "child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "fs";
+import { type Accessor, createMemo, createSignal } from "solid-js";
+import { type RunRecord, refreshRuns } from "../../run-store";
+import { getStateFilePath, resolveStatusDirs } from "../../state-dir";
+import { joinRuns } from "../../status";
 
 // Same joined scope as `at status`: project `.at/` first, then `~/.at/`.
 // The TUI used to resolve a single dir, so global runs stayed invisible
@@ -16,10 +15,10 @@ const stateDir = stateDirs[0];
 
 const [sessions, setSessions] = createSignal<RunRecord[]>([]);
 const [selectedRunId, setSelectedRunId] = createSignal<string | null>(null);
-const [sidebarFilter, setSidebarFilter] = createSignal<string>('');
+const [sidebarFilter, setSidebarFilter] = createSignal<string>("");
 const [showDashboard, setShowDashboard] = createSignal(false);
 
-export { showDashboard, setShowDashboard };
+export { setShowDashboard, showDashboard };
 
 export function toggleDashboard(): void {
   setShowDashboard(!showDashboard());
@@ -31,7 +30,7 @@ export const selectedSession: Accessor<RunRecord | null> = createMemo(() => {
   return sessions().find((s) => s.runId === id) ?? null;
 });
 
-export { sessions, setSessions, selectedRunId, setSelectedRunId, sidebarFilter, setSidebarFilter };
+export { selectedRunId, sessions, setSelectedRunId, setSessions, setSidebarFilter, sidebarFilter };
 
 export const filteredSessions: Accessor<RunRecord[]> = createMemo(() => {
   const filter = sidebarFilter().toLowerCase();
@@ -40,7 +39,7 @@ export const filteredSessions: Accessor<RunRecord[]> = createMemo(() => {
     (s) =>
       s.runId.toLowerCase().includes(filter) ||
       s.agent.toLowerCase().includes(filter) ||
-      s.status.toLowerCase().includes(filter)
+      s.status.toLowerCase().includes(filter),
   );
 });
 
@@ -114,7 +113,7 @@ export function killSession(runId: string): void {
   const session = sessions().find((s) => s.runId === runId);
   if (!session) return;
   try {
-    process.kill(session.pid, 'SIGKILL');
+    process.kill(session.pid, "SIGKILL");
   } catch {
     // silent
   }
@@ -124,9 +123,9 @@ export function killSession(runId: string): void {
 export function retrySession(runId: string): void {
   const session = sessions().find((s) => s.runId === runId);
   if (!session) return;
-  spawn('at', ['-s', '-p', session.prompt], {
+  spawn("at", ["-s", "-p", session.prompt], {
     detached: false,
-    stdio: 'inherit',
+    stdio: "inherit",
   });
   refreshSessions();
 }
@@ -134,8 +133,8 @@ export function retrySession(runId: string): void {
 export function loadSessionState(): void {
   try {
     const path = getStateFilePath(stateDir);
-    const data = JSON.parse(readFileSync(path, 'utf8')) as { tui?: { selectedRunId?: string | null } };
-    if (data.tui && 'selectedRunId' in data.tui) {
+    const data = JSON.parse(readFileSync(path, "utf8")) as { tui?: { selectedRunId?: string | null } };
+    if (data.tui && "selectedRunId" in data.tui) {
       setSelectedRunId(data.tui.selectedRunId ?? null);
     }
   } catch {
@@ -148,7 +147,7 @@ export function saveSessionState(runId: string | null): void {
     const path = getStateFilePath(stateDir);
     let data: Record<string, unknown> = {};
     try {
-      data = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+      data = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
     } catch {
       // ignore missing or malformed state.json
     }
@@ -156,7 +155,7 @@ export function saveSessionState(runId: string | null): void {
     tui.selectedRunId = runId;
     data.tui = tui;
     mkdirSync(stateDir, { recursive: true });
-    writeFileSync(path, JSON.stringify(data, null, 2), 'utf8');
+    writeFileSync(path, JSON.stringify(data, null, 2), "utf8");
   } catch {
     // ignore write errors
   }

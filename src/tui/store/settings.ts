@@ -1,20 +1,20 @@
-import { createSignal, Accessor } from 'solid-js';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { resolveStateDir, getStateFilePath } from '../../state-dir';
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createSignal } from "solid-js";
+import { getStateFilePath, resolveStateDir } from "../../state-dir";
 
 const [tier, setTier] = createSignal<1 | 2 | 3 | 4>(2);
-const [agent, setAgent] = createSignal<string>('auto');
-const [mode, setMode] = createSignal<'stream' | 'detached'>('stream');
+const [agent, setAgent] = createSignal<string>("auto");
+const [mode, setMode] = createSignal<"stream" | "detached">("stream");
 const [retries, setRetries] = createSignal<number>(0);
 
-export { tier, agent, mode, retries };
+export { agent, mode, retries, tier };
 
 const TIERS: readonly [1, 2, 3, 4] = [1, 2, 3, 4];
 const AGENTS_BY_TIER: Record<1 | 2 | 3 | 4, string[]> = {
-  1: ['auto', 'glm-code', 'codex', 'kimi'],
-  2: ['auto', 'mm-code', 'opencode', 'qwen', 'pi', 'cline'],
-  3: ['auto', 'kilo', 'agy', 'kiro'],
-  4: ['auto', 'mock', 'mock-long'],
+  1: ["auto", "glm-code", "codex", "kimi"],
+  2: ["auto", "mm-code", "opencode", "qwen", "pi", "cline"],
+  3: ["auto", "kilo", "agy", "kiro"],
+  4: ["auto", "mock", "mock-long"],
 };
 const RETRIES_CYCLE: readonly [0, 1, 2, 3, 4] = [0, 1, 2, 3, 4];
 
@@ -22,7 +22,7 @@ export function cycleTier(): void {
   const idx = TIERS.indexOf(tier());
   const next = TIERS[(idx + 1) % TIERS.length];
   setTier(next);
-  setAgent('auto');
+  setAgent("auto");
   saveSettings();
 }
 
@@ -35,7 +35,7 @@ export function cycleAgent(): void {
 }
 
 export function cycleMode(): void {
-  setMode((m) => (m === 'stream' ? 'detached' : 'stream'));
+  setMode((m) => (m === "stream" ? "detached" : "stream"));
   saveSettings();
 }
 
@@ -51,24 +51,24 @@ export function loadSettings(): void {
   try {
     const stateDir = resolveStateDir();
     const path = getStateFilePath(stateDir);
-    const data = JSON.parse(readFileSync(path, 'utf8')) as {
+    const data = JSON.parse(readFileSync(path, "utf8")) as {
       tui?: { settings?: { tier?: number; agent?: string; mode?: string; retries?: number } };
     };
     const settings = data.tui?.settings;
     if (settings) {
-      if (typeof settings.tier === 'number' && TIERS.includes(settings.tier as 1 | 2 | 3 | 4)) {
+      if (typeof settings.tier === "number" && TIERS.includes(settings.tier as 1 | 2 | 3 | 4)) {
         setTier(settings.tier as 1 | 2 | 3);
       }
-      if (typeof settings.agent === 'string') {
+      if (typeof settings.agent === "string") {
         const agents = AGENTS_BY_TIER[tier()];
         if (agents.includes(settings.agent)) {
           setAgent(settings.agent);
         }
       }
-      if (settings.mode === 'stream' || settings.mode === 'detached') {
+      if (settings.mode === "stream" || settings.mode === "detached") {
         setMode(settings.mode);
       }
-      if (typeof settings.retries === 'number' && RETRIES_CYCLE.includes(settings.retries as 0 | 1 | 2 | 3 | 4)) {
+      if (typeof settings.retries === "number" && RETRIES_CYCLE.includes(settings.retries as 0 | 1 | 2 | 3 | 4)) {
         setRetries(settings.retries);
       }
     }
@@ -83,7 +83,7 @@ export function saveSettings(): void {
     const path = getStateFilePath(stateDir);
     let data: Record<string, unknown> = {};
     try {
-      data = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+      data = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
     } catch {
       // ignore missing or malformed state.json
     }
@@ -96,7 +96,7 @@ export function saveSettings(): void {
     };
     data.tui = tui;
     mkdirSync(stateDir, { recursive: true });
-    writeFileSync(path, JSON.stringify(data, null, 2), 'utf8');
+    writeFileSync(path, JSON.stringify(data, null, 2), "utf8");
   } catch {
     // ignore write errors
   }

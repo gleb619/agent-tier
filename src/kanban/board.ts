@@ -1,10 +1,10 @@
-import { readFileSync, writeFileSync } from 'fs';
-import path from 'path';
-import type { Root, Table, TableRow } from 'mdast';
-import { findProjectRoot } from '../state-dir';
-import { parseLegend } from './legend';
-import { cellText, parseBoardText, stringifyBoard, type Processor } from './parse';
-import { DEFAULT_BOARD_REL, FALLBACK_STATUSES, type Task } from './types';
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import type { Root, Table, TableRow } from "mdast";
+import { findProjectRoot } from "../state-dir";
+import { parseLegend } from "./legend";
+import { cellText, type Processor, parseBoardText, stringifyBoard } from "./parse";
+import { DEFAULT_BOARD_REL, FALLBACK_STATUSES, type Task } from "./types";
 
 export interface BoardDoc {
   file: string;
@@ -24,7 +24,7 @@ export function resolveBoardFile(explicit?: string): string {
 }
 
 export function loadBoard(file: string): BoardDoc {
-  const content = readFileSync(file, 'utf8');
+  const content = readFileSync(file, "utf8");
   const parsed = parseBoardText(content);
   const legend = parseLegend(content);
   return {
@@ -38,7 +38,7 @@ export function loadBoard(file: string): BoardDoc {
 }
 
 export function saveBoard(doc: BoardDoc): void {
-  writeFileSync(doc.file, stringifyBoard(doc.processor, doc.tree), 'utf8');
+  writeFileSync(doc.file, stringifyBoard(doc.processor, doc.tree), "utf8");
 }
 
 export function dataRows(doc: BoardDoc): TableRow[] {
@@ -50,7 +50,7 @@ export function toTasks(doc: BoardDoc): Task[] {
     const task: Task = {};
     doc.headers.forEach((header, idx) => {
       const cell = row.children[idx];
-      task[header] = cell ? cellText(cell) : '';
+      task[header] = cell ? cellText(cell) : "";
     });
     return task;
   });
@@ -62,7 +62,7 @@ export function headerIndex(doc: BoardDoc, name: string): number {
 
 /** Row index into `table.children`, where 0 is the header row. -1 when absent. */
 export function findRowById(doc: BoardDoc, id: string): number {
-  const idIdx = headerIndex(doc, 'ID');
+  const idIdx = headerIndex(doc, "ID");
   if (idIdx === -1) return -1;
   const rows = doc.table.children;
   for (let i = 1; i < rows.length; i++) {

@@ -9,16 +9,12 @@
  * drops them at load time, so this is defensive).
  */
 
-import type { NamerProvider } from './types';
-import type { NamerConfig } from './types';
-import { OllamaProvider } from './providers/ollama';
-import { OpenRouterProvider } from './providers/openrouter';
-import { resolveSecret } from './config';
+import { resolveSecret } from "./config";
+import { OllamaProvider } from "./providers/ollama";
+import { OpenRouterProvider } from "./providers/openrouter";
+import type { NamerConfig, NamerProvider } from "./types";
 
-export function buildProviders(
-  config: NamerConfig,
-  secrets: Record<string, string> = {},
-): NamerProvider[] {
+export function buildProviders(config: NamerConfig, secrets: Record<string, string> = {}): NamerProvider[] {
   const out: NamerProvider[] = [];
   for (const pc of config.providers) {
     const provider = instantiate(pc, secrets);
@@ -27,11 +23,8 @@ export function buildProviders(
   return out;
 }
 
-function instantiate(
-  pc: NamerConfig['providers'][number],
-  secrets: Record<string, string>,
-): NamerProvider | null {
-  if (pc.type === 'ollama') {
+function instantiate(pc: NamerConfig["providers"][number], secrets: Record<string, string>): NamerProvider | null {
+  if (pc.type === "ollama") {
     return new OllamaProvider({
       name: pc.name,
       url: pc.url,
@@ -39,7 +32,7 @@ function instantiate(
       timeoutMs: pc.timeoutMs,
     });
   }
-  if (pc.type === 'openrouter') {
+  if (pc.type === "openrouter") {
     const apiKey = pc.apiKeyRef ? resolveSecret(pc.apiKeyRef, secrets) : undefined;
     return new OpenRouterProvider({
       name: pc.name,

@@ -1,11 +1,11 @@
-import type { NotifyAdapter, NotifyEvent } from '../types';
-import { buildPromptSuffix } from '../prompt';
+import { buildPromptSuffix } from "../prompt";
+import type { NotifyAdapter, NotifyEvent } from "../types";
 
 const TEXT_LIMIT = 500;
 
 function truncate(s: string, n: number): string {
   if (s.length <= n) return s;
-  return s.slice(0, n) + '…';
+  return `${s.slice(0, n)}…`;
 }
 
 interface KiroUpdate {
@@ -24,7 +24,7 @@ interface KiroUpdate {
  */
 export function makeKiroAdapter(): NotifyAdapter {
   return {
-    name: 'kiro',
+    name: "kiro",
     promptSuffix(ctx) {
       return buildPromptSuffix(ctx);
     },
@@ -33,13 +33,13 @@ export function makeKiroAdapter(): NotifyAdapter {
       // splice engine + stream-json right after the subcommand.
       const out = baseArgs.slice();
       const insertAt = 1;
-      out.splice(insertAt, 0, '--agent-engine', 'v2', '--output-format', 'stream-json');
+      out.splice(insertAt, 0, "--agent-engine", "v2", "--output-format", "stream-json");
       return out;
     },
-    parseLine(line: string): Array<Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>> {
+    parseLine(line: string): Array<Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq">> {
       try {
         const trimmed = line.trim();
-        if (!trimmed || trimmed[0] !== '{') return [];
+        if (trimmed?.[0] !== "{") return [];
         let payload: Record<string, unknown>;
         try {
           payload = JSON.parse(trimmed) as Record<string, unknown>;
@@ -47,34 +47,34 @@ export function makeKiroAdapter(): NotifyAdapter {
           return [];
         }
         const t = payload.type;
-        if (t === 'runStarted') {
+        if (t === "runStarted") {
           const data = (payload.data ?? {}) as Record<string, unknown>;
-          const engine = typeof data.engine === 'string' ? data.engine : '';
-          return [{
-            type: 'progress',
-            text: engine ? `session started (engine=${engine})` : 'session started',
-          }];
+          const engine = typeof data.engine === "string" ? data.engine : "";
+          return [
+            {
+              type: "progress",
+              text: engine ? `session started (engine=${engine})` : "session started",
+            },
+          ];
         }
-        if (t === 'sessionUpdate') {
+        if (t === "sessionUpdate") {
           const data = (payload.data ?? {}) as Record<string, unknown>;
           const update = (data.update ?? {}) as KiroUpdate;
-          if (update.sessionUpdate !== 'agent_message_chunk') return [];
+          if (update.sessionUpdate !== "agent_message_chunk") return [];
           const content = update.content;
-          const text = content && typeof content.text === 'string' ? content.text : '';
+          const text = content && typeof content.text === "string" ? content.text : "";
           if (!text) return [];
-          return [{ type: 'message', text: truncate(text, TEXT_LIMIT) }];
+          return [{ type: "message", text: truncate(text, TEXT_LIMIT) }];
         }
-        if (t === 'runFinished') {
+        if (t === "runFinished") {
           const data = (payload.data ?? {}) as Record<string, unknown>;
-          const status = typeof data.status === 'string' ? data.status : 'done';
-          const stopReason = typeof data.stopReason === 'string' ? data.stopReason : '';
-          const finalText = typeof data.finalText === 'string' ? data.finalText : '';
+          const status = typeof data.status === "string" ? data.status : "done";
+          const stopReason = typeof data.stopReason === "string" ? data.stopReason : "";
+          const finalText = typeof data.finalText === "string" ? data.finalText : "";
           const text = stopReason ? `session ${status} (${stopReason})` : `session ${status}`;
-          const events: Array<Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>> = [
-            { type: 'progress', text },
-          ];
+          const events: Array<Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq">> = [{ type: "progress", text }];
           if (finalText) {
-            events.push({ type: 'message', text: truncate(finalText, TEXT_LIMIT) });
+            events.push({ type: "message", text: truncate(finalText, TEXT_LIMIT) });
           }
           return events;
         }

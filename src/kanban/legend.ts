@@ -1,4 +1,4 @@
-export const LEGEND_HEADING = '## Status Legend';
+export const LEGEND_HEADING = "## Status Legend";
 const LEGEND_ROW_RE = /^\|\s*`([^`]+)`/;
 
 /**
@@ -9,9 +9,9 @@ export function parseLegend(text: string): string[] {
   const statuses: string[] = [];
   let inLegend = false;
 
-  for (const rawLine of text.split('\n')) {
+  for (const rawLine of text.split("\n")) {
     const line = rawLine.trim();
-    if (line.startsWith('## ')) {
+    if (line.startsWith("## ")) {
       inLegend = line === LEGEND_HEADING;
       continue;
     }

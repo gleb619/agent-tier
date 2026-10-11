@@ -7,11 +7,11 @@
  * extra reflective context (run log tail) rides along in `opts.context`.
  */
 
-import type { NamerProvider } from './types';
-import { loadNamerConfig, loadSecrets } from './config';
-import { buildProviders } from './registry';
-import { DEFAULT_NAMER_CONFIG } from './default-config';
-import { NAMER_PROMPT_MAX_CHARS } from './providers/ollama';
+import { loadNamerConfig, loadSecrets } from "./config";
+import { DEFAULT_NAMER_CONFIG } from "./default-config";
+import { NAMER_PROMPT_MAX_CHARS } from "./providers/ollama";
+import { buildProviders } from "./registry";
+import type { NamerProvider } from "./types";
 
 export interface GenerateSessionNameOpts {
   signal?: AbortSignal;
@@ -45,7 +45,7 @@ export async function generateSessionName(
   stateDir: string,
   opts: GenerateSessionNameOpts = {},
 ): Promise<GenerateSessionNameResult> {
-  const fallbackName = opts.fallbackName ?? DEFAULT_NAMER_CONFIG.fallbackName ?? 'unnamed';
+  const fallbackName = opts.fallbackName ?? DEFAULT_NAMER_CONFIG.fallbackName ?? "unnamed";
   const warn = (...args: unknown[]): void => {
     if (!opts.quiet) console.warn(...args);
   };
@@ -69,10 +69,9 @@ export async function generateSessionName(
   // Head-truncate like the ollama provider does — the prompt leads, context
   // follows, and nothing beyond NAMER_PROMPT_MAX_CHARS reaches a provider.
   let effectivePrompt = prompt;
-  if (opts.context && opts.context.trim()) {
+  if (opts.context?.trim()) {
     const combined = `${prompt}\n\n${opts.context}`;
-    effectivePrompt =
-      combined.length > NAMER_PROMPT_MAX_CHARS ? combined.slice(0, NAMER_PROMPT_MAX_CHARS) : combined;
+    effectivePrompt = combined.length > NAMER_PROMPT_MAX_CHARS ? combined.slice(0, NAMER_PROMPT_MAX_CHARS) : combined;
   }
 
   let result: GenerateSessionNameResult = { name: fallbackName, provider: null };
@@ -84,7 +83,7 @@ export async function generateSessionName(
         continue;
       }
       const raw = await provider.generate(effectivePrompt, opts.signal ?? new AbortController().signal);
-      if (typeof raw === 'string' && raw.length > 0) {
+      if (typeof raw === "string" && raw.length > 0) {
         warn(`[at] namer: named via ${provider.name}`);
         result = { name: raw, provider: provider.name };
         break;

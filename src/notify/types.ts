@@ -1,16 +1,16 @@
 export type NotifyEventType =
-  | 'start'
-  | 'message'
-  | 'tool'
-  | 'progress'
-  | 'error'
-  | 'done'
-  | 'question'
-  | 'answer'
-  | 'rename';
+  | "start"
+  | "message"
+  | "tool"
+  | "progress"
+  | "error"
+  | "done"
+  | "question"
+  | "answer"
+  | "rename";
 
-export type DiscussFrom = 'agent' | 'host';
-export type DiscussKind = 'question' | 'answer' | 'say' | 'note';
+export type DiscussFrom = "agent" | "host";
+export type DiscussKind = "question" | "answer" | "say" | "note";
 
 /** A single entry in the per-run discussion thread (`<stateDir>/events/<runId>.discuss.jsonl`). */
 export interface DiscussEntry {
@@ -111,6 +111,6 @@ export interface NotifyAdapter {
    * correct position. Defaults to appending `args()` to the end.
    */
   transformArgs?(ctx: NotifyAdapterContext, baseArgs: string[]): string[];
-  parseLine?(line: string): Array<Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>>;
-  flush?(): Array<Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>>;
+  parseLine?(line: string): Array<Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq">>;
+  flush?(): Array<Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq">>;
 }

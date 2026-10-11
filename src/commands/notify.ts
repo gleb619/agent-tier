@@ -1,5 +1,5 @@
-import { Command } from 'commander';
-import { postDiscussEntry } from './discuss-helpers';
+import type { Command } from "commander";
+import { postDiscussEntry } from "./discuss-helpers";
 
 /**
  * `at notify <runId> <msg...>` — kept as an alias for `at discuss note`.
@@ -8,10 +8,10 @@ import { postDiscussEntry } from './discuss-helpers';
  */
 export function registerNotifyCommand(program: Command): void {
   program
-    .command('notify <runId> <message...>')
-    .description('Alias for `at discuss note`: post a one-way progress note')
+    .command("notify <runId> <message...>")
+    .description("Alias for `at discuss note`: post a one-way progress note")
     .action(async (runId: string, messageParts: string[]) => {
-      const text = messageParts.join(' ');
-      await postDiscussEntry(runId, { from: 'agent', kind: 'note', text });
+      const text = messageParts.join(" ");
+      await postDiscussEntry(runId, { from: "agent", kind: "note", text });
     });
 }

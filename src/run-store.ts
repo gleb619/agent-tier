@@ -1,11 +1,11 @@
-import { readFileSync, writeFileSync, mkdirSync, statSync } from 'fs';
-import path from 'path';
-import { getStateFilePath } from './state-dir';
-import { withLock } from './lock';
-import { isPidAlive, getProcessTicks } from './process-utils';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { withLock } from "./lock";
+import { getProcessTicks, isPidAlive } from "./process-utils";
+import { getStateFilePath } from "./state-dir";
 
 /** Placeholder `RunRecord.name` until the namer resolves — or forever, when it never does. */
-export const UNNAMED_PLACEHOLDER = 'unnamed';
+export const UNNAMED_PLACEHOLDER = "unnamed";
 
 export interface RunRecord {
   runId: string;
@@ -17,7 +17,7 @@ export interface RunRecord {
   startedAt: string;
   finishedAt: string | null;
   exitCode: number | null;
-  status: 'running' | 'done' | 'failed' | 'stuck';
+  status: "running" | "done" | "failed" | "stuck";
   /**
    * Human-readable session name produced by the namer (`src/namer`). Starts as
    * `UNNAMED_PLACEHOLDER` and is overwritten asynchronously once a provider
@@ -37,13 +37,13 @@ const STUCK_SILENCE_MS = 30 * 60 * 1000; // 30 min of no log writes
 const STUCK_CPU_MS_THRESHOLD = 100; // any measurable work — jiffy granularity is 10ms
 
 export function getRunsFile(stateDir: string): string {
-  return path.join(stateDir, 'runs.jsonl');
+  return path.join(stateDir, "runs.jsonl");
 }
 
 function getMaxRuns(stateDir: string): number {
   try {
     const statePath = getStateFilePath(stateDir);
-    const data = JSON.parse(readFileSync(statePath, 'utf8')) as { runs?: { maxEntries?: number } };
+    const data = JSON.parse(readFileSync(statePath, "utf8")) as { runs?: { maxEntries?: number } };
     if (data.runs?.maxEntries !== undefined && Number.isFinite(data.runs.maxEntries)) {
       return Math.max(1, Math.floor(data.runs.maxEntries));
     }
@@ -55,8 +55,8 @@ function getMaxRuns(stateDir: string): number {
 
 function readJsonl(filePath: string): RunRecord[] {
   try {
-    const raw = readFileSync(filePath, 'utf8');
-    const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+    const raw = readFileSync(filePath, "utf8");
+    const lines = raw.split("\n").filter((l) => l.trim().length > 0);
     if (lines.length === 1) {
       try {
         const parsed = JSON.parse(lines[0]) as RunsIndex;
@@ -75,8 +75,8 @@ function readJsonl(filePath: string): RunRecord[] {
 
 function writeJsonl(filePath: string, runs: RunRecord[]): void {
   mkdirSync(path.dirname(filePath), { recursive: true });
-  const lines = runs.map((r) => JSON.stringify(r)).join('\n');
-  writeFileSync(filePath, lines ? lines + '\n' : '', 'utf8');
+  const lines = runs.map((r) => JSON.stringify(r)).join("\n");
+  writeFileSync(filePath, lines ? `${lines}\n` : "", "utf8");
 }
 
 export function loadRuns(stateDir: string): RunRecord[] {
@@ -173,14 +173,14 @@ export function detectStuck(
   const ticks = opts?.getProcessTicks ?? getProcessTicks;
   const now = Date.now();
   return runs.map((r) => {
-    if (r.status !== 'running') return r;
+    if (r.status !== "running") return r;
 
     const pidAlive = isPidAlive(r.pid);
     const logMtime = getLogMtime(r.logFile);
     const logSilence = logMtime ? now - logMtime : now - new Date(r.startedAt).getTime();
 
     if (!pidAlive) {
-      return { ...r, status: 'failed' as const, finishedAt: new Date().toISOString(), exitCode: null };
+      return { ...r, status: "failed" as const, finishedAt: new Date().toISOString(), exitCode: null };
     }
 
     if (logSilence > STUCK_SILENCE_MS) {
@@ -191,10 +191,10 @@ export function detectStuck(
       const cpuMs = ticks(r.pid);
       if (cpuMs === null) {
         // /proc unreadable (gone, no perm). Fall back to old heuristic.
-        return { ...r, status: 'stuck' as const };
+        return { ...r, status: "stuck" as const };
       }
       if (cpuMs < STUCK_CPU_MS_THRESHOLD) {
-        return { ...r, status: 'stuck' as const };
+        return { ...r, status: "stuck" as const };
       }
       return r;
     }

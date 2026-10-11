@@ -1,6 +1,6 @@
-import { existsSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
-import { AGENTS, AgentDef } from '../agents/registry';
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { AGENTS, type AgentDef } from "../agents/registry";
 
 // ── Template system ──
 
@@ -11,9 +11,9 @@ export interface WrapperTemplate {
 }
 
 const BUILTIN_TEMPLATES: Record<string, WrapperTemplate> = {
-  'glm-code': {
-    agentName: 'glm-code',
-    description: 'Claude Code wrapper pointed at GLM (Z.AI) with isolated config',
+  "glm-code": {
+    agentName: "glm-code",
+    description: "Claude Code wrapper pointed at GLM (Z.AI) with isolated config",
     content: `#!/bin/bash
 # glm-code — Claude Code pointed at GLM (Z.AI) with fully isolated config
 #
@@ -59,9 +59,9 @@ exec claude "$@"
 `,
   },
 
-  'mm-code': {
-    agentName: 'mm-code',
-    description: 'Claude Code wrapper pointed at MiniMax M2.7 with isolated config',
+  "mm-code": {
+    agentName: "mm-code",
+    description: "Claude Code wrapper pointed at MiniMax M2.7 with isolated config",
     content: `#!/bin/bash
 # mm-code — Claude Code pointed at MiniMax (M2.7) with fully isolated config
 #
@@ -113,9 +113,9 @@ exec claude "$@"
 `,
   },
 
-  'mock': {
-    agentName: 'mock',
-    description: 'Dry-run / test agent — prints prompt and exits successfully',
+  mock: {
+    agentName: "mock",
+    description: "Dry-run / test agent — prints prompt and exits successfully",
     content: `#!/bin/bash
 # mock — dry-run / test agent for \`at\`
 # Prints the prompt and environment info, then exits successfully.
@@ -130,16 +130,17 @@ if [ -z "$PROMPT" ]; then
 fi
 
 echo "[mock] received prompt: \${PROMPT}"
-echo "[mock] working directory: \$(pwd)"
-echo "[mock] timestamp: \$(date -Iseconds)"
+echo "[mock] working directory: $(pwd)"
+echo "[mock] timestamp: $(date -Iseconds)"
 echo "[mock] done" >&2
 exit 0
 `,
   },
 
-  'mock-long': {
-    agentName: 'mock-long',
-    description: 'Simulates long-running agent with streaming output — controlled by MOCK_LONG_DURATION env var (default 30000ms)',
+  "mock-long": {
+    agentName: "mock-long",
+    description:
+      "Simulates long-running agent with streaming output — controlled by MOCK_LONG_DURATION env var (default 30000ms)",
     content: `#!/bin/bash
 # mock-long — simulates long-running agent with streaming output
 # Controlled by MOCK_LONG_DURATION env var (default: 30000ms = 30 seconds)
@@ -202,13 +203,11 @@ export interface InitOptions {
 export interface InitResult {
   agent: string;
   targetPath: string;
-  action: 'created' | 'skipped' | 'would_create';
+  action: "created" | "skipped" | "would_create";
   reason?: string;
 }
 
-function resolveTargets(
-  options: InitOptions,
-): Array<{ agent: AgentDef; template: WrapperTemplate }> {
+function resolveTargets(options: InitOptions): Array<{ agent: AgentDef; template: WrapperTemplate }> {
   const agentNames = getTemplateAgentNames();
 
   if (options.list) {
@@ -234,10 +233,8 @@ function resolveTargets(
   if (options.agent) {
     const template = BUILTIN_TEMPLATES[options.agent];
     if (!template) {
-      const available = getTemplateAgentNames().join(', ');
-      throw new Error(
-        `No template defined for agent: ${options.agent}. Available: ${available}`,
-      );
+      const available = getTemplateAgentNames().join(", ");
+      throw new Error(`No template defined for agent: ${options.agent}. Available: ${available}`);
     }
     const agent = AGENTS.find((a) => a.name === options.agent);
     if (!agent) {
@@ -246,7 +243,7 @@ function resolveTargets(
     return [{ agent, template }];
   }
 
-  throw new Error('Specify an agent name, --all, or --list');
+  throw new Error("Specify an agent name, --all, or --list");
 }
 
 export function getTemplateAgentNames(): string[] {
@@ -260,14 +257,14 @@ export function getTemplate(agentName: string): WrapperTemplate | undefined {
 export function runInit(options: InitOptions): InitResult[] {
   if (options.list) {
     const targets = resolveTargets(options);
-    return targets.map(({ agent, template }) => {
+    return targets.map(({ agent }) => {
       const targetPath = agent.bin();
       const exists = existsSync(targetPath);
       return {
         agent: agent.name,
         targetPath,
-        action: exists ? 'skipped' : 'would_create',
-        reason: exists ? 'already exists' : 'missing (would be created by init)',
+        action: exists ? "skipped" : "would_create",
+        reason: exists ? "already exists" : "missing (would be created by init)",
       };
     });
   }
@@ -282,7 +279,7 @@ export function runInit(options: InitOptions): InitResult[] {
       results.push({
         agent: agent.name,
         targetPath,
-        action: 'skipped',
+        action: "skipped",
         reason: `already exists (use --force to overwrite)`,
       });
       continue;
@@ -292,7 +289,7 @@ export function runInit(options: InitOptions): InitResult[] {
       results.push({
         agent: agent.name,
         targetPath,
-        action: 'would_create',
+        action: "would_create",
       });
       continue;
     }
@@ -303,7 +300,7 @@ export function runInit(options: InitOptions): InitResult[] {
     results.push({
       agent: agent.name,
       targetPath,
-      action: 'created',
+      action: "created",
     });
   }
 
@@ -313,14 +310,9 @@ export function runInit(options: InitOptions): InitResult[] {
 export function formatInitResults(results: InitResult[]): string {
   return results
     .map((r) => {
-      const prefix =
-        r.action === 'created'
-          ? 'CREATED'
-          : r.action === 'would_create'
-            ? 'WOULD CREATE'
-            : 'SKIP';
-      const reason = r.reason ? ` (${r.reason})` : '';
+      const prefix = r.action === "created" ? "CREATED" : r.action === "would_create" ? "WOULD CREATE" : "SKIP";
+      const reason = r.reason ? ` (${r.reason})` : "";
       return `${prefix} ${r.agent} → ${r.targetPath}${reason}`;
     })
-    .join('\n');
+    .join("\n");
 }

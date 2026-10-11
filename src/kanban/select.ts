@@ -1,22 +1,22 @@
 import {
-  DONE,
-  DEFAULT_STATUS,
-  IN_PROGRESS,
-  PRIORITY_ORDER,
-  UNKNOWN_PRIORITY,
   blank,
+  DEFAULT_STATUS,
+  DONE,
+  IN_PROGRESS,
   numericId,
+  PRIORITY_ORDER,
   type Task,
-} from './types';
+  UNKNOWN_PRIORITY,
+} from "./types";
 
 export interface Selection {
-  type: 'current' | 'next';
+  type: "current" | "next";
   task: Task;
 }
 
 /** Unknown blocker IDs are ignored on purpose: a stale reference must not freeze the board. */
 export function isUnblocked(task: Task, all: Task[]): boolean {
-  const raw = task['Blocked By'] ?? '';
+  const raw = task["Blocked By"] ?? "";
   if (blank(raw)) return true;
   const blockers = raw.split(/[,\s]+/).filter(Boolean);
   for (const blockerId of blockers) {
@@ -33,7 +33,7 @@ export function isUnblocked(task: Task, all: Task[]): boolean {
  */
 export function nextExecutable(tasks: Task[]): Selection | null {
   const inProgress = tasks.find((t) => t.Status === IN_PROGRESS);
-  if (inProgress) return { type: 'current', task: inProgress };
+  if (inProgress) return { type: "current", task: inProgress };
 
   const candidates = tasks.filter((t) => t.Status === DEFAULT_STATUS && isUnblocked(t, tasks));
   if (candidates.length === 0) return null;
@@ -45,5 +45,5 @@ export function nextExecutable(tasks: Task[]): Selection | null {
     return numericId(a.ID) - numericId(b.ID);
   });
 
-  return { type: 'next', task: candidates[0] };
+  return { type: "next", task: candidates[0] };
 }

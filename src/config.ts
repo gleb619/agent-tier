@@ -1,8 +1,8 @@
-import { createHmac } from 'crypto';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import path from 'path';
-import os from 'os';
-import { AgentDef } from './agents/registry';
+import { createHmac } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { AgentDef } from "./agents/registry";
 
 export interface AtConfig {
   tierOverrides?: Record<string, 1 | 2 | 3>;
@@ -29,25 +29,27 @@ export interface AtConfig {
   globalPrompt?: string;
 }
 
-const CONFIG_DIR = path.join(os.homedir(), '.at');
-export const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
-export const HMAC_FILE = path.join(CONFIG_DIR, 'config.json.hmac');
-const HMAC_ALGO = 'sha256';
+const CONFIG_DIR = path.join(os.homedir(), ".at");
+export const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
+export const HMAC_FILE = path.join(CONFIG_DIR, "config.json.hmac");
+const HMAC_ALGO = "sha256";
 
 export function getSecret(): string {
-  return process.env.AT_HMAC_SECRET ?? 'at-config-hmac-v1';
+  return process.env.AT_HMAC_SECRET ?? "at-config-hmac-v1";
 }
 
 export function computeHmac(data: string): string {
-  return createHmac(HMAC_ALGO, getSecret()).update(data, 'utf8').digest('hex');
+  return createHmac(HMAC_ALGO, getSecret()).update(data, "utf8").digest("hex");
 }
 
 export function signConfig(): void {
-  const data = readFileSync(CONFIG_FILE, 'utf8');
+  const data = readFileSync(CONFIG_FILE, "utf8");
   mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(HMAC_FILE, computeHmac(data), 'utf8');
+  writeFileSync(HMAC_FILE, computeHmac(data), "utf8");
   if (!process.env.AT_HMAC_SECRET) {
-    console.warn('[at] warning: AT_HMAC_SECRET not set — config HMAC uses default secret. Set AT_HMAC_SECRET for real integrity protection.');
+    console.warn(
+      "[at] warning: AT_HMAC_SECRET not set — config HMAC uses default secret. Set AT_HMAC_SECRET for real integrity protection.",
+    );
   }
   console.log(`[at] config signed: ${HMAC_FILE}`);
 }
@@ -55,33 +57,35 @@ export function signConfig(): void {
 export function loadConfig(opts?: { quiet?: boolean }): AtConfig | null {
   let data: string;
   try {
-    data = readFileSync(CONFIG_FILE, 'utf8');
+    data = readFileSync(CONFIG_FILE, "utf8");
   } catch {
     return null;
   }
 
   let storedHmac: string;
   try {
-    storedHmac = readFileSync(HMAC_FILE, 'utf8').trim();
+    storedHmac = readFileSync(HMAC_FILE, "utf8").trim();
   } catch {
-    if (!opts?.quiet)
-      console.warn('[at] ~/.at/config.json found but no HMAC — ignoring. Run: at config sign');
+    if (!opts?.quiet) console.warn("[at] ~/.at/config.json found but no HMAC — ignoring. Run: at config sign");
     return null;
   }
 
   if (storedHmac !== computeHmac(data)) {
-    if (!opts?.quiet) console.error('[at] config HMAC mismatch — config may be tampered. Run: at config sign');
+    if (!opts?.quiet) console.error("[at] config HMAC mismatch — config may be tampered. Run: at config sign");
     return null;
   }
 
   if (!process.env.AT_HMAC_SECRET) {
-    if (!opts?.quiet) console.warn('[at] warning: AT_HMAC_SECRET not set — config HMAC uses default secret. Set AT_HMAC_SECRET for real integrity protection.');
+    if (!opts?.quiet)
+      console.warn(
+        "[at] warning: AT_HMAC_SECRET not set — config HMAC uses default secret. Set AT_HMAC_SECRET for real integrity protection.",
+      );
   }
 
   try {
     return JSON.parse(data) as AtConfig;
   } catch {
-    if (!opts?.quiet) console.error('[at] ~/.at/config.json is not valid JSON');
+    if (!opts?.quiet) console.error("[at] ~/.at/config.json is not valid JSON");
     return null;
   }
 }
@@ -120,7 +124,7 @@ export function getLineAgents(agents: AgentDef[], config: AtConfig | null, opts?
       resolved.push(a);
     }
     if (resolved.length === 0) {
-      throw new Error('line config is empty — add agents with: at line add <agent>');
+      throw new Error("line config is empty — add agents with: at line add <agent>");
     }
     return resolved;
   }
@@ -133,7 +137,7 @@ export function getLineAgents(agents: AgentDef[], config: AtConfig | null, opts?
     .sort((x, y) => defaultOrder.indexOf(x.tier) - defaultOrder.indexOf(y.tier));
 
   if (result.length === 0) {
-    throw new Error('line config is empty — add agents with: at line add <agent>');
+    throw new Error("line config is empty — add agents with: at line add <agent>");
   }
   return result;
 }

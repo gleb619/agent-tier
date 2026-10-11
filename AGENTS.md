@@ -23,9 +23,9 @@ cd ../agent-tier-<short-name>
 #    ...
 
 # 3. Run guardrails — ALL must pass before merging
+npx biome ci .        # lint + format drift fails the merge
 npx tsc --noEmit
-npx vitest run           # full suite; pre-existing tests_ai/glm-code fail is allowed, nothing else
-# (add linting / type-coverage / format checks here as they get wired)
+npx vitest run        # full suite; pre-existing tests_ai/glm-code fail is allowed, nothing else
 
 # CI guardrail — run in the worktree BEFORE merging whenever any of these changed:
 #   .github/workflows/*, scripts/ci-check.sh, or package.json "ci:check"
@@ -135,6 +135,10 @@ Line order is stored in `~/.at/config.json` (`"line": ["agent", ...]`, HMAC-sign
 - [docs/cli.md](docs/cli.md) — prompts, output modes, retry, `--verify`, JSON mode
 - [docs/progress.md](docs/progress.md) — SSE events, adapters, discuss channel
 - [docs/agents.md](docs/agents.md) — agent tables, binary resolution, plugins, configuration
+
+## Formatting & lint
+
+Biome (`biome.json`, `@biomejs/biome`) is the single source of truth for lint + format — no ESLint/Prettier. 2-space indent, double quotes, semicolons, 120 width, recommended lint preset, import order via `organizeImports`. `npx biome ci .` is a merge guardrail (fix drift with `npm run lint:fix`); suppress real false positives with `// biome-ignore lint/<rule>: reason` (a11y already off for `src/tui/**`, `src/tui2/**` — opentui, not DOM).
 
 ## Rules
 

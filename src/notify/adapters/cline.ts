@@ -1,11 +1,11 @@
-import type { NotifyAdapter, NotifyEvent, NotifyAdapterContext } from '../types';
+import type { NotifyAdapter, NotifyAdapterContext, NotifyEvent } from "../types";
 
 const TEXT_LIMIT = 500;
 const MESSAGE_THROTTLE_MS = 1000;
 
 function truncate(s: string, n: number): string {
   if (s.length <= n) return s;
-  return s.slice(0, n) + '…';
+  return `${s.slice(0, n)}…`;
 }
 
 interface ClineEvent {
@@ -23,13 +23,13 @@ interface ClineEvent {
  * The shim sets the right env and execs `at` regardless of daemon env.
  */
 function atBase(ctx: NotifyAdapterContext): string {
-  return ctx.hostChannelShim ?? ctx.atBin ?? '$AT_BIN';
+  return ctx.hostChannelShim ?? ctx.atBin ?? "$AT_BIN";
 }
 
 /** Flags for `discuss ask`: -R always; --state-dir only when no shim. */
 function askFlags(ctx: NotifyAdapterContext): string {
   const { runId, stateDir, hostChannelShim } = ctx;
-  const state = !hostChannelShim && stateDir ? ` --state-dir ${stateDir}` : '';
+  const state = !hostChannelShim && stateDir ? ` --state-dir ${stateDir}` : "";
   return `${state} -R ${runId}`;
 }
 
@@ -81,11 +81,11 @@ function clinePromptSuffix(ctx: NotifyAdapterContext): string {
   // works no matter what env the daemon has captured.
   const cmd = hostChannelShim
     ? `${hostChannelShim} discuss ask "<question>" -o <opt1> -o <opt2> -R ${runId}`
-    : `${atBin ?? '$AT_BIN'} discuss ask "<question>" -o <opt1> -o <opt2>${stateDir ? ` --state-dir ${stateDir}` : ''} -R ${runId}`;
+    : `${atBin ?? "$AT_BIN"} discuss ask "<question>" -o <opt1> -o <opt2>${stateDir ? ` --state-dir ${stateDir}` : ""} -R ${runId}`;
   return (
-    '\n\nHost channel — use this exact one-line command, do NOT improvise:\n' +
+    "\n\nHost channel — use this exact one-line command, do NOT improvise:\n" +
     `    ${cmd}\n` +
-    'It blocks until the host answers, then prints the answer on stdout. That stdout line IS the answer. Do not list, poll, retry, or read source code. When done, write the result to color.txt and stop.'
+    "It blocks until the host answers, then prints the answer on stdout. That stdout line IS the answer. Do not list, poll, retry, or read source code. When done, write the result to color.txt and stop."
   );
 }
 
@@ -99,17 +99,17 @@ function clinePromptSuffix(ctx: NotifyAdapterContext): string {
 export function makeClineAdapter(): NotifyAdapter {
   let lastMessageAt = 0;
   return {
-    name: 'cline',
+    name: "cline",
     promptPrefix(ctx) {
       return buildClineInstructions(ctx);
     },
     promptSuffix(ctx) {
       return clinePromptSuffix(ctx);
     },
-    parseLine(line: string): Array<Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>> {
+    parseLine(line: string): Array<Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq">> {
       try {
         const trimmed = line.trim();
-        if (!trimmed || trimmed[0] !== '{') return [];
+        if (trimmed?.[0] !== "{") return [];
         let payload: Record<string, unknown>;
         try {
           payload = JSON.parse(trimmed) as Record<string, unknown>;
@@ -117,40 +117,42 @@ export function makeClineAdapter(): NotifyAdapter {
           return [];
         }
         const t = payload.type;
-        if (t === 'agent_event') {
+        if (t === "agent_event") {
           const ev = (payload.event ?? {}) as ClineEvent;
-          if (ev.type === 'iteration_start') {
-            return [{ type: 'progress', text: 'session started' }];
+          if (ev.type === "iteration_start") {
+            return [{ type: "progress", text: "session started" }];
           }
-          if (ev.type === 'content_start' && ev.contentType === 'text') {
-            const acc = typeof ev.accumulated === 'string' ? ev.accumulated : '';
-            const text = typeof ev.text === 'string' ? ev.text : '';
+          if (ev.type === "content_start" && ev.contentType === "text") {
+            const acc = typeof ev.accumulated === "string" ? ev.accumulated : "";
+            const text = typeof ev.text === "string" ? ev.text : "";
             const display = acc || text;
             if (!display) return [];
             const now = Date.now();
             if (now - lastMessageAt < MESSAGE_THROTTLE_MS) return [];
             lastMessageAt = now;
-            return [{ type: 'message', text: truncate(display, TEXT_LIMIT) }];
+            return [{ type: "message", text: truncate(display, TEXT_LIMIT) }];
           }
-          if (ev.type === 'tool_start' || ev.type === 'tool_call') {
-            const text = typeof ev.text === 'string' ? ev.text : 'tool call';
-            return [{ type: 'tool', text: truncate(text, TEXT_LIMIT) }];
+          if (ev.type === "tool_start" || ev.type === "tool_call") {
+            const text = typeof ev.text === "string" ? ev.text : "tool call";
+            return [{ type: "tool", text: truncate(text, TEXT_LIMIT) }];
           }
-          if (ev.type === 'done') {
-            return [{ type: 'progress', text: `session done (${ev.reason ?? 'completed'})` }];
+          if (ev.type === "done") {
+            return [{ type: "progress", text: `session done (${ev.reason ?? "completed"})` }];
           }
           return [];
         }
-        if (t === 'run_result') {
+        if (t === "run_result") {
           const parts: string[] = [];
-          if (typeof payload.durationMs === 'number') parts.push(`dur=${payload.durationMs}ms`);
-          if (typeof payload.iterations === 'number') parts.push(`iterations=${payload.iterations}`);
-          const events: Array<Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>> = [{
-            type: 'progress',
-            text: `[result] ${payload.finishReason ?? 'done'} ${parts.join(' ')}`.trim(),
-          }];
-          const text = typeof payload.text === 'string' ? payload.text : '';
-          if (text) events.push({ type: 'message', text: truncate(text, TEXT_LIMIT) });
+          if (typeof payload.durationMs === "number") parts.push(`dur=${payload.durationMs}ms`);
+          if (typeof payload.iterations === "number") parts.push(`iterations=${payload.iterations}`);
+          const events: Array<Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq">> = [
+            {
+              type: "progress",
+              text: `[result] ${payload.finishReason ?? "done"} ${parts.join(" ")}`.trim(),
+            },
+          ];
+          const text = typeof payload.text === "string" ? payload.text : "";
+          if (text) events.push({ type: "message", text: truncate(text, TEXT_LIMIT) });
           return events;
         }
         return [];

@@ -1,6 +1,6 @@
-import { createEffect } from 'solid-js';
-import { autoRefresh, refreshLog } from './log';
-import { refreshSessions } from './sessions';
+import { createEffect } from "solid-js";
+import { autoRefresh, refreshLog } from "./log";
+import { refreshSessions } from "./sessions";
 
 /**
  * Cadence of the shared run-list auto-refresh poll.

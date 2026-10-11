@@ -1,8 +1,8 @@
-import { spawn } from 'child_process';
-import { appendFileSync, mkdirSync } from 'fs';
-import path from 'path';
-import { setLogLines, refreshLog } from './store/log';
-import { refreshSessions } from './store/sessions';
+import { spawn } from "node:child_process";
+import { appendFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
+import { setLogLines } from "./store/log";
+import { refreshSessions } from "./store/sessions";
 
 export interface PromptSubmitOpts {
   tier: 1 | 2 | 3 | 4;
@@ -39,7 +39,7 @@ export function submitPrompt(prompt: string, opts: PromptSubmitOpts): void {
       for (const line of lines) {
         if (line.length > 0) {
           setLogLines((prev) => [...prev, line]);
-          appendFileSync(logFile, line + "\n", "utf8");
+          appendFileSync(logFile, `${line}\n`, "utf8");
         }
       }
     });
@@ -49,7 +49,7 @@ export function submitPrompt(prompt: string, opts: PromptSubmitOpts): void {
       for (const line of lines) {
         if (line.length > 0) {
           setLogLines((prev) => [...prev, line]);
-          appendFileSync(logFile, line + "\n", "utf8");
+          appendFileSync(logFile, `${line}\n`, "utf8");
         }
       }
     });

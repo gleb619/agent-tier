@@ -1,6 +1,6 @@
-import { sessions } from '../../tui/store/sessions';
-import { sidebarFilter } from './ui';
-import type { RunRecord } from '../../run-store';
+import type { RunRecord } from "../../run-store";
+import { sessions } from "../../tui/store/sessions";
+import { sidebarFilter } from "./ui";
 
 /**
  * Pure filter: case-insensitive substring match on run id, agent, or prompt.
@@ -14,7 +14,7 @@ export function filterRuns(runs: RunRecord[], filter: string): RunRecord[] {
     (r) =>
       r.runId.toLowerCase().includes(needle) ||
       r.agent.toLowerCase().includes(needle) ||
-      r.prompt.toLowerCase().includes(needle)
+      r.prompt.toLowerCase().includes(needle),
   );
 }
 

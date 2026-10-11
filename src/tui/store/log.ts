@@ -1,28 +1,28 @@
-import { createSignal, createMemo, Accessor } from 'solid-js';
-import { readFile } from 'fs';
+import { readFile } from "node:fs";
+import { type Accessor, createMemo, createSignal } from "solid-js";
 
 const [currentLogFile, setCurrentLogFile] = createSignal<string | null>(null);
 const [logLines, setLogLines] = createSignal<string[]>([]);
-const [logFilter, setLogFilter] = createSignal<string>('');
+const [logFilter, setLogFilter] = createSignal<string>("");
 const [scrollOffset, setScrollOffset] = createSignal<number>(0);
 const [autoRefresh, setAutoRefresh] = createSignal<boolean>(true);
 const [isLoading, setIsLoading] = createSignal(false);
 const [showPrompt, setShowPrompt] = createSignal(false);
 
 export {
-  currentLogFile,
-  setCurrentLogFile,
-  logLines,
-  setLogLines,
-  logFilter,
-  setLogFilter,
-  scrollOffset,
-  setScrollOffset,
   autoRefresh,
-  setAutoRefresh,
+  currentLogFile,
   isLoading,
-  showPrompt,
+  logFilter,
+  logLines,
+  scrollOffset,
+  setAutoRefresh,
+  setCurrentLogFile,
+  setLogFilter,
+  setLogLines,
+  setScrollOffset,
   setShowPrompt,
+  showPrompt,
 };
 
 export const filteredLines: Accessor<string[]> = createMemo(() => {
@@ -35,12 +35,12 @@ export const VISIBLE_LINES = 20;
 
 export function loadLogFile(path: string): void {
   setIsLoading(true);
-  readFile(path, 'utf8', (err, content) => {
+  readFile(path, "utf8", (err, content) => {
     if (err) {
       setLogLines([]);
       setScrollOffset(0);
     } else {
-      const lines = content.split('\n');
+      const lines = content.split("\n");
       setLogLines(lines);
       setScrollOffset(Math.max(0, lines.length - VISIBLE_LINES));
     }

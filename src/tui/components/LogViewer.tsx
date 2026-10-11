@@ -1,10 +1,22 @@
-import { For, Show, createMemo, createEffect } from "solid-js";
 import type { JSX } from "solid-js";
-import { filteredLines, logFilter, setLogFilter, scrollOffset, currentLogFile, goToHead, goToTail, VISIBLE_LINES, isLoading, logLines, showPrompt, setShowPrompt } from "../store/log";
-import { selectedSession, showDashboard, sessions } from "../store/sessions";
-import { buildStatusReport, buildStateReport } from "../../status";
-import type { StatusReport, StateReport } from "../../status";
+import { createEffect, createMemo, For, Show } from "solid-js";
 import { resolveStateDir } from "../../state-dir";
+import type { StateReport, StatusReport } from "../../status";
+import { buildStateReport, buildStatusReport } from "../../status";
+import {
+  currentLogFile,
+  filteredLines,
+  goToTail,
+  isLoading,
+  logFilter,
+  logLines,
+  scrollOffset,
+  setLogFilter,
+  setShowPrompt,
+  showPrompt,
+  VISIBLE_LINES,
+} from "../store/log";
+import { selectedSession, sessions, showDashboard } from "../store/sessions";
 
 export function lineColor(line: string): string {
   if (/\[ERROR\]|\[FAIL\]|error|Error/.test(line)) return "#f85149";
@@ -17,11 +29,16 @@ export function lineColor(line: string): string {
 
 function statusColor(status: string): string {
   switch (status) {
-    case 'running': return '#58a6ff';
-    case 'done': return '#3fb950';
-    case 'failed': return '#f85149';
-    case 'stuck': return '#d29922';
-    default: return '#c9d1d9';
+    case "running":
+      return "#58a6ff";
+    case "done":
+      return "#3fb950";
+    case "failed":
+      return "#f85149";
+    case "stuck":
+      return "#d29922";
+    default:
+      return "#c9d1d9";
   }
 }
 
@@ -48,15 +65,12 @@ function DashboardView(props: DashboardProps): JSX.Element {
         <text content="Runs" bold fg="#58a6ff" />
         <text content="" />
 
-        <Show
-          when={props.statusReport.runs.length > 0}
-          fallback={<text fg="#484f58" content="  (no runs)" />}
-        >
+        <Show when={props.statusReport.runs.length > 0} fallback={<text fg="#484f58" content="  (no runs)" />}>
           <For each={props.statusReport.runs}>
             {(r) => {
               const end = r.finishedAt ? new Date(r.finishedAt).getTime() : now;
               const dur = formatMs(end - new Date(r.startedAt).getTime());
-              const id = r.runId.length > 20 ? r.runId.slice(0, 17) + '...' : r.runId;
+              const id = r.runId.length > 20 ? `${r.runId.slice(0, 17)}...` : r.runId;
               return (
                 <text
                   content={`  ${id}  ${r.agent.padEnd(12)}  ${r.status.padEnd(8)}  ${dur.padEnd(10)}  ${r.logFile}`}
@@ -78,10 +92,7 @@ function DashboardView(props: DashboardProps): JSX.Element {
           <text fg="#c9d1d9" content="  Scheduler:" />
           <For each={props.stateReport.scheduler}>
             {(e) => (
-              <text
-                fg="#8b949e"
-                content={`    ${e.key} → index ${e.index}${e.agentName ? ` (${e.agentName})` : ''}`}
-              />
+              <text fg="#8b949e" content={`    ${e.key} → index ${e.index}${e.agentName ? ` (${e.agentName})` : ""}`} />
             )}
           </For>
         </Show>
@@ -89,9 +100,11 @@ function DashboardView(props: DashboardProps): JSX.Element {
         <text content="" />
         <text
           fg="#8b949e"
-          content={props.stateReport.maxEntries != null
-            ? `  Config: max runs: ${props.stateReport.maxEntries}`
-            : '  Config: (none)'}
+          content={
+            props.stateReport.maxEntries != null
+              ? `  Config: max runs: ${props.stateReport.maxEntries}`
+              : "  Config: (none)"
+          }
         />
       </box>
     </scrollbox>
@@ -103,13 +116,13 @@ function logTitle(): string {
   const file = currentLogFile();
   const filePart = file ? file.split("/").pop()!.slice(0, 30) : "";
   if (session?.runId && filePart) {
-    return "Log — " + session.runId + " — " + filePart;
+    return `Log — ${session.runId} — ${filePart}`;
   }
   if (session?.runId) {
-    return "Log — " + session.runId;
+    return `Log — ${session.runId}`;
   }
   if (filePart) {
-    return "Log — " + filePart;
+    return `Log — ${filePart}`;
   }
   return "Log";
 }
@@ -138,7 +151,7 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
 
   createEffect(() => {
     const session = selectedSession();
-    if (session?.status === 'running' && filteredLines().length > 0) {
+    if (session?.status === "running" && filteredLines().length > 0) {
       goToTail();
     }
   });
@@ -164,11 +177,7 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
         }
       >
         <box flexDirection="row" gap={2} height={3}>
-          <box
-            flexDirection="column"
-            flexGrow={1}
-            marginBottom={1}>
-
+          <box flexDirection="column" flexGrow={1} marginBottom={1}>
             <input
               value={logFilter()}
               placeholder={props.focusZone === 3 ? "🔍 Filter logs..." : "Filter logs..."}
@@ -176,7 +185,7 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
               onInput={(v) => setLogFilter(v)}
               flexGrow={1}
               width="100%"
-              {...{ borderStyle: "single", borderColor: props.focusZone === 3 ? "#58a6ff" : "#30363d" } as any}
+              {...({ borderStyle: "single", borderColor: props.focusZone === 3 ? "#58a6ff" : "#30363d" } as any)}
             />
 
             <text content="────────────────────────────────────────" fg="#30363d" />
@@ -192,14 +201,9 @@ export function LogViewer(props: LogViewerProps): JSX.Element {
           }
         >
           <scrollbox flexGrow={1} focused={props.focusZone === 2}>
-            <Show
-              when={filteredLines().length > 0}
-              fallback={<text fg="#484f58" content="(no log output)" />}
-            >
+            <Show when={filteredLines().length > 0} fallback={<text fg="#484f58" content="(no log output)" />}>
               <For each={visibleLinesWithIndex()}>
-                {([idx, line]) => (
-                  <text content={String(idx).padStart(4, " ") + " | " + line} fg={lineColor(line)} />
-                )}
+                {([idx, line]) => <text content={`${String(idx).padStart(4, " ")} | ${line}`} fg={lineColor(line)} />}
               </For>
             </Show>
           </scrollbox>

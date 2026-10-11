@@ -16,6 +16,10 @@
     "test:gaps": "npx ts-node --project scripts/tsconfig.json scripts/coverage-gaps.ts",
     "build:mock": "make build",
     "test:go": "make test-go",
+    "lint": "biome check .",
+    "lint:fix": "biome check . --write --unsafe",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "ci:check": "bash scripts/ci-check.sh"
   },
   "dependencies": {
@@ -34,6 +38,7 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@types/node": "^22.0.0",
     "@types/mdast": "^4.0.0",
     "@types/unist": "^3.0.3",

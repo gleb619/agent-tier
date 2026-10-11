@@ -1,6 +1,6 @@
-import { createSignal, createMemo, createEffect, onCleanup } from "solid-js";
 import type { JSX } from "solid-js";
-import { tier, agent, mode, retries, cycleTier, cycleAgent, cycleMode, cycleRetries } from "../store/settings";
+import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, mode, retries, tier } from "../store/settings";
 
 export interface PromptSubmitOpts {
   tier: 1 | 2 | 3 | 4;
@@ -27,7 +27,7 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
       agent: agent(),
       mode: mode(),
       retries: retries(),
-    })
+    }),
   );
 
   createEffect(() => {
@@ -49,7 +49,7 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
       gap={1}
     >
       {submitting() ? (
-        <text content={SPINNER_FRAMES[spinnerFrame()] + " launching agent..."} fg="#00aaff" />
+        <text content={`${SPINNER_FRAMES[spinnerFrame()]} launching agent...`} fg="#00aaff" />
       ) : (
         <input
           value={prompt()}
@@ -58,7 +58,7 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
           onInput={(v) => setPrompt(v)}
           onSubmit={(v) => {
             if (submitting()) return;
-            if (typeof v !== 'string') return;
+            if (typeof v !== "string") return;
             const trimmed = v.trim();
             if (trimmed.length < 3) return;
             props.onSubmit(trimmed, currentOpts());
@@ -71,10 +71,10 @@ export function PromptBar(props: PromptBarProps): JSX.Element {
       )}
 
       <box flexDirection="row" gap={2}>
-        <text content={"Tier:[" + tier() + "]"} fg="#aaaaaa" onMouseDown={cycleTier} />
-        <text content={"Agent:[" + agent() + "]"} fg="#aaaaaa" onMouseDown={cycleAgent} />
-        <text content={"Mode:[" + mode() + "]"} fg="#aaaaaa" onMouseDown={cycleMode} />
-        <text content={"Retries:[" + retries() + "]"} fg="#aaaaaa" onMouseDown={cycleRetries} />
+        <text content={`Tier:[${tier()}]`} fg="#aaaaaa" onMouseDown={cycleTier} />
+        <text content={`Agent:[${agent()}]`} fg="#aaaaaa" onMouseDown={cycleAgent} />
+        <text content={`Mode:[${mode()}]`} fg="#aaaaaa" onMouseDown={cycleMode} />
+        <text content={`Retries:[${retries()}]`} fg="#aaaaaa" onMouseDown={cycleRetries} />
         {prompt().trim().length > 0 && prompt().trim().length < 3 && !submitting() && (
           <text content="min 3 characters" fg="#ffaa00" />
         )}

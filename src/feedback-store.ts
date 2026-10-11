@@ -1,16 +1,11 @@
-import {
-  readFileSync,
-  writeFileSync,
-  mkdirSync,
-  renameSync,
-} from 'fs';
-import path from 'path';
-import crypto from 'crypto';
-import { withLock } from './lock';
-import { getStateFilePath } from './state-dir';
+import crypto from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { withLock } from "./lock";
+import { getStateFilePath } from "./state-dir";
 
-export type FeedbackKind = 'bug' | 'improvement' | 'note';
-export type FeedbackStatus = 'open' | 'resolved' | 'wontfix';
+export type FeedbackKind = "bug" | "improvement" | "note";
+export type FeedbackStatus = "open" | "resolved" | "wontfix";
 
 export interface FeedbackEntry {
   id: string;
@@ -30,7 +25,7 @@ export interface FeedbackEntry {
   log?: FeedbackLogItem[];
 }
 
-export type FeedbackLogOutcome = 'try' | 'ok' | 'failed' | 'info';
+export type FeedbackLogOutcome = "try" | "ok" | "failed" | "info";
 
 export interface FeedbackLogItem {
   at: string;
@@ -93,7 +88,7 @@ const DEFAULT_LOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_LOG_ITEMS = 50;
 
 export function getFeedbackFile(stateDir: string): string {
-  return path.join(stateDir, 'feedback.jsonl');
+  return path.join(stateDir, "feedback.jsonl");
 }
 
 function getAtVersion(): string | undefined {
@@ -101,9 +96,7 @@ function getAtVersion(): string | undefined {
   const root = path.parse(dir).root;
   while (dir !== root) {
     try {
-      const pkg = JSON.parse(
-        readFileSync(path.join(dir, 'package.json'), 'utf8')
-      ) as { version?: string };
+      const pkg = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as { version?: string };
       if (pkg.version) {
         return pkg.version;
       }
@@ -116,10 +109,7 @@ function getAtVersion(): string | undefined {
 }
 
 function readConfig(stateDir: string): FeedbackConfig {
-  const parseNumber = (
-    raw: string | undefined,
-    fallback: number
-  ): number => {
+  const parseNumber = (raw: string | undefined, _fallback: number): number => {
     if (raw === undefined) {
       return Number.NaN;
     }
@@ -144,9 +134,9 @@ function readConfig(stateDir: string): FeedbackConfig {
     cfg.logTtlMs = envLogTtl;
   } else {
     try {
-      const data = JSON.parse(
-        readFileSync(getStateFilePath(stateDir), 'utf8')
-      ) as { feedback?: Partial<FeedbackConfig> };
+      const data = JSON.parse(readFileSync(getStateFilePath(stateDir), "utf8")) as {
+        feedback?: Partial<FeedbackConfig>;
+      };
       const n = Number(data.feedback?.logTtlMs);
       if (Number.isFinite(n) && n >= 1) {
         cfg.logTtlMs = Math.floor(n);
@@ -182,9 +172,9 @@ function readConfig(stateDir: string): FeedbackConfig {
 
   if (!useEnv) {
     try {
-      const data = JSON.parse(
-        readFileSync(getStateFilePath(stateDir), 'utf8')
-      ) as { feedback?: Partial<FeedbackConfig> };
+      const data = JSON.parse(readFileSync(getStateFilePath(stateDir), "utf8")) as {
+        feedback?: Partial<FeedbackConfig>;
+      };
       if (data.feedback) {
         if (data.feedback.maxEntries !== undefined) {
           const n = Number(data.feedback.maxEntries);
@@ -216,13 +206,13 @@ function readConfig(stateDir: string): FeedbackConfig {
 function readJsonl(filePath: string): FeedbackEntry[] {
   let raw: string;
   try {
-    raw = readFileSync(filePath, 'utf8');
+    raw = readFileSync(filePath, "utf8");
   } catch {
     return [];
   }
 
   const entries: FeedbackEntry[] = [];
-  for (const line of raw.split('\n')) {
+  for (const line of raw.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed) {
       continue;
@@ -240,24 +230,19 @@ function jsonlByteSize(entries: FeedbackEntry[]): number {
   if (entries.length === 0) {
     return 0;
   }
-  const content = entries.map((e) => JSON.stringify(e)).join('\n') + '\n';
-  return Buffer.byteLength(content, 'utf8');
+  const content = `${entries.map((e) => JSON.stringify(e)).join("\n")}\n`;
+  return Buffer.byteLength(content, "utf8");
 }
 
 function writeJsonlAtomic(filePath: string, entries: FeedbackEntry[]): void {
   mkdirSync(path.dirname(filePath), { recursive: true });
-  const content = entries.length
-    ? entries.map((e) => JSON.stringify(e)).join('\n') + '\n'
-    : '';
+  const content = entries.length ? `${entries.map((e) => JSON.stringify(e)).join("\n")}\n` : "";
   const tmp = `${filePath}.tmp.${process.pid}.${Date.now()}`;
-  writeFileSync(tmp, content, 'utf8');
+  writeFileSync(tmp, content, "utf8");
   renameSync(tmp, filePath);
 }
 
-function findEntryIndex(
-  entries: FeedbackEntry[],
-  idOrPrefix: string
-): number {
+function findEntryIndex(entries: FeedbackEntry[], idOrPrefix: string): number {
   const exact = entries.findIndex((e) => e.id === idOrPrefix);
   if (exact >= 0) {
     return exact;
@@ -277,12 +262,8 @@ function findEntryIndex(
   return matches[0];
 }
 
-function findEvictionIndex(
-  entries: FeedbackEntry[],
-  protectId?: string
-): number {
-  const isProtected = (id: string): boolean =>
-    protectId !== undefined && id === protectId;
+function findEvictionIndex(entries: FeedbackEntry[], protectId?: string): number {
+  const isProtected = (id: string): boolean => protectId !== undefined && id === protectId;
 
   // 1. oldest resolved/wontfix by createdAt
   let idx = -1;
@@ -291,7 +272,7 @@ function findEvictionIndex(
     if (isProtected(entries[i].id)) {
       continue;
     }
-    if (entries[i].status === 'resolved' || entries[i].status === 'wontfix') {
+    if (entries[i].status === "resolved" || entries[i].status === "wontfix") {
       const t = new Date(entries[i].createdAt).getTime();
       if (t < oldest) {
         oldest = t;
@@ -310,7 +291,7 @@ function findEvictionIndex(
     if (isProtected(entries[i].id)) {
       continue;
     }
-    if (entries[i].kind === 'note') {
+    if (entries[i].kind === "note") {
       const t = new Date(entries[i].createdAt).getTime();
       if (t < oldest) {
         oldest = t;
@@ -344,17 +325,11 @@ interface PruneResult {
   protectedKept: boolean;
 }
 
-function pruneLog(
-  entry: FeedbackEntry,
-  cfg: FeedbackConfig,
-  nowMs: number
-): FeedbackEntry {
+function pruneLog(entry: FeedbackEntry, cfg: FeedbackConfig, nowMs: number): FeedbackEntry {
   if (!entry.log) {
     return entry;
   }
-  const kept = entry.log
-    .filter((item) => nowMs - new Date(item.at).getTime() <= cfg.logTtlMs)
-    .slice(-cfg.maxLogItems);
+  const kept = entry.log.filter((item) => nowMs - new Date(item.at).getTime() <= cfg.logTtlMs).slice(-cfg.maxLogItems);
   if (kept.length === entry.log.length) {
     return entry;
   }
@@ -367,19 +342,12 @@ function pruneLog(
   return next;
 }
 
-function pruneEntries(
-  entries: FeedbackEntry[],
-  cfg: FeedbackConfig,
-  protectId?: string
-): PruneResult {
+function pruneEntries(entries: FeedbackEntry[], cfg: FeedbackConfig, protectId?: string): PruneResult {
   const nowMs = Date.now();
   let evicted = 0;
 
   let result = entries.filter((e) => {
-    if (
-      (e.status === 'resolved' || e.status === 'wontfix') &&
-      e.resolvedAt
-    ) {
+    if ((e.status === "resolved" || e.status === "wontfix") && e.resolvedAt) {
       const resolvedMs = new Date(e.resolvedAt).getTime();
       if (nowMs - resolvedMs > cfg.resolvedTtlMs) {
         evicted++;
@@ -409,33 +377,33 @@ function pruneEntries(
 
 function validateText(text: string): void {
   if (!text || text.trim().length === 0) {
-    throw new Error('feedback text cannot be empty');
+    throw new Error("feedback text cannot be empty");
   }
   if (text.length > 4000) {
-    throw new Error('feedback text exceeds 4000 characters');
+    throw new Error("feedback text exceeds 4000 characters");
   }
 }
 
 export async function addFeedback(
   stateDir: string,
-  input: FeedbackAddInput
+  input: FeedbackAddInput,
 ): Promise<{ entry: FeedbackEntry; evicted: number }> {
   validateText(input.text);
 
   const filePath = getFeedbackFile(stateDir);
   return withLock(filePath, async () => {
     const cfg = readConfig(stateDir);
-    let entries = readJsonl(filePath);
+    const entries = readJsonl(filePath);
 
     const now = new Date().toISOString();
     const entry: FeedbackEntry = {
-      id: crypto.randomBytes(4).toString('hex'),
-      kind: input.kind ?? 'note',
+      id: crypto.randomBytes(4).toString("hex"),
+      kind: input.kind ?? "note",
       text: input.text,
       agent: input.agent,
       runId: input.runId,
       tier: input.tier,
-      status: 'open',
+      status: "open",
       tags: input.tags && input.tags.length > 0 ? input.tags : undefined,
       createdAt: now,
       updatedAt: now,
@@ -445,18 +413,18 @@ export async function addFeedback(
     };
 
     while (entries.some((e) => e.id === entry.id)) {
-      entry.id = crypto.randomBytes(4).toString('hex');
+      entry.id = crypto.randomBytes(4).toString("hex");
     }
 
-    const singleSize = Buffer.byteLength(JSON.stringify(entry) + '\n', 'utf8');
+    const singleSize = Buffer.byteLength(`${JSON.stringify(entry)}\n`, "utf8");
     if (singleSize > cfg.maxBytes) {
-      throw new Error('feedback entry exceeds maximum byte size');
+      throw new Error("feedback entry exceeds maximum byte size");
     }
 
     entries.unshift(entry);
     const pruned = pruneEntries(entries, cfg, entry.id);
     if (!pruned.protectedKept) {
-      throw new Error('feedback entry exceeds maximum byte size');
+      throw new Error("feedback entry exceeds maximum byte size");
     }
 
     writeJsonlAtomic(filePath, pruned.entries);
@@ -464,10 +432,7 @@ export async function addFeedback(
   });
 }
 
-export function listFeedback(
-  stateDir: string,
-  filter: FeedbackFilter = {}
-): FeedbackEntry[] {
+export function listFeedback(stateDir: string, filter: FeedbackFilter = {}): FeedbackEntry[] {
   let entries = readJsonl(getFeedbackFile(stateDir));
 
   if (filter.status) {
@@ -483,19 +448,13 @@ export function listFeedback(
     entries = entries.filter((e) => e.tags?.includes(filter.tag as string));
   }
 
-  entries.sort(
-    (a, b) =>
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const limit = filter.limit ?? 20;
   return entries.slice(0, limit);
 }
 
-export function getFeedback(
-  stateDir: string,
-  idOrPrefix: string
-): FeedbackEntry | undefined {
+export function getFeedback(stateDir: string, idOrPrefix: string): FeedbackEntry | undefined {
   const entries = readJsonl(getFeedbackFile(stateDir));
   const idx = findEntryIndex(entries, idOrPrefix);
   return entries[idx];
@@ -504,7 +463,7 @@ export function getFeedback(
 export async function updateFeedback(
   stateDir: string,
   idOrPrefix: string,
-  input: FeedbackUpdateInput
+  input: FeedbackUpdateInput,
 ): Promise<FeedbackEntry> {
   const filePath = getFeedbackFile(stateDir);
   return withLock(filePath, () => {
@@ -521,13 +480,10 @@ export async function updateFeedback(
     }
     if (input.status !== undefined) {
       entry.status = input.status;
-      if (
-        (input.status === 'resolved' || input.status === 'wontfix') &&
-        !entry.resolvedAt
-      ) {
+      if ((input.status === "resolved" || input.status === "wontfix") && !entry.resolvedAt) {
         entry.resolvedAt = new Date().toISOString();
       }
-      if (input.status === 'open') {
+      if (input.status === "open") {
         delete entry.resolvedAt;
       }
     }
@@ -547,7 +503,7 @@ export async function updateFeedback(
 export async function appendFeedbackLog(
   stateDir: string,
   idOrPrefix: string,
-  input: FeedbackLogInput
+  input: FeedbackLogInput,
 ): Promise<FeedbackEntry> {
   validateText(input.note);
   const filePath = getFeedbackFile(stateDir);
@@ -561,7 +517,7 @@ export async function appendFeedbackLog(
       at: now.toISOString(),
       state: input.state,
       subState: input.subState,
-      outcome: input.outcome ?? 'info',
+      outcome: input.outcome ?? "info",
       note: input.note,
       runId: input.runId,
       files: input.files && input.files.length > 0 ? input.files : undefined,
@@ -577,13 +533,10 @@ export async function appendFeedbackLog(
   });
 }
 
-export async function removeFeedback(
-  stateDir: string,
-  ids: string[]
-): Promise<number> {
+export async function removeFeedback(stateDir: string, ids: string[]): Promise<number> {
   const filePath = getFeedbackFile(stateDir);
   return withLock(filePath, () => {
-    let entries = readJsonl(filePath);
+    const entries = readJsonl(filePath);
     let removed = 0;
 
     for (const id of ids) {
@@ -599,10 +552,10 @@ export async function removeFeedback(
 
 export async function clearFeedback(
   stateDir: string,
-  opts: { resolved?: boolean; all?: boolean; yes?: boolean }
+  opts: { resolved?: boolean; all?: boolean; yes?: boolean },
 ): Promise<number> {
   if (opts.all && !opts.yes) {
-    throw new Error('--yes is required to clear all feedback');
+    throw new Error("--yes is required to clear all feedback");
   }
 
   const filePath = getFeedbackFile(stateDir);
@@ -615,12 +568,10 @@ export async function clearFeedback(
       removed = entries.length;
       toKeep = [];
     } else if (opts.resolved) {
-      toKeep = entries.filter(
-        (e) => e.status !== 'resolved' && e.status !== 'wontfix'
-      );
+      toKeep = entries.filter((e) => e.status !== "resolved" && e.status !== "wontfix");
       removed = entries.length - toKeep.length;
     } else {
-      throw new Error('specify --resolved or --all');
+      throw new Error("specify --resolved or --all");
     }
 
     writeJsonlAtomic(filePath, toKeep);
@@ -641,10 +592,4 @@ export async function pruneFeedback(stateDir: string): Promise<number> {
   });
 }
 
-export {
-  DEFAULT_MAX_ENTRIES,
-  DEFAULT_MAX_BYTES,
-  DEFAULT_RESOLVED_TTL_MS,
-  DEFAULT_LOG_TTL_MS,
-  DEFAULT_MAX_LOG_ITEMS,
-};
+export { DEFAULT_LOG_TTL_MS, DEFAULT_MAX_BYTES, DEFAULT_MAX_ENTRIES, DEFAULT_MAX_LOG_ITEMS, DEFAULT_RESOLVED_TTL_MS };

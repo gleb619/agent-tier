@@ -1,27 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { batch, untrack } from 'solid-js';
+// Import readFile from the mocked fs module
+import { readFile } from "node:fs";
+import { batch, untrack } from "solid-js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  currentLogFile,
-  setCurrentLogFile,
-  logLines,
-  setLogLines,
-  logFilter,
-  setLogFilter,
-  scrollOffset,
-  setScrollOffset,
   filteredLines,
-  loadLogFile,
   goToHead,
   goToTail,
+  loadLogFile,
+  logFilter,
+  logLines,
   refreshLog,
-  showPrompt,
+  scrollOffset,
+  setCurrentLogFile,
+  setLogFilter,
+  setLogLines,
+  setScrollOffset,
   setShowPrompt,
-} from '../../../src/tui/store/log';
+  showPrompt,
+} from "../../../src/tui/store/log";
 
-// Import readFile from the mocked fs module
-import { readFile } from 'fs';
-
-vi.mock('fs', () => ({
+vi.mock("fs", () => ({
   readFile: vi.fn(),
 }));
 
@@ -33,11 +31,11 @@ function computeFilteredLines(): string[] {
   return lines.filter((line) => line.toLowerCase().includes(filter));
 }
 
-describe('TUI Log Store', () => {
+describe("TUI Log Store", () => {
   beforeEach(() => {
     batch(() => {
       setLogLines([]);
-      setLogFilter('');
+      setLogFilter("");
       setScrollOffset(0);
       setCurrentLogFile(null);
       setShowPrompt(false);
@@ -45,24 +43,24 @@ describe('TUI Log Store', () => {
     vi.clearAllMocks();
   });
 
-  describe('logLines signal', () => {
-    it('can set and get log lines', () => {
-      setLogLines(['line1', 'line2', 'line3']);
-      expect(logLines()).toEqual(['line1', 'line2', 'line3']);
+  describe("logLines signal", () => {
+    it("can set and get log lines", () => {
+      setLogLines(["line1", "line2", "line3"]);
+      expect(logLines()).toEqual(["line1", "line2", "line3"]);
     });
   });
 
-  describe('showPrompt signal', () => {
-    it('starts false', () => {
+  describe("showPrompt signal", () => {
+    it("starts false", () => {
       expect(showPrompt()).toBe(false);
     });
 
-    it('can be set true', () => {
+    it("can be set true", () => {
       setShowPrompt(true);
       expect(showPrompt()).toBe(true);
     });
 
-    it('can be toggled', () => {
+    it("can be toggled", () => {
       setShowPrompt((v) => !v);
       expect(showPrompt()).toBe(true);
       setShowPrompt((v) => !v);
@@ -70,41 +68,41 @@ describe('TUI Log Store', () => {
     });
   });
 
-  describe('filteredLines', () => {
-    it('returns all lines when no filter', () => {
-      setLogLines(['line1', 'line2', 'line3']);
+  describe("filteredLines", () => {
+    it("returns all lines when no filter", () => {
+      setLogLines(["line1", "line2", "line3"]);
       const result = computeFilteredLines();
-      expect(result).toEqual(['line1', 'line2', 'line3']);
+      expect(result).toEqual(["line1", "line2", "line3"]);
     });
 
-    it('filters lines case-insensitively', () => {
-      setLogLines(['ERROR: something failed', 'INFO: all good', 'error: another error']);
-      setLogFilter('ERROR');
+    it("filters lines case-insensitively", () => {
+      setLogLines(["ERROR: something failed", "INFO: all good", "error: another error"]);
+      setLogFilter("ERROR");
       const result = computeFilteredLines();
-      expect(result).toEqual(['ERROR: something failed', 'error: another error']);
+      expect(result).toEqual(["ERROR: something failed", "error: another error"]);
     });
 
-    it('returns empty array when no lines match filter', () => {
-      setLogLines(['line1', 'line2', 'line3']);
-      setLogFilter('xyz');
+    it("returns empty array when no lines match filter", () => {
+      setLogLines(["line1", "line2", "line3"]);
+      setLogFilter("xyz");
       const result = computeFilteredLines();
       expect(result).toEqual([]);
     });
   });
 
-  describe('goToHead', () => {
-    it('sets scrollOffset to 0', () => {
+  describe("goToHead", () => {
+    it("sets scrollOffset to 0", () => {
       setScrollOffset(50);
       goToHead();
       expect(scrollOffset()).toBe(0);
     });
   });
 
-  describe('goToTail', () => {
-    it('sets scrollOffset to max(0, lines.length - 20)', () => {
+  describe("goToTail", () => {
+    it("sets scrollOffset to max(0, lines.length - 20)", () => {
       // Test that goToTail calculates correctly based on filteredLines length
       // With 30 lines and no filter, offset should be 30 - 20 = 10
-      setLogFilter('');
+      setLogFilter("");
       setLogLines(Array.from({ length: 30 }, (_, i) => `line${i}`));
       // Manually compute what goToTail should do
       const expectedOffset = Math.max(0, filteredLines().length - 20);
@@ -112,72 +110,72 @@ describe('TUI Log Store', () => {
       expect(scrollOffset()).toBe(expectedOffset);
     });
 
-    it('sets scrollOffset to 0 when fewer lines than VISIBLE_LINES', () => {
-      setLogLines(['line1', 'line2']);
+    it("sets scrollOffset to 0 when fewer lines than VISIBLE_LINES", () => {
+      setLogLines(["line1", "line2"]);
       goToTail();
       expect(scrollOffset()).toBe(0);
     });
   });
 
-  describe('setLogFilter', () => {
-    it('updates the filter and filteredLines recomputes', () => {
-      setLogLines(['ERROR: fail', 'INFO: ok', 'ERROR: again']);
-      setLogFilter('error');
-      expect(computeFilteredLines()).toEqual(['ERROR: fail', 'ERROR: again']);
+  describe("setLogFilter", () => {
+    it("updates the filter and filteredLines recomputes", () => {
+      setLogLines(["ERROR: fail", "INFO: ok", "ERROR: again"]);
+      setLogFilter("error");
+      expect(computeFilteredLines()).toEqual(["ERROR: fail", "ERROR: again"]);
 
-      setLogFilter('info');
-      expect(computeFilteredLines()).toEqual(['INFO: ok']);
+      setLogFilter("info");
+      expect(computeFilteredLines()).toEqual(["INFO: ok"]);
     });
   });
 
-  describe('loadLogFile', () => {
-    it('sets logLines and scrollOffset correctly on success', () => {
-      const content = Array.from({ length: 25 }, (_, i) => `log line ${i}`).join('\n');
+  describe("loadLogFile", () => {
+    it("sets logLines and scrollOffset correctly on success", () => {
+      const content = Array.from({ length: 25 }, (_, i) => `log line ${i}`).join("\n");
 
       (readFile as ReturnType<typeof vi.fn>).mockImplementation(
         (_path: string, _encoding: string, callback: (err: Error | null, content: string) => void) => {
           callback(null, content);
-        }
+        },
       );
 
-      loadLogFile('/test/path.log');
+      loadLogFile("/test/path.log");
 
       expect(logLines().length).toBe(25);
       expect(scrollOffset()).toBe(5); // 25 - 20 = 5
     });
 
-    it('sets logLines to empty and scrollOffset to 0 on error', () => {
+    it("sets logLines to empty and scrollOffset to 0 on error", () => {
       (readFile as ReturnType<typeof vi.fn>).mockImplementation(
         (_path: string, _encoding: string, callback: (err: Error, content?: string) => void) => {
-          callback(new Error('ENOENT'));
-        }
+          callback(new Error("ENOENT"));
+        },
       );
 
-      loadLogFile('/nonexistent/path.log');
+      loadLogFile("/nonexistent/path.log");
 
       expect(logLines()).toEqual([]);
       expect(scrollOffset()).toBe(0);
     });
   });
 
-  describe('refreshLog', () => {
-    it('reloads the current log file by reading it again', () => {
-      const content = 'refreshed line 1\nrefreshed line 2';
+  describe("refreshLog", () => {
+    it("reloads the current log file by reading it again", () => {
+      const content = "refreshed line 1\nrefreshed line 2";
 
       (readFile as ReturnType<typeof vi.fn>).mockImplementation(
         (_path: string, _encoding: string, callback: (err: Error | null, content: string) => void) => {
           callback(null, content);
-        }
+        },
       );
 
-      setCurrentLogFile('/tmp/test-refresh.log');
+      setCurrentLogFile("/tmp/test-refresh.log");
       refreshLog();
 
-      expect(readFile).toHaveBeenCalledWith('/tmp/test-refresh.log', 'utf8', expect.any(Function));
-      expect(logLines()).toEqual(['refreshed line 1', 'refreshed line 2']);
+      expect(readFile).toHaveBeenCalledWith("/tmp/test-refresh.log", "utf8", expect.any(Function));
+      expect(logLines()).toEqual(["refreshed line 1", "refreshed line 2"]);
     });
 
-    it('does nothing when currentLogFile is null', () => {
+    it("does nothing when currentLogFile is null", () => {
       setCurrentLogFile(null);
       refreshLog();
       expect(readFile).not.toHaveBeenCalled();

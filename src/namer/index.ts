@@ -3,34 +3,34 @@
  * `providers/*` directly. Back-compat shim for the pre-T09 `runner.ts` import.
  */
 
-export type { NamerProvider } from './types';
-export { KNOWN_NAMER_PROVIDER_KINDS, type NamerProviderKind } from './types';
-export {
-  OllamaProvider,
-  sanitizeName,
-  deriveName,
-  NAMER_MIN_LEN,
-  NAMER_SALVAGE_MIN_LEN,
-  NAMER_MAX_LEN,
-  NAMER_PROMPT_MAX_CHARS,
-  DEFAULT_NAMER_MODEL,
-  DEFAULT_NAMER_URL,
-  DEFAULT_NAMER_TIMEOUT_MS,
-  type NamerOptions,
-} from './providers/ollama';
-export {
-  OpenRouterProvider,
-  type OpenRouterOptions,
-} from './providers/openrouter';
-export {
-  generateSessionName,
-  type GenerateSessionNameOpts,
-  type GenerateSessionNameResult,
-} from './orchestrator';
 export {
   loadNamerConfig,
   loadSecrets,
   resolveSecret,
-} from './config';
-export { buildProviders } from './registry';
-export { DEFAULT_NAMER_CONFIG } from './default-config';
+} from "./config";
+export { DEFAULT_NAMER_CONFIG } from "./default-config";
+export {
+  type GenerateSessionNameOpts,
+  type GenerateSessionNameResult,
+  generateSessionName,
+} from "./orchestrator";
+export {
+  DEFAULT_NAMER_MODEL,
+  DEFAULT_NAMER_TIMEOUT_MS,
+  DEFAULT_NAMER_URL,
+  deriveName,
+  NAMER_MAX_LEN,
+  NAMER_MIN_LEN,
+  NAMER_PROMPT_MAX_CHARS,
+  NAMER_SALVAGE_MIN_LEN,
+  type NamerOptions,
+  OllamaProvider,
+  sanitizeName,
+} from "./providers/ollama";
+export {
+  type OpenRouterOptions,
+  OpenRouterProvider,
+} from "./providers/openrouter";
+export { buildProviders } from "./registry";
+export type { NamerProvider } from "./types";
+export { KNOWN_NAMER_PROVIDER_KINDS, type NamerProviderKind } from "./types";

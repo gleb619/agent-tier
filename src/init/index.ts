@@ -1,7 +1,7 @@
+export type { InitOptions, InitResult, WrapperTemplate } from "./wrappers";
 export {
-  runInit,
   formatInitResults,
-  getTemplateAgentNames,
   getTemplate,
-} from './wrappers';
-export type { InitOptions, InitResult, WrapperTemplate } from './wrappers';
+  getTemplateAgentNames,
+  runInit,
+} from "./wrappers";

@@ -26,15 +26,14 @@
  * a `--wait` / `-s` feature. A non-zero callback exit is only logged to the
  * run log file — the supervisor never fails because of it.
  */
-import { spawn, spawnSync } from 'child_process';
-import { appendFileSync, readFileSync } from 'fs';
-import path from 'path';
-
-import { isPidAlive } from './process-utils';
-import { updateRun, UNNAMED_PLACEHOLDER } from './run-store';
-import { recordResult } from './health';
-import { getStateFilePath } from './state-dir';
-import { applyRunName, drainNamingQueue, readLogTail } from './naming';
+import { spawn, spawnSync } from "node:child_process";
+import { appendFileSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { recordResult } from "./health";
+import { applyRunName, drainNamingQueue, readLogTail } from "./naming";
+import { isPidAlive } from "./process-utils";
+import { UNNAMED_PLACEHOLDER, updateRun } from "./run-store";
+import { getStateFilePath } from "./state-dir";
 
 export const POLL_INTERVAL_MS = 2000;
 /**
@@ -72,7 +71,7 @@ export interface RunWatchOptions {
 
 /** Absolute path of the compiled supervisor entry (next to this module). */
 export function getRunWatchScript(): string {
-  return path.join(__dirname, 'run-watch.js');
+  return path.join(__dirname, "run-watch.js");
 }
 
 /**
@@ -81,7 +80,7 @@ export function getRunWatchScript(): string {
  */
 export function buildRunWatchArgs(o: RunWatchOptions): string[] {
   const args = [String(o.pid), o.runId, o.stateDir, o.agent, String(o.tier), o.logFile];
-  if (o.callback && o.callback.trim()) args.push(o.callback.trim());
+  if (o.callback?.trim()) args.push(o.callback.trim());
   return args;
 }
 
@@ -96,16 +95,16 @@ export function spawnRunWatch(o: RunWatchOptions): void {
     // a fixed shape (we'd otherwise need to add/remove slots that depend on
     // whether --verify / --cwd were set).
     const env: NodeJS.ProcessEnv = { ...process.env, AT_PROMPT: o.prompt };
-    if (o.verify && o.verify.trim()) env.AT_VERIFY_CMD = o.verify.trim();
+    if (o.verify?.trim()) env.AT_VERIFY_CMD = o.verify.trim();
     if (o.cwd) env.AT_CWD = o.cwd;
-    if (o.nameRun) env.AT_NAME_RUN = '1';
+    if (o.nameRun) env.AT_NAME_RUN = "1";
     const child = spawn(process.execPath, [getRunWatchScript(), ...buildRunWatchArgs(o)], {
       detached: true,
-      stdio: 'ignore',
+      stdio: "ignore",
       env,
     });
     child.unref();
-    child.once('error', () => {});
+    child.once("error", () => {});
   } catch {
     // supervisor is a convenience — never fail the caller because of it
   }
@@ -123,7 +122,7 @@ const QUOTA_SCAN_BYTES = 64 * 1024;
  */
 export function detectQuotaLimit(logFile: string): string | null {
   try {
-    const content = readFileSync(logFile, 'utf8');
+    const content = readFileSync(logFile, "utf8");
     const tail = content.length > QUOTA_SCAN_BYTES ? content.slice(-QUOTA_SCAN_BYTES) : content;
     const m = tail.match(QUOTA_MARKERS);
     return m ? m[0] : null;
@@ -141,7 +140,7 @@ function sleep(ms: number): Promise<void> {
 function runCallback(
   callback: string,
   o: RunWatchOptions,
-  status: 'done' | 'failed' = 'done',
+  status: "done" | "failed" = "done",
   name: string = UNNAMED_PLACEHOLDER,
 ): void {
   const env: NodeJS.ProcessEnv = {
@@ -150,14 +149,14 @@ function runCallback(
     AT_AGENT: o.agent,
     AT_TIER: String(o.tier),
     // Unknowable for a non-child pid; 0 keeps the contract stable.
-    AT_EXIT_CODE: '0',
+    AT_EXIT_CODE: "0",
     AT_LOG_FILE: o.logFile,
     AT_PROMPT: o.prompt,
     AT_STATUS: status,
     AT_RUN_NAME: name,
   };
 
-  const result = spawnSync(callback, [], { env, stdio: 'ignore', shell: true });
+  const result = spawnSync(callback, [], { env, stdio: "ignore", shell: true });
   if (result.status !== 0) {
     try {
       appendFileSync(o.logFile, `[at] callback exited with code ${result.status ?? 1}: ${callback}\n`);
@@ -190,7 +189,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     tier: Number.isFinite(tier) ? tier : 2,
     logFile,
     callback,
-    prompt: process.env.AT_PROMPT ?? '',
+    prompt: process.env.AT_PROMPT ?? "",
   };
 
   // Flush naming jobs queued by earlier lock timeouts — best-effort, silent,
@@ -205,10 +204,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         lastHeartbeat = Date.now();
         const elapsedMin = Math.round((lastHeartbeat - startedAt) / 60000);
         try {
-          appendFileSync(
-            logFile,
-            `[at] heartbeat: ${agent} pid ${pid} alive, ${elapsedMin}m elapsed\n`,
-          );
+          appendFileSync(logFile, `[at] heartbeat: ${agent} pid ${pid} alive, ${elapsedMin}m elapsed\n`);
         } catch {
           // log file may be gone — heartbeat is best-effort
         }
@@ -229,7 +225,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         );
       }
       await updateRun(stateDir, runId, {
-        status: quotaHit ? 'failed' : 'done',
+        status: quotaHit ? "failed" : "done",
         finishedAt: new Date().toISOString(),
         // The exit code of a process that is not our direct child cannot be
         // observed; null signals "finished, status unknown". A quota kill is
@@ -254,7 +250,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
     // alone. Awaited (not fire-and-forget): the name must be in runs.jsonl
     // before this process exits, and the callback should see it.
     const named =
-      process.env.AT_NAME_RUN === '1'
+      process.env.AT_NAME_RUN === "1"
         ? await applyRunName({
             stateDir,
             runId,
@@ -265,7 +261,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
           })
         : null;
 
-    let finalStatus: 'done' | 'failed' = 'done';
+    let finalStatus: "done" | "failed" = "done";
     const verifyCmd = process.env.AT_VERIFY_CMD?.trim();
     if (verifyCmd) {
       // Verify runs in AT_CWD when set (forwarded by the parent CLI's
@@ -273,7 +269,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       // the parent's CWD for any realistic detached-run invocation (the
       // supervisor inherits cwd from the spawning `at` process).
       const verifyCwd = process.env.AT_CWD ?? process.cwd();
-      const verifyResult = spawnSync(verifyCmd, [], { cwd: verifyCwd, shell: true, stdio: 'ignore' });
+      const verifyResult = spawnSync(verifyCmd, [], { cwd: verifyCwd, shell: true, stdio: "ignore" });
       const verifyExit = verifyResult.status ?? 1;
       if (verifyExit === 0) {
         try {
@@ -282,7 +278,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
           // best effort
         }
       } else {
-        finalStatus = 'failed';
+        finalStatus = "failed";
         try {
           appendFileSync(logFile, `[at] verify failed (exit ${verifyExit}): ${verifyCmd}\n`);
         } catch {
@@ -296,7 +292,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       }
     }
 
-    if (callback && callback.trim()) {
+    if (callback?.trim()) {
       runCallback(callback.trim(), options, finalStatus, named?.name ?? UNNAMED_PLACEHOLDER);
     }
 

@@ -1,14 +1,14 @@
-import { Command } from 'commander';
-import { resolveStateDir } from '../state-dir';
-import { startMcpServer } from '../mcp/server';
+import type { Command } from "commander";
+import { startMcpServer } from "../mcp/server";
+import { resolveStateDir } from "../state-dir";
 
 export function registerMcpCommand(program: Command): void {
   program
-    .command('mcp')
-    .description('Start MCP server on stdio (for Claude Code, Cursor, etc.)')
-    .option('--state-dir <path>', 'State directory override (default: auto-resolve)')
+    .command("mcp")
+    .description("Start MCP server on stdio (for Claude Code, Cursor, etc.)")
+    .option("--state-dir <path>", "State directory override (default: auto-resolve)")
     .addHelpText(
-      'after',
+      "after",
       `
 Examples:
   $ at mcp                          # start MCP server

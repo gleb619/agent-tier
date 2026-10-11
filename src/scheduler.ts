@@ -1,7 +1,7 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import path from 'path';
-import { AgentDef } from './agents/registry';
-import { withLock } from './lock';
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import type { AgentDef } from "./agents/registry";
+import { withLock } from "./lock";
 
 export interface SchedulerState {
   index: number;
@@ -18,7 +18,7 @@ export interface StateFile {
 
 export function loadStateFile(stateFilePath: string): StateFile {
   try {
-    return JSON.parse(readFileSync(stateFilePath, 'utf8'));
+    return JSON.parse(readFileSync(stateFilePath, "utf8"));
   } catch {
     return {};
   }
@@ -26,14 +26,14 @@ export function loadStateFile(stateFilePath: string): StateFile {
 
 export function saveStateFile(stateFilePath: string, state: StateFile): void {
   mkdirSync(path.dirname(stateFilePath), { recursive: true });
-  writeFileSync(stateFilePath, JSON.stringify(state, null, 2), 'utf8');
+  writeFileSync(stateFilePath, JSON.stringify(state, null, 2), "utf8");
 }
 
 export function getStateFile(stateDir: string): string {
-  return path.join(stateDir, 'state.json');
+  return path.join(stateDir, "state.json");
 }
 
-export async function pickAgent(agents: AgentDef[], stateFilePath: string, key = 'default'): Promise<AgentDef> {
+export async function pickAgent(agents: AgentDef[], stateFilePath: string, key = "default"): Promise<AgentDef> {
   return withLock(stateFilePath, () => {
     const state = loadStateFile(stateFilePath);
     if (!state.scheduler) state.scheduler = {};

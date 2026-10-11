@@ -1,12 +1,12 @@
-import { existsSync, readdirSync, statSync } from 'fs';
-import path from 'path';
-import { parseLegend } from './legend';
-import { PLANS_DIR_REL, SENTINEL } from './types';
+import { existsSync, readdirSync, statSync } from "node:fs";
+import path from "node:path";
+import { parseLegend } from "./legend";
+import { PLANS_DIR_REL, SENTINEL } from "./types";
 
 export const ROW_RE = /^\|\s*T\d+\s*\|/;
 export const ID_RE = /^\|\s*(T\d+)\s*\|/;
 export const CELL_SPLIT_RE = /(?<!\\)\|/;
-export const HEADER_LINE_PREFIX = '| ID';
+export const HEADER_LINE_PREFIX = "| ID";
 
 export interface LintViolation {
   line: number;
@@ -23,15 +23,15 @@ export interface LintResult {
 export function splitCells(line: string): string[] {
   return line
     .trim()
-    .replace(/^\|+/, '')
-    .replace(/\|+$/, '')
+    .replace(/^\|+/, "")
+    .replace(/\|+$/, "")
     .split(CELL_SPLIT_RE)
     .map((c) => c.trim());
 }
 
 export function extractIds(text: string): Set<string> {
   const ids = new Set<string>();
-  for (const rawLine of text.split('\n')) {
+  for (const rawLine of text.split("\n")) {
     const m = ID_RE.exec(rawLine.trim());
     if (m) ids.add(m[1]);
   }
@@ -45,7 +45,7 @@ function planResolves(plan: string, id: string, root: string): boolean {
   // `clean` drops Done rows but leaves their plan files behind, so a re-added task can
   // carry a drifted slug. An `<ID>-*` file in docs/plans is accepted as the real spec.
   const plansDir = path.join(root, PLANS_DIR_REL);
-  if (!id.startsWith('T') || !existsSync(plansDir)) return false;
+  if (!id.startsWith("T") || !existsSync(plansDir)) return false;
   return readdirSync(plansDir).some((name) => {
     if (!name.startsWith(`${id}-`)) return false;
     try {
@@ -57,7 +57,7 @@ function planResolves(plan: string, id: string, root: string): boolean {
 }
 
 export function lintBoard(text: string, root: string): LintResult {
-  const lines = text.split('\n');
+  const lines = text.split("\n");
   const legend = parseLegend(text);
   const violations: LintViolation[] = [];
   const seen = new Map<string, number>();
@@ -96,16 +96,14 @@ export function lintBoard(text: string, root: string): LintResult {
 
     if (headerCols === null) return;
 
-    const statusIdx = headerCols.indexOf('Status');
-    const status = statusIdx >= 0 ? cells[statusIdx] ?? '' : '';
+    const statusIdx = headerCols.indexOf("Status");
+    const status = statusIdx >= 0 ? (cells[statusIdx] ?? "") : "";
     if (legend.length > 0 && !legend.includes(status)) {
-      fail(
-        `line ${lineNo}: ${id} has invalid Status '${status}' (expected one of: ${[...legend].sort().join(', ')})`,
-      );
+      fail(`line ${lineNo}: ${id} has invalid Status '${status}' (expected one of: ${[...legend].sort().join(", ")})`);
     }
 
-    const planIdx = headerCols.indexOf('Plan File');
-    const plan = (planIdx >= 0 ? cells[planIdx] ?? '' : '').replace(/`/g, '').trim();
+    const planIdx = headerCols.indexOf("Plan File");
+    const plan = (planIdx >= 0 ? (cells[planIdx] ?? "") : "").replace(/`/g, "").trim();
     if (plan && plan !== SENTINEL && !planResolves(plan, id, root)) {
       fail(`line ${lineNo}: ${id} Plan File '${plan}' does not exist`);
     }

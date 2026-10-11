@@ -20,10 +20,15 @@ export function shouldPassNormkaFlag(prompt: string): boolean {
  * the caller either set `normka: true` OR the prompt itself triggers
  * normka mode. Returns the args unchanged otherwise.
  */
-import type { AgentDef } from './registry';
+import type { AgentDef } from "./registry";
 
-export function applyNormkaFlag(agent: AgentDef, args: string[], prompt: string, opts: { normka?: boolean } = {}): string[] {
+export function applyNormkaFlag(
+  agent: AgentDef,
+  args: string[],
+  prompt: string,
+  opts: { normka?: boolean } = {},
+): string[] {
   if (agent.tier !== 4) return args;
   if (!opts.normka && !shouldPassNormkaFlag(prompt)) return args;
-  return [...args, '--normka'];
+  return [...args, "--normka"];
 }

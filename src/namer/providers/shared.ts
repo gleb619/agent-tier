@@ -23,19 +23,15 @@ export function linkAbort(signal: AbortSignal, controller: AbortController): () 
     return () => {};
   }
   const onAbort = () => controller.abort();
-  signal.addEventListener('abort', onAbort);
-  return () => signal.removeEventListener('abort', onAbort);
+  signal.addEventListener("abort", onAbort);
+  return () => signal.removeEventListener("abort", onAbort);
 }
 
 /**
  * `fetchImpl(url, init)` with an aborting timeout and the caller's signal
  * linked in. `init.signal` is always replaced by the internal controller's.
  */
-export async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  opts: FetchWithTimeoutOpts,
-): Promise<Response> {
+export async function fetchWithTimeout(url: string, init: RequestInit, opts: FetchWithTimeoutOpts): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
   const off = linkAbort(opts.signal, controller);

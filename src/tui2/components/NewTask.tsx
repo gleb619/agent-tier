@@ -1,17 +1,8 @@
-import { Show, createSignal } from 'solid-js';
-import type { JSX } from 'solid-js';
-import type { TextareaRenderable } from '@opentui/core';
-import { submitPrompt, type PromptSubmitOpts } from '../../tui/launch';
-import {
-  agent,
-  cycleAgent,
-  cycleMode,
-  cycleRetries,
-  cycleTier,
-  mode,
-  retries,
-  tier,
-} from '../../tui/store/settings';
+import type { TextareaRenderable } from "@opentui/core";
+import type { JSX } from "solid-js";
+import { createSignal, Show } from "solid-js";
+import { type PromptSubmitOpts, submitPrompt } from "../../tui/launch";
+import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, mode, retries, tier } from "../../tui/store/settings";
 
 const MIN_PROMPT_LENGTH = 3;
 
@@ -46,11 +37,11 @@ function Selector(props: SelectorProps): JSX.Element {
 }
 
 export function NewTask(props: { focused: boolean }): JSX.Element {
-  const [status, setStatus] = createSignal<{ text: string; error: boolean }>({ text: '', error: false });
+  const [status, setStatus] = createSignal<{ text: string; error: boolean }>({ text: "", error: false });
   let field: TextareaRenderable | undefined;
 
   function submit(): void {
-    const result = validatePrompt(field ? field.plainText : '');
+    const result = validatePrompt(field ? field.plainText : "");
     if (result.error) {
       setStatus({ text: result.error, error: true });
       return;
@@ -66,7 +57,7 @@ export function NewTask(props: { focused: boolean }): JSX.Element {
       title="New Task"
       border
       borderStyle="single"
-      borderColor={props.focused ? '#00ddff' : '#555555'}
+      borderColor={props.focused ? "#00ddff" : "#555555"}
       focused={props.focused}
       flexDirection="column"
       flexGrow={1}
@@ -90,10 +81,10 @@ export function NewTask(props: { focused: boolean }): JSX.Element {
         keyBindings={[
           // Enter is the primary action here (the classic PromptBar behaviour);
           // Shift+Enter keeps multi-line prompts reachable.
-          { name: 'return', action: 'submit' },
-          { name: 'kpenter', action: 'submit' },
-          { name: 'return', shift: true, action: 'newline' },
-          { name: 'linefeed', action: 'newline' },
+          { name: "return", action: "submit" },
+          { name: "kpenter", action: "submit" },
+          { name: "return", shift: true, action: "newline" },
+          { name: "linefeed", action: "newline" },
         ]}
       />
 
@@ -104,8 +95,8 @@ export function NewTask(props: { focused: boolean }): JSX.Element {
         <Selector label="Retries" value={String(retries())} hotkey="N" onCycle={cycleRetries} />
       </box>
 
-      <Show when={status().text !== ''}>
-        <text content={status().text} fg={status().error ? '#d29922' : '#3fb950'} />
+      <Show when={status().text !== ""}>
+        <text content={status().text} fg={status().error ? "#d29922" : "#3fb950"} />
       </Show>
     </box>
   );

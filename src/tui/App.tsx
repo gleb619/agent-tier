@@ -1,17 +1,44 @@
-import { createSignal, createEffect, onMount, onCleanup } from "solid-js";
-import type { JSX } from "solid-js";
+import type { KeyEvent } from "@opentui/core";
 import { useKeyHandler } from "@opentui/solid";
-import { KeyEvent } from "@opentui/core";
-import { Sidebar } from "./components/Sidebar";
+import type { JSX } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { HotkeyBar } from "./components/HotkeyBar";
 import { LogViewer } from "./components/LogViewer";
 import { PromptBar, type PromptSubmitOpts } from "./components/PromptBar";
-import { HotkeyBar } from "./components/HotkeyBar";
-import { filteredSessions, selectedSession, selectedRunId, setSelectedRunId, refreshSessions, killSession, retrySession, showDashboard, setShowDashboard, loadSessionState, saveSessionState } from "./store/sessions";
-import { scrollOffset, setScrollOffset, filteredLines, autoRefresh, refreshLog, goToHead, goToTail, setAutoRefresh, setCurrentLogFile, loadLogFile, setLogLines, VISIBLE_LINES, showPrompt, setShowPrompt } from "./store/log";
-import { startSessionAutoRefresh } from "./store/auto-refresh";
-import { cycleTier, cycleAgent, cycleMode, cycleRetries, loadSettings } from "./store/settings";
-import { focusZone, setFocusZone, loadUIState, saveUIState } from "./store/ui";
+import { Sidebar } from "./components/Sidebar";
 import { submitPrompt } from "./launch";
+import { startSessionAutoRefresh } from "./store/auto-refresh";
+import {
+  autoRefresh,
+  filteredLines,
+  goToHead,
+  goToTail,
+  loadLogFile,
+  refreshLog,
+  scrollOffset,
+  setAutoRefresh,
+  setCurrentLogFile,
+  setLogLines,
+  setScrollOffset,
+  setShowPrompt,
+  showPrompt,
+  VISIBLE_LINES,
+} from "./store/log";
+import {
+  filteredSessions,
+  killSession,
+  loadSessionState,
+  refreshSessions,
+  retrySession,
+  saveSessionState,
+  selectedRunId,
+  selectedSession,
+  setSelectedRunId,
+  setShowDashboard,
+  showDashboard,
+} from "./store/sessions";
+import { cycleAgent, cycleMode, cycleRetries, cycleTier, loadSettings } from "./store/settings";
+import { focusZone, loadUIState, saveUIState, setFocusZone } from "./store/ui";
 
 export function App(): JSX.Element {
   // Shared auto-refresh loop (same cadence/poller as tui2 — see
@@ -109,7 +136,7 @@ export function App(): JSX.Element {
     } else if (name === "up" && (focusZone() === 0 || focusZone() === 1)) {
       const sessions = filteredSessions();
       const current = selectedRunId();
-      const idx = sessions.findIndex(s => s.runId === current);
+      const idx = sessions.findIndex((s) => s.runId === current);
       if (showDashboard()) {
         // no-op, already at top
       } else if (current === null) {
@@ -123,7 +150,7 @@ export function App(): JSX.Element {
     } else if (name === "down" && (focusZone() === 0 || focusZone() === 1)) {
       const sessions = filteredSessions();
       const current = selectedRunId();
-      const idx = sessions.findIndex(s => s.runId === current);
+      const idx = sessions.findIndex((s) => s.runId === current);
       if (showDashboard()) {
         setShowDashboard(false);
         if (sessions.length > 0) {
@@ -152,32 +179,71 @@ export function App(): JSX.Element {
       {/* header */}
       <box flexDirection="row" gap={2} padding={1} paddingY={0}>
         <text content="at — agent tier" fg="#aaaaaa" />
-        <text content={autoRefresh() ? "⟳ auto-refresh ON" : "⟳ auto-refresh OFF"} fg={autoRefresh() ? "#00ff88" : "#555555"} />
-        <text content={'\u00A0' + `dir: ${scrollOffset() === 0 ? "head" : scrollOffset() >= filteredLines().length - VISIBLE_LINES ? "tail" : "scroll"}`} fg="#aaaaaa" />
-        <text content={'\u00A0' + `lines: ${Math.min(VISIBLE_LINES, Math.max(0, filteredLines().length - scrollOffset()))}/${filteredLines().length}`} fg="#aaaaaa" />
-        <text content={selectedSession() ? '\u00A0' + `status: ${selectedSession()!.status}` : ""} fg="#aaaaaa" />
-        <text content={selectedSession() ? '\u00A0' + `code: ${selectedSession()!.exitCode ?? "-"}` : ""} fg="#aaaaaa" />
-        <text content={selectedSession() ? '\u00A0' + `started: ${new Date(selectedSession()!.startedAt).toLocaleTimeString()}` : ""} fg="#aaaaaa" />
-        <text content={selectedSession() ? '\u00A0' + `finished: ${(() => { const f = selectedSession()!.finishedAt; return f ? new Date(f).toLocaleTimeString() : "-"; })()}` : ""} fg="#aaaaaa" />
-        <text content={selectedSession() ? '\u00A0' + `pid: ${selectedSession()!.pid}` : ""} fg="#aaaaaa" />
-        <text content={selectedSession() ? '\u00A0' + `agent: ${selectedSession()!.agent}` : ""} fg="#aaaaaa" />
-        <text content={selectedSession() ? '\u00A0' + `tier: ${selectedSession()!.tier}` : ""} fg="#aaaaaa" />
+        <text
+          content={autoRefresh() ? "⟳ auto-refresh ON" : "⟳ auto-refresh OFF"}
+          fg={autoRefresh() ? "#00ff88" : "#555555"}
+        />
+        <text
+          content={
+            "\u00A0" +
+            `dir: ${scrollOffset() === 0 ? "head" : scrollOffset() >= filteredLines().length - VISIBLE_LINES ? "tail" : "scroll"}`
+          }
+          fg="#aaaaaa"
+        />
+        <text
+          content={
+            "\u00A0" +
+            `lines: ${Math.min(VISIBLE_LINES, Math.max(0, filteredLines().length - scrollOffset()))}/${filteredLines().length}`
+          }
+          fg="#aaaaaa"
+        />
+        <text content={selectedSession() ? "\u00A0" + `status: ${selectedSession()!.status}` : ""} fg="#aaaaaa" />
+        <text
+          content={selectedSession() ? "\u00A0" + `code: ${selectedSession()!.exitCode ?? "-"}` : ""}
+          fg="#aaaaaa"
+        />
+        <text
+          content={
+            selectedSession()
+              ? "\u00A0" + `started: ${new Date(selectedSession()!.startedAt).toLocaleTimeString()}`
+              : ""
+          }
+          fg="#aaaaaa"
+        />
+        <text
+          content={
+            selectedSession()
+              ? "\u00A0" +
+                `finished: ${(() => {
+                  const f = selectedSession()!.finishedAt;
+                  return f ? new Date(f).toLocaleTimeString() : "-";
+                })()}`
+              : ""
+          }
+          fg="#aaaaaa"
+        />
+        <text content={selectedSession() ? "\u00A0" + `pid: ${selectedSession()!.pid}` : ""} fg="#aaaaaa" />
+        <text content={selectedSession() ? "\u00A0" + `agent: ${selectedSession()!.agent}` : ""} fg="#aaaaaa" />
+        <text content={selectedSession() ? "\u00A0" + `tier: ${selectedSession()!.tier}` : ""} fg="#aaaaaa" />
       </box>
 
       {/* main area: sidebar + log viewer side by side */}
       <box flexDirection="row" flexGrow={1}>
         <box width="25%" onMouseDown={() => setFocusZone(0)}>
-          <Sidebar focused={focusZone() <= 1} focusZone={Math.min(focusZone(), 1) as 0|1} />
+          <Sidebar focused={focusZone() <= 1} focusZone={Math.min(focusZone(), 1) as 0 | 1} />
         </box>
         <box flexGrow={1} onMouseDown={() => setFocusZone(2)}>
-          <LogViewer focused={focusZone() >= 2 && focusZone() <= 3} focusZone={focusZone() >= 2 && focusZone() <= 3 ? (focusZone() as 2|3) : 2} />
+          <LogViewer
+            focused={focusZone() >= 2 && focusZone() <= 3}
+            focusZone={focusZone() >= 2 && focusZone() <= 3 ? (focusZone() as 2 | 3) : 2}
+          />
         </box>
       </box>
 
       {/* prompt bar */}
       <box flexDirection="column" flexGrow={0} onMouseDown={() => setFocusZone(4)}>
         <PromptBar focused={focusZone() === 4} onSubmit={handleSubmit} />
-        <HotkeyBar focusZone={focusZone() as 0|1|2|3|4} />
+        <HotkeyBar focusZone={focusZone() as 0 | 1 | 2 | 3 | 4} />
       </box>
     </box>
   );

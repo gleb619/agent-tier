@@ -1,79 +1,79 @@
-import { readFileSync } from 'fs';
-import { computeHmac, loadConfig, applyTierOverrides, AtConfig, CONFIG_FILE, HMAC_FILE } from '../src/config';
-import { AgentDef } from '../src/agents/registry';
-import { Mock } from 'vitest';
+import { readFileSync } from "node:fs";
+import type { Mock } from "vitest";
+import type { AgentDef } from "../src/agents/registry";
+import { type AtConfig, applyTierOverrides, CONFIG_FILE, computeHmac, HMAC_FILE, loadConfig } from "../src/config";
 
-vi.mock('fs');
+vi.mock("fs");
 
 const mockReadFileSync = readFileSync as Mock;
 
 function makeAgent(name: string, tier: 1 | 2 | 3 = 2): AgentDef {
-  return { name, tier, bin: () => '/usr/bin/true', buildArgs: (p) => [p] };
+  return { name, tier, bin: () => "/usr/bin/true", buildArgs: (p) => [p] };
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.spyOn(console, 'warn').mockImplementation(() => {});
-  vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('loadConfig', () => {
-  it('returns null when config file does not exist', () => {
+describe("loadConfig", () => {
+  it("returns null when config file does not exist", () => {
     mockReadFileSync.mockImplementation((p) => {
-      if (p === CONFIG_FILE) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      throw new Error('unexpected');
+      if (p === CONFIG_FILE) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      throw new Error("unexpected");
     });
     expect(loadConfig()).toBeNull();
     expect(console.warn).not.toHaveBeenCalled();
     expect(console.error).not.toHaveBeenCalled();
   });
 
-  it('warns and returns null when HMAC file does not exist', () => {
+  it("warns and returns null when HMAC file does not exist", () => {
     const configData = JSON.stringify({ tierOverrides: { pi: 2 } });
     mockReadFileSync.mockImplementation((p) => {
       if (p === CONFIG_FILE) return configData;
-      if (p === HMAC_FILE) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      throw new Error('unexpected');
+      if (p === HMAC_FILE) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      throw new Error("unexpected");
     });
     expect(loadConfig()).toBeNull();
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('no HMAC'));
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("no HMAC"));
   });
 
-  it('errors and returns null when HMAC does not match', () => {
+  it("errors and returns null when HMAC does not match", () => {
     const configData = JSON.stringify({ tierOverrides: { pi: 2 } });
     mockReadFileSync.mockImplementation((p) => {
       if (p === CONFIG_FILE) return configData;
-      if (p === HMAC_FILE) return 'deadbeef';
-      throw new Error('unexpected');
+      if (p === HMAC_FILE) return "deadbeef";
+      throw new Error("unexpected");
     });
     expect(loadConfig()).toBeNull();
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('HMAC mismatch'));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("HMAC mismatch"));
   });
 
-  it('errors and returns null when JSON is invalid', () => {
-    const configData = 'not-json{{{';
+  it("errors and returns null when JSON is invalid", () => {
+    const configData = "not-json{{{";
     const hmac = computeHmac(configData);
     mockReadFileSync.mockImplementation((p) => {
       if (p === CONFIG_FILE) return configData;
       if (p === HMAC_FILE) return hmac;
-      throw new Error('unexpected');
+      throw new Error("unexpected");
     });
     expect(loadConfig()).toBeNull();
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('not valid JSON'));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("not valid JSON"));
   });
 
-  it('returns parsed config when HMAC matches', () => {
-    process.env.AT_HMAC_SECRET = 'test-secret';
+  it("returns parsed config when HMAC matches", () => {
+    process.env.AT_HMAC_SECRET = "test-secret";
     const configData = JSON.stringify({ tierOverrides: { pi: 2, kiro: 1 } });
     const hmac = computeHmac(configData);
     mockReadFileSync.mockImplementation((p) => {
       if (p === CONFIG_FILE) return configData;
       if (p === HMAC_FILE) return hmac;
-      throw new Error('unexpected');
+      throw new Error("unexpected");
     });
     const result = loadConfig();
     expect(result).toEqual({ tierOverrides: { pi: 2, kiro: 1 } });
@@ -82,66 +82,66 @@ describe('loadConfig', () => {
     delete process.env.AT_HMAC_SECRET;
   });
 
-  it('quiet suppresses warn when HMAC file is missing', () => {
+  it("quiet suppresses warn when HMAC file is missing", () => {
     const configData = JSON.stringify({ tierOverrides: { pi: 2 } });
     mockReadFileSync.mockImplementation((p) => {
       if (p === CONFIG_FILE) return configData;
-      if (p === HMAC_FILE) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-      throw new Error('unexpected');
+      if (p === HMAC_FILE) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      throw new Error("unexpected");
     });
     expect(loadConfig({ quiet: true })).toBeNull();
     expect(console.warn).not.toHaveBeenCalled();
     expect(console.error).not.toHaveBeenCalled();
   });
 
-  it('quiet suppresses error when HMAC does not match', () => {
+  it("quiet suppresses error when HMAC does not match", () => {
     const configData = JSON.stringify({ tierOverrides: { pi: 2 } });
     mockReadFileSync.mockImplementation((p) => {
       if (p === CONFIG_FILE) return configData;
-      if (p === HMAC_FILE) return 'deadbeef';
-      throw new Error('unexpected');
+      if (p === HMAC_FILE) return "deadbeef";
+      throw new Error("unexpected");
     });
     expect(loadConfig({ quiet: true })).toBeNull();
     expect(console.warn).not.toHaveBeenCalled();
     expect(console.error).not.toHaveBeenCalled();
   });
 
-  it('quiet suppresses default-secret warn on valid config', () => {
+  it("quiet suppresses default-secret warn on valid config", () => {
     delete process.env.AT_HMAC_SECRET;
-    const configData = JSON.stringify({ line: ['mock'] });
+    const configData = JSON.stringify({ line: ["mock"] });
     const hmac = computeHmac(configData);
     mockReadFileSync.mockImplementation((p) => {
       if (p === CONFIG_FILE) return configData;
       if (p === HMAC_FILE) return hmac;
-      throw new Error('unexpected');
+      throw new Error("unexpected");
     });
-    expect(loadConfig({ quiet: true })).toEqual({ line: ['mock'] });
+    expect(loadConfig({ quiet: true })).toEqual({ line: ["mock"] });
     expect(console.warn).not.toHaveBeenCalled();
     expect(console.error).not.toHaveBeenCalled();
   });
 });
 
-describe('applyTierOverrides', () => {
-  const agents = [makeAgent('mm-code', 2), makeAgent('pi', 3), makeAgent('kiro', 3)];
+describe("applyTierOverrides", () => {
+  const agents = [makeAgent("mm-code", 2), makeAgent("pi", 3), makeAgent("kiro", 3)];
 
-  it('returns agents unchanged when config is null', () => {
+  it("returns agents unchanged when config is null", () => {
     const result = applyTierOverrides(agents, null);
     expect(result).toEqual(agents);
   });
 
-  it('returns agents unchanged when tierOverrides is absent', () => {
+  it("returns agents unchanged when tierOverrides is absent", () => {
     const result = applyTierOverrides(agents, {} as AtConfig);
     expect(result).toEqual(agents);
   });
 
-  it('overrides the tier of the named agent and leaves others unchanged', () => {
+  it("overrides the tier of the named agent and leaves others unchanged", () => {
     const result = applyTierOverrides(agents, { tierOverrides: { pi: 2 } });
-    expect(result.find((a) => a.name === 'pi')?.tier).toBe(2);
-    expect(result.find((a) => a.name === 'mm-code')?.tier).toBe(2);
-    expect(result.find((a) => a.name === 'kiro')?.tier).toBe(3);
+    expect(result.find((a) => a.name === "pi")?.tier).toBe(2);
+    expect(result.find((a) => a.name === "mm-code")?.tier).toBe(2);
+    expect(result.find((a) => a.name === "kiro")?.tier).toBe(3);
   });
 
-  it('does not mutate the original agent objects', () => {
+  it("does not mutate the original agent objects", () => {
     const original = agents[1]; // pi, tier 3
     applyTierOverrides(agents, { tierOverrides: { pi: 2 } });
     expect(original.tier).toBe(3);

@@ -1,7 +1,7 @@
-import type { RunRecord } from '../../../run-store';
-import { UNNAMED_PLACEHOLDER } from '../../../run-store';
-import type { ActiveView } from '../../store/ui';
-import { dateBucket } from '../../format';
+import type { RunRecord } from "../../../run-store";
+import { UNNAMED_PLACEHOLDER } from "../../../run-store";
+import { dateBucket } from "../../format";
+import type { ActiveView } from "../../store/ui";
 
 /**
  * Flat row model for the sidebar. The sidebar renders one vertical list where
@@ -12,16 +12,16 @@ import { dateBucket } from '../../format';
  * `separator` and `group-header` rows are visual only — selection skips them.
  */
 
-export type RowKind = 'filter' | 'menu' | 'separator' | 'group-header' | 'run';
+export type RowKind = "filter" | "menu" | "separator" | "group-header" | "run";
 
 export interface FilterRow {
-  kind: 'filter';
+  kind: "filter";
   label: string;
   filter: string;
 }
 
 export interface MenuRow {
-  kind: 'menu';
+  kind: "menu";
   view: ActiveView;
   key: string;
   label: string;
@@ -29,16 +29,16 @@ export interface MenuRow {
 }
 
 export interface SeparatorRow {
-  kind: 'separator';
+  kind: "separator";
 }
 
 export interface GroupHeaderRow {
-  kind: 'group-header';
+  kind: "group-header";
   label: string;
 }
 
 export interface RunRow {
-  kind: 'run';
+  kind: "run";
   runId: string;
   run: RunRecord;
 }
@@ -46,11 +46,11 @@ export interface RunRow {
 export type Row = FilterRow | MenuRow | SeparatorRow | GroupHeaderRow | RunRow;
 
 /** Numeric hotkeys per design doc §11.6 — single source of truth for the menu. */
-export const SIDEBAR_MENU_ITEMS: ReadonlyArray<Omit<MenuRow, 'active'>> = [
-  { kind: 'menu', view: 'dashboard', key: '1', label: 'Dashboard' },
-  { kind: 'menu', view: 'new-task', key: '2', label: 'New Task' },
-  { kind: 'menu', view: 'run-details', key: '3', label: 'Run Details' },
-  { kind: 'menu', view: 'settings', key: '4', label: 'Settings' },
+export const SIDEBAR_MENU_ITEMS: ReadonlyArray<Omit<MenuRow, "active">> = [
+  { kind: "menu", view: "dashboard", key: "1", label: "Dashboard" },
+  { kind: "menu", view: "new-task", key: "2", label: "New Task" },
+  { kind: "menu", view: "run-details", key: "3", label: "Run Details" },
+  { kind: "menu", view: "settings", key: "4", label: "Settings" },
 ];
 
 /**
@@ -59,14 +59,14 @@ export const SIDEBAR_MENU_ITEMS: ReadonlyArray<Omit<MenuRow, 'active'>> = [
  * its keywords. Lower-cased before comparison.
  */
 export const MENU_KEYWORDS: Record<ActiveView, readonly string[]> = {
-  dashboard: ['runs', 'history', 'status', 'overview', 'dashboard'],
-  'new-task': ['task', 'new', 'prompt', 'run', 'create', 'submit'],
-  'run-details': ['log', 'detail', 'output', 'run', 'prompt', 'meta'],
-  settings: ['config', 'setting', 'retry', 'retries', 'sandbox', 'timeout', 'line', 'tier'],
+  dashboard: ["runs", "history", "status", "overview", "dashboard"],
+  "new-task": ["task", "new", "prompt", "run", "create", "submit"],
+  "run-details": ["log", "detail", "output", "run", "prompt", "meta"],
+  settings: ["config", "setting", "retry", "retries", "sandbox", "timeout", "line", "tier"],
 };
 
 /** All label/keyword strings for a menu item, lower-cased. */
-function menuSearchCorpus(item: Omit<MenuRow, 'active'>): string[] {
+function menuSearchCorpus(item: Omit<MenuRow, "active">): string[] {
   return [item.label.toLowerCase(), ...MENU_KEYWORDS[item.view].map((k) => k.toLowerCase())];
 }
 
@@ -75,10 +75,7 @@ function menuSearchCorpus(item: Omit<MenuRow, 'active'>): string[] {
  * token must hit the corpus somewhere; multi-token queries (split on
  * whitespace) must hit everywhere (AND across tokens).
  */
-export function menuMatchesQuery(
-  item: Omit<MenuRow, 'active'>,
-  query: string,
-): boolean {
+export function menuMatchesQuery(item: Omit<MenuRow, "active">, query: string): boolean {
   const trimmed = query.trim().toLowerCase();
   if (!trimmed) return true;
   const tokens = trimmed.split(/\s+/);
@@ -139,17 +136,23 @@ export interface RowModelInput {
  */
 export function buildRowModel(input: RowModelInput): Row[] {
   const rows: Row[] = [];
-  rows.push({ kind: 'filter', label: 'Filter runs…', filter: input.filter });
-  rows.push({ kind: 'separator' });
+  rows.push({ kind: "filter", label: "Filter runs…", filter: input.filter });
+  rows.push({ kind: "separator" });
   for (const item of SIDEBAR_MENU_ITEMS) {
     if (!menuMatchesQuery(item, input.filter)) continue;
-    rows.push({ kind: 'menu', view: item.view, key: item.key, label: item.label, active: input.activeView === item.view });
+    rows.push({
+      kind: "menu",
+      view: item.view,
+      key: item.key,
+      label: item.label,
+      active: input.activeView === item.view,
+    });
   }
-  rows.push({ kind: 'separator' });
+  rows.push({ kind: "separator" });
   for (const group of input.groups) {
-    rows.push({ kind: 'group-header', label: group.label });
+    rows.push({ kind: "group-header", label: group.label });
     for (const run of group.runs) {
-      rows.push({ kind: 'run', runId: run.runId, run });
+      rows.push({ kind: "run", runId: run.runId, run });
     }
   }
   return rows;
@@ -159,14 +162,14 @@ export function buildRowModel(input: RowModelInput): Row[] {
 export function selectableRowIndices(rows: Row[]): number[] {
   const out: number[] = [];
   rows.forEach((row, i) => {
-    if (row.kind === 'filter' || row.kind === 'menu' || row.kind === 'run') out.push(i);
+    if (row.kind === "filter" || row.kind === "menu" || row.kind === "run") out.push(i);
   });
   return out;
 }
 
 /** Type guard for selectable rows. */
 export function isSelectable(row: Row): row is FilterRow | MenuRow | RunRow {
-  return row.kind === 'filter' || row.kind === 'menu' || row.kind === 'run';
+  return row.kind === "filter" || row.kind === "menu" || row.kind === "run";
 }
 
 /**
@@ -202,8 +205,8 @@ export function preserveSidebarIndex(oldRows: Row[], oldIndex: number, newRows: 
   if (sel.length === 0) return -1;
 
   const old = oldIndex >= 0 ? oldRows[oldIndex] : undefined;
-  if (old && old.kind === 'run') {
-    const kept = newRows.findIndex((r) => r.kind === 'run' && r.runId === old.runId);
+  if (old && old.kind === "run") {
+    const kept = newRows.findIndex((r) => r.kind === "run" && r.runId === old.runId);
     if (kept !== -1) return kept;
   } else if (oldIndex >= 0 && sel.includes(oldIndex)) {
     return oldIndex;

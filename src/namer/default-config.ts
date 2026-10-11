@@ -5,17 +5,17 @@
  * same names as before.
  */
 
-import type { NamerConfig } from './types';
+import type { NamerConfig } from "./types";
 
 export const DEFAULT_NAMER_CONFIG: NamerConfig = {
   providers: [
     {
-      name: 'local-ollama',
-      type: 'ollama',
-      url: 'http://localhost:11434',
-      model: 'gemma3:1b',
+      name: "local-ollama",
+      type: "ollama",
+      url: "http://localhost:11434",
+      model: "gemma3:1b",
       timeoutMs: 3000,
     },
   ],
-  fallbackName: 'unnamed',
+  fallbackName: "unnamed",
 };

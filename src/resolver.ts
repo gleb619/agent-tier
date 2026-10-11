@@ -1,5 +1,5 @@
-import { resolveStateDir } from './state-dir';
-import { readPromptFile } from './prompt-file';
+import { readPromptFile } from "./prompt-file";
+import { resolveStateDir } from "./state-dir";
 
 export interface RunOptions {
   agent: string;
@@ -62,11 +62,11 @@ interface ArgvOptions {
   timeout?: string | number;
   callback?: string;
   sse?: boolean | string;
-    ssePort?: string | number;
-    verify?: string;
-    normka?: boolean;
-    sandbox?: boolean;
-    globalPrompt?: string;
+  ssePort?: string | number;
+  verify?: string;
+  normka?: boolean;
+  sandbox?: boolean;
+  globalPrompt?: string;
 }
 
 export interface ParsedJson {
@@ -91,7 +91,7 @@ export interface ParsedJson {
   globalPrompt?: string;
 }
 
-function parseTier(raw: unknown, source: 'argv' | 'json'): 1 | 2 | 3 | 4 {
+function parseTier(raw: unknown, source: "argv" | "json"): 1 | 2 | 3 | 4 {
   const n = Number(raw);
   if (!Number.isInteger(n) || ![1, 2, 3, 4].includes(n)) {
     throw new Error(`tier must be 1, 2, 3, or 4 (got ${JSON.stringify(raw)}) [${source}]`);
@@ -100,26 +100,27 @@ function parseTier(raw: unknown, source: 'argv' | 'json'): 1 | 2 | 3 | 4 {
 }
 
 export function resolveFromArgs(argv: ArgvOptions): RunOptions {
-  const prompt = argv.prompt?.trim() ?? '';
-  if (!prompt) throw new Error('prompt is required and cannot be empty');
+  const prompt = argv.prompt?.trim() ?? "";
+  if (!prompt) throw new Error("prompt is required and cannot be empty");
 
   // No implicit default — absent tier means line mode.
-  const tier = argv.tier !== undefined ? parseTier(argv.tier, 'argv') : undefined;
+  const tier = argv.tier !== undefined ? parseTier(argv.tier, "argv") : undefined;
 
   const timeoutMs = Number(argv.timeout ?? 3600000);
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('timeout must be a positive number (ms)');
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("timeout must be a positive number (ms)");
 
   const retriesNum = Number(argv.retries ?? 0);
-  if (!Number.isFinite(retriesNum) || retriesNum < 0 || !Number.isInteger(retriesNum)) throw new Error('retries must be a non-negative integer');
+  if (!Number.isFinite(retriesNum) || retriesNum < 0 || !Number.isInteger(retriesNum))
+    throw new Error("retries must be a non-negative integer");
 
   // `--sse` (commander -> true) and `--sse <port>` (commander -> '<port>') both enable SSE.
   // `--sse true` / `--sse TRUE` also accepted for parity. Reject other strings as invalid ports.
   let sse = false;
   if (argv.sse === true) {
     sse = true;
-  } else if (typeof argv.sse === 'string') {
+  } else if (typeof argv.sse === "string") {
     const raw = argv.sse.trim();
-    if (raw === '' || raw.toLowerCase() === 'true') {
+    if (raw === "" || raw.toLowerCase() === "true") {
       sse = true;
     } else {
       const asPort = Number(raw);
@@ -133,14 +134,16 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
   let ssePort = 7777;
   if (argv.ssePort !== undefined) {
     ssePort = Number(argv.ssePort);
-    if (!Number.isFinite(ssePort) || ssePort < 0 || !Number.isInteger(ssePort)) throw new Error('ssePort must be a non-negative integer');
-  } else if (typeof argv.sse === 'string' && argv.sse.trim() && argv.sse.trim().toLowerCase() !== 'true') {
+    if (!Number.isFinite(ssePort) || ssePort < 0 || !Number.isInteger(ssePort))
+      throw new Error("ssePort must be a non-negative integer");
+  } else if (typeof argv.sse === "string" && argv.sse.trim() && argv.sse.trim().toLowerCase() !== "true") {
     ssePort = Number(argv.sse.trim());
-    if (!Number.isFinite(ssePort) || ssePort < 0 || !Number.isInteger(ssePort)) throw new Error('--sse port must be a non-negative integer');
+    if (!Number.isFinite(ssePort) || ssePort < 0 || !Number.isInteger(ssePort))
+      throw new Error("--sse port must be a non-negative integer");
   }
 
   return {
-    agent: argv.agent?.trim() || 'auto',
+    agent: argv.agent?.trim() || "auto",
     tier,
     prompt,
     model: argv.model,
@@ -153,7 +156,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     wait: argv.wait ?? false,
     stateDir: resolveStateDir(argv.stateDir),
     retries: retriesNum,
-    logDir: argv.logDir ?? '/tmp/at-logs',
+    logDir: argv.logDir ?? "/tmp/at-logs",
     noChop: argv.noChop ?? false,
     timeout: timeoutMs,
     callback: argv.callback?.trim() || undefined,
@@ -166,11 +169,21 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
   };
 }
 
-export function mergeJsonDefaults(stdin: Record<string, unknown>, defaults: Record<string, unknown> | undefined): Record<string, unknown> {
+export function mergeJsonDefaults(
+  stdin: Record<string, unknown>,
+  defaults: Record<string, unknown> | undefined,
+): Record<string, unknown> {
   if (!defaults) return stdin;
   const out: Record<string, unknown> = { ...defaults };
   for (const [k, v] of Object.entries(stdin)) {
-    if (k === 'env' && v && typeof v === 'object' && !Array.isArray(v) && typeof defaults.env === 'object' && !Array.isArray(defaults.env)) {
+    if (
+      k === "env" &&
+      v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      typeof defaults.env === "object" &&
+      !Array.isArray(defaults.env)
+    ) {
       out.env = { ...(defaults.env as Record<string, unknown>), ...(v as Record<string, unknown>) };
     } else {
       out[k] = v;
@@ -184,10 +197,10 @@ export function parseJsonInput(raw: string): ParsedJson {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error('Invalid JSON input');
+    throw new Error("Invalid JSON input");
   }
 
-  const inlinePrompt = (parsed.prompt as string | undefined)?.trim() ?? '';
+  const inlinePrompt = (parsed.prompt as string | undefined)?.trim() ?? "";
 
   // Optional `promptFile` field. If present and `prompt` isn't, read the file
   // and use its content as the prompt. If both are present, the inline `prompt`
@@ -195,26 +208,26 @@ export function parseJsonInput(raw: string): ParsedJson {
   // before hitting the filesystem.
   let promptFileContent: string | undefined;
   if (parsed.promptFile !== undefined) {
-    if (typeof parsed.promptFile !== 'string' || !parsed.promptFile.trim()) {
-      throw new Error('JSON input: promptFile must be a non-empty string');
+    if (typeof parsed.promptFile !== "string" || !parsed.promptFile.trim()) {
+      throw new Error("JSON input: promptFile must be a non-empty string");
     }
     if (!inlinePrompt) {
       promptFileContent = readPromptFile(parsed.promptFile);
     }
   }
 
-  const prompt = inlinePrompt || promptFileContent || '';
-  if (!prompt) throw new Error('JSON input: prompt is required (or supply promptFile)');
+  const prompt = inlinePrompt || promptFileContent || "";
+  if (!prompt) throw new Error("JSON input: prompt is required (or supply promptFile)");
 
   const rawEnv = parsed.env;
   let env: Record<string, string> | undefined;
   if (rawEnv !== undefined) {
-    if (typeof rawEnv !== 'object' || rawEnv === null || Array.isArray(rawEnv)) {
-      throw new Error('JSON input: env must be a plain object');
+    if (typeof rawEnv !== "object" || rawEnv === null || Array.isArray(rawEnv)) {
+      throw new Error("JSON input: env must be a plain object");
     }
     for (const [k, v] of Object.entries(rawEnv as Record<string, unknown>)) {
-      if (typeof v !== 'string') {
-        throw new Error('JSON input: env values must be strings (got ' + typeof v + ' for key "' + k + '")');
+      if (typeof v !== "string") {
+        throw new Error(`JSON input: env values must be strings (got ${typeof v} for key "${k}")`);
       }
     }
     env = rawEnv as Record<string, string>;
@@ -225,15 +238,15 @@ export function parseJsonInput(raw: string): ParsedJson {
   if (ssePortRaw !== undefined) {
     ssePort = Number(ssePortRaw);
     if (!Number.isFinite(ssePort) || ssePort < 0 || !Number.isInteger(ssePort)) {
-      throw new Error('JSON input: ssePort must be a non-negative integer');
+      throw new Error("JSON input: ssePort must be a non-negative integer");
     }
   }
 
   const tierRaw = parsed.tier;
-  const tier = tierRaw !== undefined ? parseTier(tierRaw, 'json') : undefined;
+  const tier = tierRaw !== undefined ? parseTier(tierRaw, "json") : undefined;
 
   return {
-    agent: (parsed.agent as string | undefined) ?? 'auto',
+    agent: (parsed.agent as string | undefined) ?? "auto",
     tier,
     prompt,
     model: parsed.model as string | undefined,

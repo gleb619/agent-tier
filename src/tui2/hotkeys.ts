@@ -1,4 +1,4 @@
-import type { KeyEvent } from '@opentui/core';
+import type { KeyEvent } from "@opentui/core";
 
 /**
  * Pure hotkey mapping for the sidebar filter entry.
@@ -12,10 +12,10 @@ import type { KeyEvent } from '@opentui/core';
  */
 
 /** The subset of a KeyEvent these decisions depend on. */
-export type FilterHotkeyInput = Pick<KeyEvent, 'name' | 'ctrl'>;
+export type FilterHotkeyInput = Pick<KeyEvent, "name" | "ctrl">;
 
 /** Keys that move the sidebar cursor onto the filter row and focus it. */
 export function isFilterHotkey(key: FilterHotkeyInput): boolean {
-  if (key.ctrl) return key.name === 'f';
-  return key.name === '/';
+  if (key.ctrl) return key.name === "f";
+  return key.name === "/";
 }

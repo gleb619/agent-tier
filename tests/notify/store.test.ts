@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import path from 'path';
-import { appendEvent, readEvents, readEventsSince, getEventFilePath } from '../../src/notify/store';
-import type { NotifyEvent } from '../../src/notify/types';
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { appendEvent, getEventFilePath, readEvents, readEventsSince } from "../../src/notify/store";
+import type { NotifyEvent } from "../../src/notify/types";
 
-describe('notify store', () => {
+describe("notify store", () => {
   let stateDir: string;
 
   beforeEach(() => {
-    stateDir = mkdtempSync(path.join(tmpdir(), 'at-notify-'));
+    stateDir = mkdtempSync(path.join(tmpdir(), "at-notify-"));
   });
 
   afterEach(() => {
@@ -18,31 +18,31 @@ describe('notify store', () => {
 
   function event(seq: number): NotifyEvent {
     return {
-      runId: 'r1',
-      agent: 'mock',
+      runId: "r1",
+      agent: "mock",
       ts: new Date().toISOString(),
       seq,
-      type: 'message',
+      type: "message",
       text: `m${seq}`,
     };
   }
 
-  it('appends and reads events', () => {
+  it("appends and reads events", () => {
     appendEvent(stateDir, event(1));
     appendEvent(stateDir, event(2));
-    expect(readEvents(stateDir, 'r1')).toHaveLength(2);
-    expect(readEvents(stateDir, 'r1')[1].text).toBe('m2');
+    expect(readEvents(stateDir, "r1")).toHaveLength(2);
+    expect(readEvents(stateDir, "r1")[1].text).toBe("m2");
   });
 
-  it('filters since seq', () => {
+  it("filters since seq", () => {
     appendEvent(stateDir, event(1));
     appendEvent(stateDir, event(2));
     appendEvent(stateDir, event(3));
-    expect(readEventsSince(stateDir, 'r1', 1).map((e) => e.seq)).toEqual([2, 3]);
+    expect(readEventsSince(stateDir, "r1", 1).map((e) => e.seq)).toEqual([2, 3]);
   });
 
-  it('returns empty for unknown run', () => {
-    expect(readEvents(stateDir, 'missing')).toEqual([]);
-    expect(getEventFilePath(stateDir, 'missing')).toContain('missing.jsonl');
+  it("returns empty for unknown run", () => {
+    expect(readEvents(stateDir, "missing")).toEqual([]);
+    expect(getEventFilePath(stateDir, "missing")).toContain("missing.jsonl");
   });
 });

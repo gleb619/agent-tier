@@ -1,11 +1,11 @@
-import type { NotifyAdapter, NotifyEvent } from '../types';
-import { buildPromptSuffix } from '../prompt';
+import { buildPromptSuffix } from "../prompt";
+import type { NotifyAdapter, NotifyEvent } from "../types";
 
 const TEXT_LIMIT = 500;
 
 function truncate(s: string, n: number): string {
   if (s.length <= n) return s;
-  return s.slice(0, n) + '…';
+  return `${s.slice(0, n)}…`;
 }
 
 /**
@@ -15,20 +15,20 @@ function truncate(s: string, n: number): string {
  */
 export function makeKiloAdapter(): NotifyAdapter {
   return {
-    name: 'kilo',
+    name: "kilo",
     promptSuffix(ctx) {
       return buildPromptSuffix(ctx);
     },
     transformArgs(_ctx, baseArgs) {
       const out = baseArgs.slice(0, -1);
-      out.push('--format', 'json');
+      out.push("--format", "json");
       out.push(baseArgs[baseArgs.length - 1]!);
       return out;
     },
-    parseLine(line: string): Array<Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>> {
+    parseLine(line: string): Array<Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq">> {
       try {
         const trimmed = line.trim();
-        if (!trimmed || trimmed[0] !== '{') return [];
+        if (trimmed?.[0] !== "{") return [];
         let payload: Record<string, unknown>;
         try {
           payload = JSON.parse(trimmed) as Record<string, unknown>;
@@ -37,21 +37,21 @@ export function makeKiloAdapter(): NotifyAdapter {
         }
         const t = payload.type;
         const part = (payload.part ?? {}) as Record<string, unknown>;
-        if (t === 'step_start') {
-          return [{ type: 'progress', text: 'session started' }];
+        if (t === "step_start") {
+          return [{ type: "progress", text: "session started" }];
         }
-        if (t === 'text') {
-          const text = typeof part.text === 'string' ? part.text : '';
+        if (t === "text") {
+          const text = typeof part.text === "string" ? part.text : "";
           if (!text) return [];
           // kilo sends each text fragment; use `accumulated` if present so we
           // avoid duplicating earlier fragments.
           const acc = (payload as Record<string, unknown>).accumulated;
-          const display = typeof acc === 'string' && acc ? acc : text;
-          return [{ type: 'message', text: truncate(display, TEXT_LIMIT) }];
+          const display = typeof acc === "string" && acc ? acc : text;
+          return [{ type: "message", text: truncate(display, TEXT_LIMIT) }];
         }
-        if (t === 'step_finish') {
-          const reason = typeof part.reason === 'string' ? part.reason : 'finished';
-          return [{ type: 'progress', text: `session ${reason}` }];
+        if (t === "step_finish") {
+          const reason = typeof part.reason === "string" ? part.reason : "finished";
+          return [{ type: "progress", text: `session ${reason}` }];
         }
         return [];
       } catch {

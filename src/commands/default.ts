@@ -1,69 +1,82 @@
-import { Command } from 'commander';
-import { AGENTS } from '../agents/registry';
-import { loadGenericAgents } from '../agents/generic-loader';
-import { resolveFromArgs, parseJsonInput, mergeJsonDefaults } from '../resolver';
-import { run } from '../runner';
-import { loadConfig, applyTierOverrides } from '../config';
-import { readPromptFile } from '../prompt-file';
+import type { Command } from "commander";
+import { loadGenericAgents } from "../agents/generic-loader";
+import { AGENTS } from "../agents/registry";
+import { applyTierOverrides, loadConfig } from "../config";
+import { readPromptFile } from "../prompt-file";
+import type { RunOptions } from "../resolver";
+import { mergeJsonDefaults, parseJsonInput, resolveFromArgs } from "../resolver";
+import { run } from "../runner";
 
 async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) return '';
+  if (process.stdin.isTTY) return "";
   return new Promise((resolve) => {
-    let data = '';
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (chunk) => (data += chunk));
-    process.stdin.on('end', () => resolve(data.trim()));
+    let data = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => (data += chunk));
+    process.stdin.on("end", () => resolve(data.trim()));
   });
 }
 
 export function registerDefaultCommand(program: Command): void {
   program
-    .option('-a, --agent <name>', 'Agent name or "auto"', 'auto')
-    .option('-t, --tier <number>', 'Tier: 1=architect, 2=dev, 3=experimental. Omit = line mode (single ordered queue)')
-    .option('-p, --prompt <text>', 'Prompt text')
-    .option('-f, --prompt-file <path>', 'Path to a file containing the prompt (.md or .json)')
-    .option('-s, --stream', 'Stream agent output to terminal via chop/tail (default: detached, fire-and-forget with report)', false)
+    .option("-a, --agent <name>", 'Agent name or "auto"', "auto")
+    .option("-t, --tier <number>", "Tier: 1=architect, 2=dev, 3=experimental. Omit = line mode (single ordered queue)")
+    .option("-p, --prompt <text>", "Prompt text")
+    .option("-f, --prompt-file <path>", "Path to a file containing the prompt (.md or .json)")
     .option(
-      '--wait',
-      'In detached mode, block until the agent exits (enables timeout, retry, agent-health tracking and callback with the real exit code). Default: return immediately after the run box',
-      false,
-    )
-    .option('--sandbox', 'After a successful run, verify the agent with a real `at` sandbox test in /tmp (also enabled by sandbox.enabled in config)', false)
-    .option('--no-chop', 'Disable chop output-log compression in stream mode (default: enabled when chop is available)')
-    .option('-r, --retries <number>', 'Max extra retry attempts with next agent in tier (default: 0). Total attempts = min(retries+1, agents-in-tier). Named agents never retry', '0')
-    .option('--state-dir <path>', 'State directory (default: .at/ in CWD if exists, else ~/.at/)')
-    .option('--log-dir <path>', 'Log file directory for detached mode', '/tmp/at-logs')
-    .option('--timeout <ms>', 'Force-kill agent after N milliseconds (default: 3600000 = 1h)', '3600000')
-    .option('-m, --model <name>', 'Model name to pass to the agent')
-    .option(
-      '--callback <command>',
-      'Shell command to run after the agent job finishes. Exposes AT_RUN_ID, AT_AGENT, AT_TIER, AT_EXIT_CODE, AT_LOG_FILE, AT_PROMPT, AT_STATUS env vars',
-    )
-    .option(
-      '--verify <command>',
-      'Shell command run after the agent exits, before --callback. Non-zero exit fails the run (status=failed, log line, AgentError raised in blocking modes to trigger retry-with-next-agent, AT_STATUS=failed in callback). Exposes the same AT_* env vars as --callback plus AT_VERIFY_CMD.',
-    )
-    .option('--sse [port]', 'Enable SSE live-progress hub (default port 7777, 0=random)')
-    .option(
-      '--normka',
-      'Forward --normka flag to tier-4 agents (mock / mock-long) so they parse the prompt as a JSON normka spec. Auto-applied when the prompt itself starts with `#NORMKA` or contains a `// normka:on` block.',
+      "-s, --stream",
+      "Stream agent output to terminal via chop/tail (default: detached, fire-and-forget with report)",
       false,
     )
     .option(
-      '--global-prompt <text>',
-      'Global prompt text prepended to every run\'s prompt (overrides config globalPrompt and JSON globalPrompt)',
+      "--wait",
+      "In detached mode, block until the agent exits (enables timeout, retry, agent-health tracking and callback with the real exit code). Default: return immediately after the run box",
+      false,
     )
     .option(
-      '--json',
+      "--sandbox",
+      "After a successful run, verify the agent with a real `at` sandbox test in /tmp (also enabled by sandbox.enabled in config)",
+      false,
+    )
+    .option("--no-chop", "Disable chop output-log compression in stream mode (default: enabled when chop is available)")
+    .option(
+      "-r, --retries <number>",
+      "Max extra retry attempts with next agent in tier (default: 0). Total attempts = min(retries+1, agents-in-tier). Named agents never retry",
+      "0",
+    )
+    .option("--state-dir <path>", "State directory (default: .at/ in CWD if exists, else ~/.at/)")
+    .option("--log-dir <path>", "Log file directory for detached mode", "/tmp/at-logs")
+    .option("--timeout <ms>", "Force-kill agent after N milliseconds (default: 3600000 = 1h)", "3600000")
+    .option("-m, --model <name>", "Model name to pass to the agent")
+    .option(
+      "--callback <command>",
+      "Shell command to run after the agent job finishes. Exposes AT_RUN_ID, AT_AGENT, AT_TIER, AT_EXIT_CODE, AT_LOG_FILE, AT_PROMPT, AT_STATUS env vars",
+    )
+    .option(
+      "--verify <command>",
+      "Shell command run after the agent exits, before --callback. Non-zero exit fails the run (status=failed, log line, AgentError raised in blocking modes to trigger retry-with-next-agent, AT_STATUS=failed in callback). Exposes the same AT_* env vars as --callback plus AT_VERIFY_CMD.",
+    )
+    .option("--sse [port]", "Enable SSE live-progress hub (default port 7777, 0=random)")
+    .option(
+      "--normka",
+      "Forward --normka flag to tier-4 agents (mock / mock-long) so they parse the prompt as a JSON normka spec. Auto-applied when the prompt itself starts with `#NORMKA` or contains a `// normka:on` block.",
+      false,
+    )
+    .option(
+      "--global-prompt <text>",
+      "Global prompt text prepended to every run's prompt (overrides config globalPrompt and JSON globalPrompt)",
+    )
+    .option(
+      "--json",
       'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0,"globalPrompt":"..."}. Supports globalPrompt field and --global-prompt flag.',
       false,
     )
     .action(async (opts) => {
       try {
-        let runOptions;
+        let runOptions: RunOptions;
         const config = loadConfig();
         const effectiveAgents = applyTierOverrides([...AGENTS, ...loadGenericAgents()], config);
-        let filePrompt = '';
+        let filePrompt = "";
         if (opts.promptFile) {
           filePrompt = readPromptFile(opts.promptFile as string);
         }
@@ -74,21 +87,21 @@ export function registerDefaultCommand(program: Command): void {
           try {
             stdinJson = JSON.parse(stdinData);
           } catch {
-            throw new Error('Invalid JSON input');
+            throw new Error("Invalid JSON input");
           }
           const mergedJson = mergeJsonDefaults(stdinJson, config?.jsonDefaults);
           const parsed = parseJsonInput(JSON.stringify(mergedJson));
-          
+
           // Determine effective globalPrompt based on precedence: CLI > JSON > config
           const cliGlobalPrompt = (opts.globalPrompt as string | undefined)?.trim();
           const jsonGlobalPrompt = parsed.globalPrompt;
           const configGlobalPrompt = config?.globalPrompt;
           const effectiveGlobalPrompt = cliGlobalPrompt || jsonGlobalPrompt || configGlobalPrompt;
-          
+
           // Build final prompt with globalPrompt prepended (if any)
-          const basePrompt = (parsed.prompt || parsed.promptFileContent || filePrompt || opts.prompt || '').trim();
-          const finalPrompt = effectiveGlobalPrompt ? (effectiveGlobalPrompt + '\n\n' + basePrompt).trim() : basePrompt;
-          
+          const basePrompt = (parsed.prompt || parsed.promptFileContent || filePrompt || opts.prompt || "").trim();
+          const finalPrompt = effectiveGlobalPrompt ? `${effectiveGlobalPrompt}\n\n${basePrompt}`.trim() : basePrompt;
+
           runOptions = resolveFromArgs({
             agent: parsed.agent,
             tier: opts.tier,
@@ -111,16 +124,16 @@ export function registerDefaultCommand(program: Command): void {
             sandbox: opts.sandbox as boolean,
             globalPrompt: effectiveGlobalPrompt,
           });
-         } else {
-           // For non-JSON mode: precedence CLI > config
-           const cliGlobalPrompt = (opts.globalPrompt as string | undefined)?.trim();
-           const configGlobalPrompt = config?.globalPrompt;
-           const effectiveGlobalPrompt = cliGlobalPrompt || configGlobalPrompt;
-           
-           const stdinData = !opts.prompt && !opts.promptFile && !process.stdin.isTTY ? await readStdin() : '';
-           const basePrompt = (stdinData || filePrompt || (opts.prompt as string | undefined) || '').trim();
-           const finalPrompt = effectiveGlobalPrompt ? (effectiveGlobalPrompt + '\n\n' + basePrompt).trim() : basePrompt;
-          
+        } else {
+          // For non-JSON mode: precedence CLI > config
+          const cliGlobalPrompt = (opts.globalPrompt as string | undefined)?.trim();
+          const configGlobalPrompt = config?.globalPrompt;
+          const effectiveGlobalPrompt = cliGlobalPrompt || configGlobalPrompt;
+
+          const stdinData = !opts.prompt && !opts.promptFile && !process.stdin.isTTY ? await readStdin() : "";
+          const basePrompt = (stdinData || filePrompt || (opts.prompt as string | undefined) || "").trim();
+          const finalPrompt = effectiveGlobalPrompt ? `${effectiveGlobalPrompt}\n\n${basePrompt}`.trim() : basePrompt;
+
           runOptions = resolveFromArgs({
             agent: opts.agent,
             tier: opts.tier,
@@ -153,7 +166,7 @@ export function registerDefaultCommand(program: Command): void {
       }
     })
     .addHelpText(
-      'after',
+      "after",
       `
 Examples:
   # Detached mode (logs in /tmp/at-logs/) — returns as soon as the run box prints — DEFAULT
@@ -190,6 +203,6 @@ Examples:
 
   # Sandbox verification after success
   at -s -a mock --wait --sandbox -p "say OK"
-`
+`,
     );
 }

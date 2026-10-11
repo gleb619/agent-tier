@@ -1,7 +1,7 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import path from 'path';
-import { AgentDef } from './agents/registry';
-import { withLock } from './lock';
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import type { AgentDef } from "./agents/registry";
+import { withLock } from "./lock";
 
 export interface AgentHealth {
   failureTimes: string[];
@@ -14,7 +14,7 @@ export interface HealthState {
   agents: Record<string, AgentHealth>;
 }
 
-const DEFAULT_WINDOW_MS = 60 * 60 * 1000;       // 60 min
+const DEFAULT_WINDOW_MS = 60 * 60 * 1000; // 60 min
 const DEFAULT_THRESHOLD = 3;
 const DEFAULT_DEACTIVATE_TTL_MS = 24 * 60 * 60 * 1000; // 24h auto-reactivate
 
@@ -23,9 +23,9 @@ function getDeactivateTtlMs(): number {
   return env ? Number(env) : DEFAULT_DEACTIVATE_TTL_MS;
 }
 const DEFAULT_BLOCK_DURATIONS: [number, number][] = [
-  [3, 30 * 60 * 1000],        // 3 failures → 30 min
-  [5, 2 * 60 * 60 * 1000],    // 5 failures → 2h
-  [7, 6 * 60 * 60 * 1000],    // 7 failures → 6h
+  [3, 30 * 60 * 1000], // 3 failures → 30 min
+  [5, 2 * 60 * 60 * 1000], // 5 failures → 2h
+  [7, 6 * 60 * 60 * 1000], // 7 failures → 6h
 ];
 
 function getWindowMs(): number {
@@ -73,7 +73,7 @@ function blockDurationFor(count: number): number {
 
 export function loadHealth(stateFilePath: string): HealthState {
   try {
-    const data = readFileSync(stateFilePath, 'utf8');
+    const data = readFileSync(stateFilePath, "utf8");
     const parsed = JSON.parse(data);
     return { agents: {}, ...parsed };
   } catch {
@@ -86,13 +86,13 @@ export function saveHealth(stateFilePath: string, state: HealthState): void {
   // Read existing full state file to preserve scheduler data
   let full: Record<string, unknown> = {};
   try {
-    full = JSON.parse(readFileSync(stateFilePath, 'utf8'));
+    full = JSON.parse(readFileSync(stateFilePath, "utf8"));
   } catch {
     // no file yet
   }
   // Merge health fields into the existing state
   full.agents = state.agents;
-  writeFileSync(stateFilePath, JSON.stringify(full, null, 2), 'utf8');
+  writeFileSync(stateFilePath, JSON.stringify(full, null, 2), "utf8");
 }
 
 export function isDeactivated(stateFilePath: string, name: string, preloaded?: HealthState): boolean {
@@ -158,7 +158,7 @@ export async function recordResult(stateFilePath: string, name: string, success:
 export async function isHealthy(stateFilePath: string, name: string, preloaded?: HealthState): Promise<boolean> {
   const state = preloaded ?? loadHealth(stateFilePath);
   const raw = state.agents[name];
-  if (!raw || !raw.failureTimes) return true;
+  if (!raw?.failureTimes) return true;
 
   const { pruned, dirty } = pruneEntry(raw);
 
@@ -172,13 +172,17 @@ export async function isHealthy(stateFilePath: string, name: string, preloaded?:
   return Date.now() >= new Date(pruned.disabledTo).getTime();
 }
 
-export async function filterHealthy(stateFilePath: string, agents: AgentDef[], preloaded?: HealthState): Promise<AgentDef[]> {
+export async function filterHealthy(
+  stateFilePath: string,
+  agents: AgentDef[],
+  preloaded?: HealthState,
+): Promise<AgentDef[]> {
   let state = preloaded ?? loadHealth(stateFilePath);
   let dirty = false;
 
   for (const a of agents) {
     const raw = state.agents[a.name];
-    if (!raw || !raw.failureTimes) continue;
+    if (!raw?.failureTimes) continue;
 
     const { pruned, dirty: d } = pruneEntry(raw);
     if (d) {
@@ -191,9 +195,9 @@ export async function filterHealthy(stateFilePath: string, agents: AgentDef[], p
     await withLock(stateFilePath, () => saveHealth(stateFilePath, state));
   }
 
-  return agents.filter(a => {
+  return agents.filter((a) => {
     const entry = state.agents[a.name];
-    if (!entry || !entry.disabledTo) return true;
+    if (!entry?.disabledTo) return true;
     return Date.now() >= new Date(entry.disabledTo).getTime();
   });
 }

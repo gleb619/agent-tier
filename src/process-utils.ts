@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'fs';
+import { readdirSync, readFileSync } from "node:fs";
 // ^ readdirSync used to enumerate /proc/*/stat for descendants.
 
 /**
@@ -34,10 +34,13 @@ interface ProcStat {
  */
 function readProcStat(pid: number): ProcStat | null {
   try {
-    const raw = readFileSync(`/proc/${pid}/stat`, 'utf8');
-    const closeParen = raw.lastIndexOf(')');
+    const raw = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const closeParen = raw.lastIndexOf(")");
     if (closeParen < 0) return null;
-    const fields = raw.slice(closeParen + 1).trim().split(/\s+/);
+    const fields = raw
+      .slice(closeParen + 1)
+      .trim()
+      .split(/\s+/);
     // After the closing paren, fields are indexed starting at 3 in the
     // canonical /proc layout (state=3, ppid=4, ..., utime=14, stime=15).
     // The slice above drops fields 1 and 2 (pid + comm), so fields[0] = state,
@@ -65,7 +68,7 @@ function collectProcessTree(rootPid: number): number[] | null {
   const childrenByPpid = new Map<number, number[]>();
   let dirents: string[];
   try {
-    dirents = readdirSync('/proc');
+    dirents = readdirSync("/proc");
   } catch {
     return [rootPid];
   }

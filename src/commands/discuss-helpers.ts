@@ -1,9 +1,6 @@
-import type { DiscussEntry } from '../notify/types';
-import {
-  appendDiscuss,
-  nextDiscussId,
-} from '../notify/discuss-store';
-import { resolveStateDir } from '../state-dir';
+import { appendDiscuss, nextDiscussId } from "../notify/discuss-store";
+import type { DiscussEntry } from "../notify/types";
+import { resolveStateDir } from "../state-dir";
 
 export interface PostResult {
   id: string;
@@ -15,15 +12,15 @@ export interface PostResult {
  */
 export async function postDiscussEntry(
   runId: string,
-  entry: Omit<DiscussEntry, 'id' | 'ts'>,
+  entry: Omit<DiscussEntry, "id" | "ts">,
   stateDir?: string,
 ): Promise<string> {
   const sseUrl = process.env.AT_SSE_URL;
   if (sseUrl) {
-    const url = `${sseUrl.replace(/\/$/, '')}/discuss/${encodeURIComponent(runId)}`;
+    const url = `${sseUrl.replace(/\/$/, "")}/discuss/${encodeURIComponent(runId)}`;
     const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(entry),
     });
     if (!res.ok) {

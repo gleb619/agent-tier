@@ -1,9 +1,9 @@
-import { For, Show, createMemo } from 'solid-js';
-import type { JSX } from 'solid-js';
-import type { RunRecord } from '../../run-store';
-import { UNNAMED_PLACEHOLDER } from '../../run-store';
-import { runLabel } from './sidebar/row-model';
-import { formatClockRange, formatDuration, formatExitCode, statusColor, statusIcon, truncate } from '../format';
+import type { JSX } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
+import type { RunRecord } from "../../run-store";
+import { UNNAMED_PLACEHOLDER } from "../../run-store";
+import { formatClockRange, formatDuration, formatExitCode, statusColor, statusIcon, truncate } from "../format";
+import { runLabel } from "./sidebar/row-model";
 
 /**
  * Run-details metadata block (design doc §11.2).
@@ -26,11 +26,11 @@ import { formatClockRange, formatDuration, formatExitCode, statusColor, statusIc
  */
 
 /** Same colour family as the rest of tui2: dim labels, brighter values. */
-export const META_LABEL = '#8b949e';
-export const META_VALUE = '#c9d1d9';
-export const META_NAME = '#e6edf3';
-export const META_HINT = '#6e7681';
-export const META_OK = '#3fb950';
+export const META_LABEL = "#8b949e";
+export const META_VALUE = "#c9d1d9";
+export const META_NAME = "#e6edf3";
+export const META_HINT = "#6e7681";
+export const META_OK = "#3fb950";
 
 /** Shared value-column width for multi-field rows (agent/tier/pid, status/exit/duration). */
 export const META_VALUE_WIDTH = 14;
@@ -48,13 +48,13 @@ export interface MetaField {
 
 /** One metadata line: either the identity headline or an aligned key/value row. */
 export type MetaRow =
-  | { kind: 'identity'; name: string; runId: string | null }
-  | { kind: 'fields'; fields: MetaField[]; valueWidth?: number };
+  | { kind: "identity"; name: string; runId: string | null }
+  | { kind: "fields"; fields: MetaField[]; valueWidth?: number };
 
 /** Longest key label across the key/value rows — the shared label column. */
 export function metaLabelWidth(rows: MetaRow[]): number {
   return rows.reduce(
-    (max, row) => (row.kind === 'fields' ? Math.max(max, ...row.fields.map((f) => f.label.length)) : max),
+    (max, row) => (row.kind === "fields" ? Math.max(max, ...row.fields.map((f) => f.label.length)) : max),
     0,
   );
 }
@@ -75,7 +75,7 @@ export function padValue(value: string, width: number = META_VALUE_WIDTH): strin
 
 /** Green for a clean run, red for a failure, neutral while unknown. */
 export function exitCodeColor(exitCode: number | null): string | undefined {
-  return exitCode === null ? undefined : exitCode === 0 ? META_OK : statusColor('failed');
+  return exitCode === null ? undefined : exitCode === 0 ? META_OK : statusColor("failed");
 }
 
 /** True when the namer never resolved for the run yet (placeholder name). */
@@ -89,31 +89,33 @@ export function runMetaRows(session: RunRecord): MetaRow[] {
   // just be noise, so the id cell is dropped in that case.
   const runId = isUnnamed(session) ? null : session.runId;
   return [
-    { kind: 'identity', name: runLabel(session), runId },
+    { kind: "identity", name: runLabel(session), runId },
     {
-      kind: 'fields',
+      kind: "fields",
       fields: [
-        { label: 'agent', value: session.agent },
-        { label: 'tier', value: `t${session.tier}` },
-        { label: 'pid', value: String(session.pid) },
+        { label: "agent", value: session.agent },
+        { label: "tier", value: `t${session.tier}` },
+        { label: "pid", value: String(session.pid) },
       ],
     },
     {
-      kind: 'fields',
+      kind: "fields",
       fields: [
-        { label: 'status', value: `${statusIcon(session.status)} ${session.status}`, color: statusColor(session.status) },
-        { label: 'exit', value: formatExitCode(session.exitCode), color: exitCodeColor(session.exitCode) },
-        { label: 'duration', value: formatDuration(session) },
+        {
+          label: "status",
+          value: `${statusIcon(session.status)} ${session.status}`,
+          color: statusColor(session.status),
+        },
+        { label: "exit", value: formatExitCode(session.exitCode), color: exitCodeColor(session.exitCode) },
+        { label: "duration", value: formatDuration(session) },
       ],
     },
     {
-      kind: 'fields',
+      kind: "fields",
       // `formatClockRange` is wider than the shared value column, so this row
       // opts into a wider value width to keep the clock readable.
       valueWidth: META_VALUE_WIDTH_WIDE,
-      fields: [
-        { label: 'started', value: formatClockRange(session.startedAt, session.finishedAt) },
-      ],
+      fields: [{ label: "started", value: formatClockRange(session.startedAt, session.finishedAt) }],
     },
   ];
 }
@@ -125,15 +127,13 @@ export interface RunMetaProps {
 
 /** One metadata line: the bold identity headline or an aligned key/value row. */
 function MetaRowView(props: { row: MetaRow; labelWidth: number }): JSX.Element {
-  if (props.row.kind === 'identity') {
+  if (props.row.kind === "identity") {
     return (
       <box flexDirection="row" gap={2}>
         <text fg={META_NAME}>
           <b>{truncate(props.row.name, 40)}</b>
         </text>
-        <Show when={props.row.runId}>
-          {(id: () => string) => <text fg={META_HINT} content={truncate(id(), 24)} />}
-        </Show>
+        <Show when={props.row.runId}>{(id: () => string) => <text fg={META_HINT} content={truncate(id(), 24)} />}</Show>
       </box>
     );
   }

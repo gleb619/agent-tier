@@ -1,11 +1,11 @@
-import { Command } from 'commander';
-import { existsSync, readFileSync } from 'fs';
-import { spawn } from 'child_process';
-import path from 'path';
-import { resolveStatusDirs } from '../state-dir';
-import { runStatus } from '../status';
-import { loadRuns } from '../run-store';
-import { chopLines } from '../chop';
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import type { Command } from "commander";
+import { chopLines } from "../chop";
+import { loadRuns } from "../run-store";
+import { resolveStatusDirs } from "../state-dir";
+import { runStatus } from "../status";
 
 function showRunLogs(
   stateDirs: string[],
@@ -30,26 +30,26 @@ function showRunLogs(
 
   if (opts.follow) {
     try {
-      const logStreamerJs = path.join(__dirname, '..', 'log-streamer.js');
+      const logStreamerJs = path.join(__dirname, "..", "log-streamer.js");
       const useStreamer = !opts.noChop && existsSync(logStreamerJs);
       if (useStreamer) {
-        spawn('node', [logStreamerJs, '--log', run.logFile, '--pid', String(process.pid)], { stdio: 'inherit' });
+        spawn("node", [logStreamerJs, "--log", run.logFile, "--pid", String(process.pid)], { stdio: "inherit" });
         return;
       }
     } catch {
       // fall through to plain tail
     }
-    spawn('tail', ['-f', run.logFile], { stdio: 'inherit' });
+    spawn("tail", ["-f", run.logFile], { stdio: "inherit" });
     return;
   }
 
   try {
-    const logs = readFileSync(run.logFile, 'utf8');
+    const logs = readFileSync(run.logFile, "utf8");
     const finalOutput = opts.noChop ? logs : chopLines(logs);
     if (opts.lines !== undefined) {
-      const lines = finalOutput.split('\n');
+      const lines = finalOutput.split("\n");
       const slice = opts.head ? lines.slice(0, opts.lines) : lines.slice(-opts.lines);
-      process.stdout.write(slice.join('\n') + '\n');
+      process.stdout.write(`${slice.join("\n")}\n`);
     } else {
       process.stdout.write(finalOutput);
     }
@@ -61,14 +61,14 @@ function showRunLogs(
 
 export function registerStatusCommand(program: Command): void {
   program
-    .command('status [runId]')
-    .description('Show recent agent runs: running, stuck, done, failed. With runId, show logs for that run')
-    .option('-n, --lines <number>', 'Number of log lines to show (default: all)', (value) => parseInt(value, 10))
-    .option('--head', 'Show lines from the beginning of the log')
-    .option('--tail', 'Show lines from the end of the log (default when -n is used)')
-    .option('-f, --follow', 'Stream new log lines as they arrive (requires runId)')
-    .option('--no-chop', 'Disable log filtering (ANSI, spinners, repeated lines)')
-    .option('--json', 'Output as JSON without text trimming', false)
+    .command("status [runId]")
+    .description("Show recent agent runs: running, stuck, done, failed. With runId, show logs for that run")
+    .option("-n, --lines <number>", "Number of log lines to show (default: all)", (value) => parseInt(value, 10))
+    .option("--head", "Show lines from the beginning of the log")
+    .option("--tail", "Show lines from the end of the log (default when -n is used)")
+    .option("-f, --follow", "Stream new log lines as they arrive (requires runId)")
+    .option("--no-chop", "Disable log filtering (ANSI, spinners, repeated lines)")
+    .option("--json", "Output as JSON without text trimming", false)
     .action(async (runId: string | undefined, opts: Record<string, unknown>, cmd: Command) => {
       try {
         const stateDirs = resolveStatusDirs();
@@ -85,7 +85,8 @@ export function registerStatusCommand(program: Command): void {
           // root, so commander populates it as a global option rather than
           // on this subcommand's `opts`. Use optsWithGlobals so `--json`
           // is honoured regardless of registration order.
-          const json = (opts.json as boolean | undefined) || ((cmd.optsWithGlobals().json as boolean | undefined) ?? false);
+          const json =
+            (opts.json as boolean | undefined) || ((cmd.optsWithGlobals().json as boolean | undefined) ?? false);
           await runStatus(stateDirs, { json });
         }
       } catch (err) {

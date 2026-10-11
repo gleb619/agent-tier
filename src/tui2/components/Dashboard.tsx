@@ -1,20 +1,12 @@
-import { For, Show, createMemo } from 'solid-js';
-import type { JSX } from 'solid-js';
-import type { RunRecord } from '../../run-store';
-import { buildStateReportFor, type StateReport } from '../../status';
-import { resolveStatusDirs } from '../../state-dir';
-import { autoRefresh } from '../../tui/store/log';
-import { agent, tier } from '../../tui/store/settings';
-import { filteredSessions2 } from '../store/filtered-sessions';
-import {
-  durationMs,
-  formatAgentRow,
-  formatMs,
-  formatRunRow,
-  isToday,
-  statusColor,
-  TUI2_COLORS,
-} from '../format';
+import type { JSX } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
+import type { RunRecord } from "../../run-store";
+import { resolveStatusDirs } from "../../state-dir";
+import { buildStateReportFor, type StateReport } from "../../status";
+import { autoRefresh } from "../../tui/store/log";
+import { agent, tier } from "../../tui/store/settings";
+import { durationMs, formatAgentRow, formatMs, formatRunRow, isToday, statusColor, TUI2_COLORS } from "../format";
+import { filteredSessions2 } from "../store/filtered-sessions";
 
 const RECENT_LIMIT = 8;
 
@@ -35,8 +27,8 @@ export interface DashStats {
 
 /** Aggregate a (newest-first) run list into dashboard numbers. Pure. */
 export function computeStats(runs: RunRecord[]): DashStats {
-  const running = runs.filter((r) => r.status === 'running');
-  const completed = runs.filter((r) => r.status !== 'running');
+  const running = runs.filter((r) => r.status === "running");
+  const completed = runs.filter((r) => r.status !== "running");
   const finished = completed.filter((r) => r.exitCode !== null);
   const ok = finished.filter((r) => r.exitCode === 0).length;
 
@@ -44,7 +36,7 @@ export function computeStats(runs: RunRecord[]): DashStats {
     total: runs.length,
     running,
     completed,
-    stuck: runs.filter((r) => r.status === 'stuck').length,
+    stuck: runs.filter((r) => r.status === "stuck").length,
     today: runs.filter((r) => isToday(r.startedAt)).length,
     successRate: finished.length === 0 ? null : (ok / finished.length) * 100,
     avgDurationMs: finished.length === 0 ? 0 : finished.reduce((sum, r) => sum + durationMs(r), 0) / finished.length,
@@ -68,13 +60,7 @@ function SectionHeader(props: { title: string }): JSX.Element {
 /** Padded, dim-bordered box for "nothing here yet" messages. */
 function EmptyState(props: { message: string }): JSX.Element {
   return (
-    <box
-      borderColor={TUI2_COLORS.dim}
-      borderStyle="round"
-      paddingX={2}
-      paddingY={1}
-      marginBottom={1}
-    >
+    <box borderColor={TUI2_COLORS.dim} borderStyle="round" paddingX={2} paddingY={1} marginBottom={1}>
       <text fg={TUI2_COLORS.dimmer} content={props.message} />
     </box>
   );
@@ -84,7 +70,7 @@ export function Dashboard(): JSX.Element {
   const stats = createMemo(() => computeStats(filteredSessions2()));
   const successText = createMemo(() => {
     const rate = stats().successRate;
-    return rate === null ? 'success: -' : `success: ${rate.toFixed(0)}%`;
+    return rate === null ? "success: -" : `success: ${rate.toFixed(0)}%`;
   });
   // Same reports `at status` prints — joined across project `.at/` + `~/.at/`
   // when the project has its own scope, so agent health matches the run list.
@@ -118,18 +104,10 @@ export function Dashboard(): JSX.Element {
           {/* Active runs */}
           <box>
             <SectionHeader title={`Active runs (${stats().running.length})`} />
-            <Show
-              when={stats().running.length > 0}
-              fallback={<EmptyState message="(nothing running)" />}
-            >
+            <Show when={stats().running.length > 0} fallback={<EmptyState message="(nothing running)" />}>
               <box flexDirection="column">
                 <For each={stats().running.slice(0, RECENT_LIMIT)}>
-                  {(r) => (
-                    <text
-                      fg={statusColor(r.status)}
-                      content={`  ${formatRunRow(r, { status: true })}`}
-                    />
-                  )}
+                  {(r) => <text fg={statusColor(r.status)} content={`  ${formatRunRow(r, { status: true })}`} />}
                 </For>
               </box>
             </Show>
@@ -138,10 +116,7 @@ export function Dashboard(): JSX.Element {
           {/* Recent completions */}
           <box>
             <SectionHeader title="Recent completions" />
-            <Show
-              when={stats().completed.length > 0}
-              fallback={<EmptyState message="(no finished runs)" />}
-            >
+            <Show when={stats().completed.length > 0} fallback={<EmptyState message="(no finished runs)" />}>
               <box flexDirection="column">
                 <For each={stats().completed.slice(0, RECENT_LIMIT)}>
                   {(r) => (
@@ -160,12 +135,9 @@ export function Dashboard(): JSX.Element {
             <SectionHeader title="Agents" />
             <text
               fg={TUI2_COLORS.muted}
-              content={`  defaults: tier ${tier()} · agent ${agent()} · auto-refresh ${autoRefresh() ? 'ON' : 'OFF'}`}
+              content={`  defaults: tier ${tier()} · agent ${agent()} · auto-refresh ${autoRefresh() ? "ON" : "OFF"}`}
             />
-            <Show
-              when={health().agents.length > 0}
-              fallback={<EmptyState message="(no health records)" />}
-            >
+            <Show when={health().agents.length > 0} fallback={<EmptyState message="(no health records)" />}>
               <box flexDirection="column">
                 <For each={health().agents}>
                   {(a) => (

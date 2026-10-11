@@ -1,10 +1,10 @@
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
-import remarkGfm from 'remark-gfm';
-import remarkStringify from 'remark-stringify';
-import { visit } from 'unist-util-visit';
-import type { Root, Table, TableCell } from 'mdast';
-import type { Node } from 'unist';
+import type { Root, Table, TableCell } from "mdast";
+import remarkGfm from "remark-gfm";
+import remarkParse from "remark-parse";
+import remarkStringify from "remark-stringify";
+import { unified } from "unified";
+import type { Node } from "unist";
+import { visit } from "unist-util-visit";
 
 export function createProcessor() {
   return unified().use(remarkParse).use(remarkGfm).use(remarkStringify);
@@ -17,12 +17,12 @@ export function cellText(cell: Node): string {
   const walk = (nodes: Node[] | undefined): void => {
     for (const n of nodes ?? []) {
       const node = n as { type: string; value?: string; children?: Node[] };
-      if (node.type === 'text' || node.type === 'inlineCode') out.push(node.value ?? '');
+      if (node.type === "text" || node.type === "inlineCode") out.push(node.value ?? "");
       else if (node.children) walk(node.children);
     }
   };
   walk((cell as { children?: Node[] }).children);
-  return out.join('').trim();
+  return out.join("").trim();
 }
 
 /**
@@ -31,11 +31,11 @@ export function cellText(cell: Node): string {
  * Escaping by hand here would store a literal backslash in the value.
  */
 export function makeCell(text: string): TableCell {
-  return { type: 'tableCell', children: [{ type: 'text', value: String(text) }] };
+  return { type: "tableCell", children: [{ type: "text", value: String(text) }] };
 }
 
 export function setCellText(cell: TableCell, text: string): void {
-  cell.children = [{ type: 'text', value: String(text) }];
+  cell.children = [{ type: "text", value: String(text) }];
 }
 
 export interface ParsedBoard {
@@ -55,17 +55,17 @@ export function parseBoardText(content: string): ParsedBoard {
   const tree = processor.parse(content) as Root;
   const found: { table: Table | null; headers: string[] } = { table: null, headers: [] };
 
-  visit(tree, 'table', (node: Table) => {
+  visit(tree, "table", (node: Table) => {
     if (!node.children || node.children.length === 0) return;
     const headerCells = node.children[0].children.map((c) => cellText(c));
-    if (headerCells.includes('ID') && headerCells.includes('Status')) {
+    if (headerCells.includes("ID") && headerCells.includes("Status")) {
       found.table = node;
       found.headers = headerCells;
     }
   });
 
   if (!found.table) {
-    throw new Error('No kanban task table found (expected ID + Status columns)');
+    throw new Error("No kanban task table found (expected ID + Status columns)");
   }
   return { processor, tree, table: found.table, headers: found.headers };
 }

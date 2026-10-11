@@ -1,10 +1,10 @@
-import os from 'os';
-import path from 'path';
-import { existsSync, readdirSync, statSync } from 'fs';
-import { AgentDef } from './registry';
+import { existsSync, readdirSync, statSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { AgentDef } from "./registry";
 
 export function loadGenericAgents(): AgentDef[] {
-  const baseDir = process.env.AT_GENERIC_DIR ?? path.join(os.homedir(), '.at');
+  const baseDir = process.env.AT_GENERIC_DIR ?? path.join(os.homedir(), ".at");
 
   if (!existsSync(baseDir)) return [];
 
@@ -29,19 +29,19 @@ export function loadGenericAgents(): AgentDef[] {
     try {
       if (!statSync(entryPath).isDirectory()) continue;
 
-      const genericFile = path.join(entryPath, 'generic.js');
+      const genericFile = path.join(entryPath, "generic.js");
       if (!existsSync(genericFile)) continue;
 
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const mod = require(genericFile) as Partial<AgentDef>;
 
-      if (typeof mod.tier !== 'number' || ![1, 2, 3].includes(mod.tier)) {
+      if (typeof mod.tier !== "number" || ![1, 2, 3].includes(mod.tier)) {
         throw new Error(`missing or invalid 'tier' (must be 1, 2, or 3)`);
       }
-      if (typeof mod.bin !== 'function') {
+      if (typeof mod.bin !== "function") {
         throw new Error(`missing 'bin' function`);
       }
-      if (typeof mod.buildArgs !== 'function') {
+      if (typeof mod.buildArgs !== "function") {
         throw new Error(`missing 'buildArgs' function`);
       }
 

@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { Command } from 'commander';
-import { mkdtempSync, rmSync, mkdirSync, appendFileSync } from 'fs';
-import { tmpdir } from 'os';
-import path from 'path';
-import { registerEventsCommand } from '../../src/commands/events';
-import { appendEvent } from '../../src/notify/store';
-import type { NotifyEvent } from '../../src/notify/types';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { Command } from "commander";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { registerEventsCommand } from "../../src/commands/events";
+import { appendEvent } from "../../src/notify/store";
+import type { NotifyEvent } from "../../src/notify/types";
 
 function makeProgram(): Command {
   const program = new Command();
-  program.name('at');
+  program.name("at");
   program.exitOverride();
   registerEventsCommand(program);
   return program;
@@ -24,12 +24,12 @@ function captureStdout(): { chunks: string[]; restore: () => void } {
   //    directly, so we don't miss anything either way.
   const chunks: string[] = [];
   const origWrite = process.stdout.write.bind(process.stdout);
-  (process.stdout.write as unknown) = ((s: string | Buffer): boolean => {
+  (process.stdout.write as unknown) = (s: string | Buffer): boolean => {
     chunks.push(String(s));
     return true;
-  });
-  const spy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
-    chunks.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '));
+  };
+  const spy = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+    chunks.push(args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" "));
   });
   return {
     chunks,
@@ -43,7 +43,7 @@ function captureStdout(): { chunks: string[]; restore: () => void } {
 function mkEvent(seq: number, type: string, text: string, runId: string): NotifyEvent {
   return {
     runId,
-    agent: 'mock',
+    agent: "mock",
     ts: new Date().toISOString(),
     seq,
     type,
@@ -51,22 +51,20 @@ function mkEvent(seq: number, type: string, text: string, runId: string): Notify
   } as NotifyEvent;
 }
 
-describe('events command', () => {
+describe("events command", () => {
   let stateDir: string;
   let runId: string;
   let exitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    stateDir = mkdtempSync(path.join(tmpdir(), 'at-events-'));
+    stateDir = mkdtempSync(path.join(tmpdir(), "at-events-"));
     process.env.AT_STATE_DIR = stateDir;
-    runId = 'run-events-test';
-    mkdirSync(path.join(stateDir, 'events'), { recursive: true });
-    exitSpy = vi
-      .spyOn(process, 'exit')
-      .mockImplementation(((code?: number) => {
-        if (code && code !== 0) throw new Error(`__exit__:${code}`);
-        return undefined as never;
-      }) as never);
+    runId = "run-events-test";
+    mkdirSync(path.join(stateDir, "events"), { recursive: true });
+    exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      if (code && code !== 0) throw new Error(`__exit__:${code}`);
+      return undefined as never;
+    }) as never);
   });
 
   afterEach(() => {
@@ -76,14 +74,14 @@ describe('events command', () => {
     vi.clearAllMocks();
   });
 
-  it('prints stored events as JSON lines, then returns (no -f)', async () => {
-    appendEvent(stateDir, mkEvent(1, 'start', 'started', runId));
-    appendEvent(stateDir, mkEvent(2, 'output', 'hello', runId));
-    appendEvent(stateDir, mkEvent(3, 'done', 'finished', runId));
+  it("prints stored events as JSON lines, then returns (no -f)", async () => {
+    appendEvent(stateDir, mkEvent(1, "start", "started", runId));
+    appendEvent(stateDir, mkEvent(2, "output", "hello", runId));
+    appendEvent(stateDir, mkEvent(3, "done", "finished", runId));
 
     const cap = captureStdout();
     try {
-      await makeProgram().parseAsync(['node', 'at', 'events', runId]);
+      await makeProgram().parseAsync(["node", "at", "events", runId]);
     } finally {
       cap.restore();
     }
@@ -95,17 +93,17 @@ describe('events command', () => {
     expect(cap.chunks).toHaveLength(3);
     const parsed = cap.chunks.map((l) => JSON.parse(l));
     expect(parsed.map((e: NotifyEvent) => e.seq)).toEqual([1, 2, 3]);
-    expect(parsed.map((e: NotifyEvent) => e.type)).toEqual(['start', 'output', 'done']);
+    expect(parsed.map((e: NotifyEvent) => e.type)).toEqual(["start", "output", "done"]);
   });
 
-  it('prints nothing when no events exist', async () => {
+  it("prints nothing when no events exist", async () => {
     const cap = captureStdout();
     try {
-      await makeProgram().parseAsync(['node', 'at', 'events', runId]);
+      await makeProgram().parseAsync(["node", "at", "events", runId]);
     } finally {
       cap.restore();
     }
-    expect(cap.chunks.join('').trim()).toBe('');
+    expect(cap.chunks.join("").trim()).toBe("");
   });
 
   // ── -f follow ───────────────────────────────────────────────────────────
@@ -115,21 +113,21 @@ describe('events command', () => {
   // the test process alive long enough for the interval polls + signal
   // handlers to run. This bug is documented in the task report.
 
-  it('with -f, registers SIGINT + SIGTERM handlers and exits 0 on SIGINT', async () => {
-    appendEvent(stateDir, mkEvent(1, 'start', 'started', runId));
+  it("with -f, registers SIGINT + SIGTERM handlers and exits 0 on SIGINT", async () => {
+    appendEvent(stateDir, mkEvent(1, "start", "started", runId));
     const cap = captureStdout();
 
-    await makeProgram().parseAsync(['node', 'at', 'events', runId, '-f']);
+    await makeProgram().parseAsync(["node", "at", "events", runId, "-f"]);
 
     // The action returned, but setInterval keeps the event loop pumping and
     // signal handlers stay registered. Verify both handlers exist.
-    expect(process.listeners('SIGINT').length).toBeGreaterThan(0);
-    expect(process.listeners('SIGTERM').length).toBeGreaterThan(0);
+    expect(process.listeners("SIGINT").length).toBeGreaterThan(0);
+    expect(process.listeners("SIGTERM").length).toBeGreaterThan(0);
 
     // Append a follow-up event; the next 500ms poll should pick it up.
-    setTimeout(() => appendEvent(stateDir, mkEvent(2, 'output', 'followup', runId)), 100);
+    setTimeout(() => appendEvent(stateDir, mkEvent(2, "output", "followup", runId)), 100);
     // Fire SIGINT after the poll has had a chance to pick up the event.
-    setTimeout(() => process.kill(process.pid, 'SIGINT'), 800);
+    setTimeout(() => process.kill(process.pid, "SIGINT"), 800);
 
     await new Promise((r) => setTimeout(r, 1200));
 
@@ -142,14 +140,14 @@ describe('events command', () => {
     cap.restore();
   });
 
-  it('with -f, SIGTERM also exits 0', async () => {
-    appendEvent(stateDir, mkEvent(1, 'start', 'started', runId));
+  it("with -f, SIGTERM also exits 0", async () => {
+    appendEvent(stateDir, mkEvent(1, "start", "started", runId));
     const cap = captureStdout();
 
-    await makeProgram().parseAsync(['node', 'at', 'events', runId, '-f']);
-    expect(process.listeners('SIGTERM').length).toBeGreaterThan(0);
+    await makeProgram().parseAsync(["node", "at", "events", runId, "-f"]);
+    expect(process.listeners("SIGTERM").length).toBeGreaterThan(0);
 
-    setTimeout(() => process.kill(process.pid, 'SIGTERM'), 400);
+    setTimeout(() => process.kill(process.pid, "SIGTERM"), 400);
     await new Promise((r) => setTimeout(r, 700));
 
     expect(exitSpy).toHaveBeenCalledWith(0);
@@ -157,24 +155,21 @@ describe('events command', () => {
     cap.restore();
   });
 
-  it('reads from the alt state dir via AT_STATE_DIR env override', async () => {
+  it("reads from the alt state dir via AT_STATE_DIR env override", async () => {
     // events.ts reads stateDir via resolveStateDir(), which prefers AT_STATE_DIR.
     // Verify the env override actually drives the file lookup.
-    const altState = mkdtempSync(path.join(tmpdir(), 'at-events-alt-'));
+    const altState = mkdtempSync(path.join(tmpdir(), "at-events-alt-"));
     try {
-      mkdirSync(path.join(altState, 'events'), { recursive: true });
-      const event = mkEvent(1, 'start', 'from-alt', runId);
-      appendFileSync(
-        path.join(altState, 'events', `${runId}.jsonl`),
-        JSON.stringify(event) + '\n',
-      );
+      mkdirSync(path.join(altState, "events"), { recursive: true });
+      const event = mkEvent(1, "start", "from-alt", runId);
+      appendFileSync(path.join(altState, "events", `${runId}.jsonl`), `${JSON.stringify(event)}\n`);
 
       const prevState = process.env.AT_STATE_DIR;
       process.env.AT_STATE_DIR = altState;
       try {
         const cap = captureStdout();
         try {
-          await makeProgram().parseAsync(['node', 'at', 'events', runId]);
+          await makeProgram().parseAsync(["node", "at", "events", runId]);
         } finally {
           cap.restore();
         }
@@ -182,7 +177,7 @@ describe('events command', () => {
         const lines = cap.chunks;
         expect(lines).toHaveLength(1);
         const parsed = JSON.parse(lines[0]);
-        expect(parsed.text).toBe('from-alt');
+        expect(parsed.text).toBe("from-alt");
       } finally {
         process.env.AT_STATE_DIR = prevState;
       }

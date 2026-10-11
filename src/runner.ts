@@ -1,20 +1,19 @@
-import { spawn, spawnSync } from 'child_process';
-import { mkdirSync, openSync, closeSync, writeSync, appendFileSync, existsSync } from 'fs';
-import path from 'path';
-
-import { AgentDef } from './agents/registry';
-import { applyNormkaFlag } from './agents/normka-flag';
-import { RunOptions } from './resolver';
-import { pickAgent, getStateFile } from './scheduler';
-import { filterHealthy, recordResult, isDeactivated, loadHealth } from './health';
-import { addRun, updateRun, loadRuns, UNNAMED_PLACEHOLDER } from './run-store';
-import { getStateFilePath } from './state-dir';
-import { setupNotify, startHub, tailLogFile, type Hub, type NotifyEvent } from './notify';
-import { applyRunName, readLogTail } from './naming';
-import { spawnRunWatch } from './run-watch';
-import { loadConfig, getLineAgents } from './config';
-import { runSandboxTest } from './sandbox';
-import { AgentError } from './agent-error';
+import { spawn, spawnSync } from "node:child_process";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, writeSync } from "node:fs";
+import path from "node:path";
+import { AgentError } from "./agent-error";
+import { applyNormkaFlag } from "./agents/normka-flag";
+import type { AgentDef } from "./agents/registry";
+import { getLineAgents, loadConfig } from "./config";
+import { filterHealthy, isDeactivated, loadHealth, recordResult } from "./health";
+import { applyRunName, readLogTail } from "./naming";
+import { type Hub, type NotifyEvent, setupNotify, startHub, tailLogFile } from "./notify";
+import type { RunOptions } from "./resolver";
+import { addRun, loadRuns, UNNAMED_PLACEHOLDER, updateRun } from "./run-store";
+import { spawnRunWatch } from "./run-watch";
+import { runSandboxTest } from "./sandbox";
+import { getStateFile, pickAgent } from "./scheduler";
+import { getStateFilePath } from "./state-dir";
 
 interface TrackedChild {
   pid: number;
@@ -38,9 +37,9 @@ export function killActiveChildren(): void {
   for (const child of activeChildren) {
     try {
       if (child.detached) {
-        process.kill(-child.pid, 'SIGKILL');
+        process.kill(-child.pid, "SIGKILL");
       } else {
-        process.kill(child.pid, 'SIGKILL');
+        process.kill(child.pid, "SIGKILL");
       }
     } catch {
       // ignore — process may already be dead
@@ -52,7 +51,7 @@ export function killActiveChildren(): void {
 // AgentError lives in src/agent-error.ts so non-runner modules (e.g. sandbox)
 // can throw the same type without creating a circular import. Re-exported here
 // for backwards compatibility.
-export { AgentError } from './agent-error';
+export { AgentError } from "./agent-error";
 
 export type Spawner = (agent: AgentDef, options: RunOptions, runId: string) => Promise<number>;
 
@@ -70,12 +69,12 @@ export interface CallbackContext {
   exitCode: number;
   logFile: string;
   prompt: string;
-  status: 'done' | 'failed';
+  status: "done" | "failed";
   name: string;
 }
 
 export function executeCallback(command: string | undefined, context: CallbackContext): void {
-  if (!command || !command.trim()) return;
+  if (!command?.trim()) return;
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -90,7 +89,7 @@ export function executeCallback(command: string | undefined, context: CallbackCo
   };
 
   const cmd = command.trim();
-  const result = spawnSync(cmd, [], { env, stdio: 'inherit', shell: true });
+  const result = spawnSync(cmd, [], { env, stdio: "inherit", shell: true });
   if (result.status !== 0) {
     console.warn(`[at] callback exited with code ${result.status ?? 1}: ${cmd}`);
   }
@@ -108,11 +107,11 @@ export function runVerify(cmd: string, cwd: string): { exitCode: number; output:
   const result = spawnSync(cmd, [], {
     cwd,
     shell: true,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    encoding: 'utf8',
+    stdio: ["ignore", "pipe", "pipe"],
+    encoding: "utf8",
   });
-  const stdout = typeof result.stdout === 'string' ? result.stdout : '';
-  const stderr = typeof result.stderr === 'string' ? result.stderr : '';
+  const stdout = typeof result.stdout === "string" ? result.stdout : "";
+  const stderr = typeof result.stderr === "string" ? result.stderr : "";
   // Some shells (busybox) print to stdout even on failure; merge so the log
   // line on failure captures everything the user might want to see.
   return { exitCode: result.status ?? 1, output: stdout + stderr };
@@ -122,14 +121,23 @@ export function runVerify(cmd: string, cwd: string): { exitCode: number; output:
  * Append the standard `[at] verify ...` log line. Kept tiny so a long
  * failing test output doesn't drown the run log — only the first ~20 lines.
  */
-export function appendVerifyLogLine(logFile: string, outcome: 'ok' | 'failed', cmd: string, exitCode: number, output?: string): void {
+export function appendVerifyLogLine(
+  logFile: string,
+  outcome: "ok" | "failed",
+  cmd: string,
+  exitCode: number,
+  output?: string,
+): void {
   try {
-    if (outcome === 'ok') {
+    if (outcome === "ok") {
       appendFileSync(logFile, `[at] verify ok: ${cmd}\n`);
       return;
     }
-    const head = (output ?? '').split('\n').slice(0, 20).join('\n');
-    appendFileSync(logFile, `[at] verify failed (exit ${exitCode}): ${cmd}\n${head}${head && !head.endsWith('\n') ? '\n' : ''}`);
+    const head = (output ?? "").split("\n").slice(0, 20).join("\n");
+    appendFileSync(
+      logFile,
+      `[at] verify failed (exit ${exitCode}): ${cmd}\n${head}${head && !head.endsWith("\n") ? "\n" : ""}`,
+    );
   } catch {
     // log file may be gone — best effort
   }
@@ -163,7 +171,7 @@ export function getAtBin(): string {
 }
 
 function shellQuote(s: string): string {
-  if (/^[a-zA-Z0-9_\/\.\-]+$/.test(s)) return s;
+  if (/^[a-zA-Z0-9_/.-]+$/.test(s)) return s;
   return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
@@ -175,20 +183,15 @@ function shellQuote(s: string): string {
  * are ignored and the host channel silently writes to the wrong state
  * dir. The shim is the only thing the LLM can rely on.
  */
-export function writeHostChannelShim(opts: {
-  cwd?: string;
-  atBin: string;
-  stateDir: string;
-  runId: string;
-}): string {
+export function writeHostChannelShim(opts: { cwd?: string; atBin: string; stateDir: string; runId: string }): string {
   const { cwd, atBin, stateDir, runId } = opts;
-  if (!cwd) return '';
+  if (!cwd) return "";
   try {
-    const fs = require('fs') as typeof import('fs');
+    const fs = require("node:fs") as typeof import("fs");
     fs.mkdirSync(cwd, { recursive: true });
-    const shimPath = path.join(cwd, '.at-host-channel.sh');
+    const shimPath = path.join(cwd, ".at-host-channel.sh");
     const body =
-      '#!/usr/bin/env bash\n' +
+      "#!/usr/bin/env bash\n" +
       `# Auto-generated by agent-tier per-run. Sets the right at env and execs \`at\`.\n` +
       `export AT_STATE_DIR=${shellQuote(stateDir)}\n` +
       `export AT_RUN_ID=${shellQuote(runId)}\n` +
@@ -198,19 +201,16 @@ export function writeHostChannelShim(opts: {
     return shimPath;
   } catch {
     // Best-effort: never fail a run because the shim could not be written.
-    return '';
+    return "";
   }
 }
 
 export async function launchAgent(agent: AgentDef, options: RunOptions, extras?: LaunchExtras): Promise<LaunchResult> {
   const runId = extras?.runId ?? generateRunId();
-  const promptText = options.prompt + (extras?.extraPrompt ?? '');
-  const baseArgs = applyNormkaFlag(
-    agent,
-    agent.buildArgs(promptText, options.model, options.cwd),
-    promptText,
-    { normka: options.normka },
-  );
+  const promptText = options.prompt + (extras?.extraPrompt ?? "");
+  const baseArgs = applyNormkaFlag(agent, agent.buildArgs(promptText, options.model, options.cwd), promptText, {
+    normka: options.normka,
+  });
   let args: string[];
   if (extras?.overrideArgs) {
     args = extras.overrideArgs;
@@ -220,22 +220,25 @@ export async function launchAgent(agent: AgentDef, options: RunOptions, extras?:
     args = baseArgs;
   }
   const extraEnv = agent.buildEnv?.(options.model) ?? {};
-  const env = { ...process.env, ...extraEnv, ...(options.env ?? {}), ...(extras?.extraEnv ?? {}) } as Record<string, string>;
+  const env = { ...process.env, ...extraEnv, ...(options.env ?? {}), ...(extras?.extraEnv ?? {}) } as Record<
+    string,
+    string
+  >;
   env.AT_RUN_NAME = extras?.name ?? UNNAMED_PLACEHOLDER;
 
   mkdirSync(options.logDir, { recursive: true });
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const logFile = path.join(options.logDir, `at-${timestamp}-${agent.name}.log`);
-  const stdinData = agent.promptMode === 'stdin' ? promptText : undefined;
+  const stdinData = agent.promptMode === "stdin" ? promptText : undefined;
 
-  const logFd = openSync(logFile, 'w');
+  const logFd = openSync(logFile, "w");
   writeSync(logFd, `[at] runId: ${runId}\n`);
 
   const child = spawn(agent.bin(), args, {
     env,
     cwd: options.cwd,
     detached: true,
-    stdio: stdinData ? ['pipe', logFd, logFd] : ['ignore', logFd, logFd],
+    stdio: stdinData ? ["pipe", logFd, logFd] : ["ignore", logFd, logFd],
   });
 
   if (child.pid === undefined) {
@@ -245,7 +248,7 @@ export async function launchAgent(agent: AgentDef, options: RunOptions, extras?:
   }
 
   closeSync(logFd);
-  child.once('error', () => {});
+  child.once("error", () => {});
 
   if (stdinData && child.stdin) {
     child.stdin.write(stdinData);
@@ -263,7 +266,7 @@ export async function launchAgent(agent: AgentDef, options: RunOptions, extras?:
     startedAt: new Date().toISOString(),
     finishedAt: null,
     exitCode: null,
-    status: 'running',
+    status: "running",
     name: extras?.name ?? UNNAMED_PLACEHOLDER,
   });
 
@@ -294,7 +297,10 @@ export function closeProcessHub(): Promise<void> {
   const grace = hub.hadActiveClients ? 300 : 0;
   return new Promise((resolve) => {
     setTimeout(() => {
-      hub.close().then(() => resolve(), () => resolve());
+      hub.close().then(
+        () => resolve(),
+        () => resolve(),
+      );
     }, grace).unref();
   });
 }
@@ -312,27 +318,25 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   const timeoutMs = options.timeout;
 
   const agentExit = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
-    child.on('close', (code, signal) => resolve({ code, signal }));
-    child.on('error', () => resolve({ code: 1, signal: null }));
+    child.on("close", (code, signal) => resolve({ code, signal }));
+    child.on("error", () => resolve({ code: 1, signal: null }));
   });
 
   let timeoutHandle: ReturnType<typeof setTimeout>;
-  const timeoutP = new Promise<{ code: null; signal: 'SIGKILL' }>((resolve) => {
-    timeoutHandle = setTimeout(() => resolve({ code: null, signal: 'SIGKILL' }), timeoutMs);
+  const timeoutP = new Promise<{ code: null; signal: "SIGKILL" }>((resolve) => {
+    timeoutHandle = setTimeout(() => resolve({ code: null, signal: "SIGKILL" }), timeoutMs);
   });
 
   // Use in-process log-streamer for real-time filtering.
   // Falls back to plain tail -f if --no-chop or the built streamer is missing.
-  const logStreamerJs = path.join(__dirname, 'log-streamer.js');
+  const logStreamerJs = path.join(__dirname, "log-streamer.js");
   const useStreamer = !options.noChop && existsSync(logStreamerJs);
 
-  const streamCmd = useStreamer ? 'node' : 'tail';
-  const streamArgs = useStreamer
-    ? [logStreamerJs, '--log', logFile, '--pid', String(child.pid!)]
-    : ['-f', logFile];
+  const streamCmd = useStreamer ? "node" : "tail";
+  const streamArgs = useStreamer ? [logStreamerJs, "--log", logFile, "--pid", String(child.pid!)] : ["-f", logFile];
 
   const streamChild = spawn(streamCmd, streamArgs, {
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ["ignore", "pipe", "pipe"],
     detached: false,
   });
 
@@ -343,17 +347,17 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   }
 
   const ignoreEpipe = (err: Error) => {
-    if ((err as NodeJS.ErrnoException).code !== 'EPIPE') {
+    if ((err as NodeJS.ErrnoException).code !== "EPIPE") {
       console.error(`[at] stdout/stderr error: ${err.message}`);
     }
   };
-  process.stdout.on('error', ignoreEpipe);
-  process.stderr.on('error', ignoreEpipe);
+  process.stdout.on("error", ignoreEpipe);
+  process.stderr.on("error", ignoreEpipe);
 
   streamChild.stdout?.pipe(process.stdout, { end: false });
   streamChild.stderr?.pipe(process.stderr, { end: false });
 
-  streamChild.on('error', (err) => {
+  streamChild.on("error", (err) => {
     console.error(`[at] log stream error (logs at ${logFile}): ${err.message}`);
   });
 
@@ -361,19 +365,25 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   clearTimeout(timeoutHandle!);
 
   if (streamPid !== undefined) {
-    try { streamChild.kill('SIGKILL'); } catch {}
+    try {
+      streamChild.kill("SIGKILL");
+    } catch {}
     untrackChild(streamPid);
   }
   untrackChild(child.pid!);
 
-  process.stdout.off('error', ignoreEpipe);
-  process.stderr.off('error', ignoreEpipe);
+  process.stdout.off("error", ignoreEpipe);
+  process.stderr.off("error", ignoreEpipe);
 
-  if (signal === 'SIGKILL') {
-    try { process.kill(-child.pid!, 'SIGKILL'); } catch {}
-    try { appendFileSync(logFile, `[at] timeout: killed after ${timeoutMs}ms\n`); } catch {}
+  if (signal === "SIGKILL") {
+    try {
+      process.kill(-child.pid!, "SIGKILL");
+    } catch {}
+    try {
+      appendFileSync(logFile, `[at] timeout: killed after ${timeoutMs}ms\n`);
+    } catch {}
     await updateRun(options.stateDir, runId, {
-      status: 'failed',
+      status: "failed",
       finishedAt: new Date().toISOString(),
       exitCode: 1,
     });
@@ -381,7 +391,7 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   }
 
   const exitCode = code ?? 1;
-  let status: 'done' | 'failed' = exitCode === 0 ? 'done' : 'failed';
+  let status: "done" | "failed" = exitCode === 0 ? "done" : "failed";
   await updateRun(options.stateDir, runId, {
     status,
     finishedAt: new Date().toISOString(),
@@ -394,16 +404,16 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   // `run()`'s retry-with-next-agent logic applies (blocking modes only).
   // Agent exitCode is kept on the record — the failure source is visible
   // via the log line.
-  if (options.verify && options.verify.trim()) {
+  if (options.verify?.trim()) {
     const verifyCmd = options.verify.trim();
     const verifyCwd = options.cwd ?? process.cwd();
     const { exitCode: verifyExit, output } = runVerify(verifyCmd, verifyCwd);
     if (verifyExit === 0) {
-      appendVerifyLogLine(logFile, 'ok', verifyCmd, 0);
+      appendVerifyLogLine(logFile, "ok", verifyCmd, 0);
     } else {
-      status = 'failed';
+      status = "failed";
       await updateRun(options.stateDir, runId, { status });
-      appendVerifyLogLine(logFile, 'failed', verifyCmd, verifyExit, output);
+      appendVerifyLogLine(logFile, "failed", verifyCmd, verifyExit, output);
       executeCallback(options.callback, {
         runId,
         agent: agent.name,
@@ -432,18 +442,13 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   return exitCode;
 }
 
-export async function run(
-  options: RunOptions,
-  agents: AgentDef[],
-  spawner: Spawner = defaultSpawner,
-): Promise<number> {
-
+export async function run(options: RunOptions, agents: AgentDef[], spawner: Spawner = defaultSpawner): Promise<number> {
   const cleanup = () => {
     killActiveChildren();
     process.exit(1);
   };
-  process.once('SIGTERM', cleanup);
-  process.once('SIGINT', cleanup);
+  process.once("SIGTERM", cleanup);
+  process.once("SIGINT", cleanup);
 
   try {
     const runId = generateRunId();
@@ -451,11 +456,9 @@ export async function run(
     const healthState = loadHealth(stateFilePath);
     let candidates: AgentDef[];
 
-    if (options.agent !== 'auto') {
+    if (options.agent !== "auto") {
       if (isDeactivated(stateFilePath, options.agent, healthState)) {
-        throw new Error(
-          `Agent "${options.agent}" is deactivated. Enable it first with: at enable ${options.agent}`,
-        );
+        throw new Error(`Agent "${options.agent}" is deactivated. Enable it first with: at enable ${options.agent}`);
       }
       const named = agents.find((a) => a.name === options.agent);
       if (!named) throw new Error(`Unknown agent: ${options.agent}`);
@@ -466,37 +469,41 @@ export async function run(
         ? getLineAgents(agents, loadConfig())
         : agents.filter((a) => a.tier === options.tier);
       if (poolAgents.length === 0) {
-        throw new Error(isLineMode
-          ? 'No agents available for line mode (line pool is empty)'
-          : `No agents defined for tier ${options.tier}`);
+        throw new Error(
+          isLineMode
+            ? "No agents available for line mode (line pool is empty)"
+            : `No agents defined for tier ${options.tier}`,
+        );
       }
       const enabled = poolAgents.filter((a) => !isDeactivated(stateFilePath, a.name, healthState));
       if (enabled.length === 0) {
-        throw new Error(isLineMode
-          ? 'All line agents are deactivated'
-          : `All tier-${options.tier} agents are deactivated`);
+        throw new Error(
+          isLineMode ? "All line agents are deactivated" : `All tier-${options.tier} agents are deactivated`,
+        );
       }
       const healthy = await filterHealthy(stateFilePath, enabled, healthState);
       if (healthy.length === 0) {
-        console.warn(isLineMode
-          ? '[at] all line agents are temporarily disabled, using full enabled pool'
-          : `[at] all tier-${options.tier} agents are temporarily disabled, using full enabled pool`);
+        console.warn(
+          isLineMode
+            ? "[at] all line agents are temporarily disabled, using full enabled pool"
+            : `[at] all tier-${options.tier} agents are temporarily disabled, using full enabled pool`,
+        );
         candidates = enabled;
       } else {
         candidates = healthy;
       }
     }
 
-    const isNamed = options.agent !== 'auto';
+    const isNamed = options.agent !== "auto";
     const stateFile = getStateFile(options.stateDir);
-    const schedKey = options.tier != null ? `tier-${options.tier}` : 'line';
+    const schedKey = options.tier != null ? `tier-${options.tier}` : "line";
     const maxAttempts = isNamed ? 1 : 1 + Math.min(options.retries, candidates.length - 1);
     let agent = isNamed ? candidates[0] : await pickAgent(candidates, stateFile, schedKey);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) {
         agent = await pickAgent(candidates, stateFile, schedKey);
-        console.warn('[at] retrying with next agent...');
+        console.warn("[at] retrying with next agent...");
       }
 
       let healthRecorded = false;
@@ -529,10 +536,12 @@ export async function run(
               agent: agent.name,
               ts: new Date().toISOString(),
               seq: 0,
-              type: 'rename',
+              type: "rename",
               data: { name: namedRun.name },
             } as NotifyEvent);
-          } catch { /* hub not available — skip */ }
+          } catch {
+            /* hub not available — skip */
+          }
         }
         if (options.stream) {
           await recordResult(stateFilePath, agent.name, exitCode === 0);
@@ -560,18 +569,21 @@ export async function run(
     }
 
     // Unreachable, but satisfies strict return
-    throw new AgentError('all retry attempts exhausted', 1);
+    throw new AgentError("all retry attempts exhausted", 1);
   } finally {
-    process.off('SIGTERM', cleanup);
-    process.off('SIGINT', cleanup);
+    process.off("SIGTERM", cleanup);
+    process.off("SIGINT", cleanup);
     if (options.stream) {
       killActiveChildren();
     }
   }
 }
 
-function buildDoneEvent(status: 'done' | 'failed', exitCode: number): Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'> {
-  return { type: 'done', data: { status, exitCode } };
+function buildDoneEvent(
+  status: "done" | "failed",
+  exitCode: number,
+): Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq"> {
+  return { type: "done", data: { status, exitCode } };
 }
 
 /**
@@ -583,24 +595,28 @@ async function awaitDetachedExit(result: LaunchResult, options: RunOptions): Pro
   const { child, runId, logFile, agent } = result;
 
   const agentExit = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
-    child.on('close', (code, signal) => resolve({ code, signal }));
-    child.on('error', () => resolve({ code: 1, signal: null }));
+    child.on("close", (code, signal) => resolve({ code, signal }));
+    child.on("error", () => resolve({ code: 1, signal: null }));
   });
 
   let timeoutHandle: ReturnType<typeof setTimeout>;
-  const timeoutP = new Promise<{ code: null; signal: 'SIGKILL' }>((resolve) => {
-    timeoutHandle = setTimeout(() => resolve({ code: null, signal: 'SIGKILL' }), options.timeout);
+  const timeoutP = new Promise<{ code: null; signal: "SIGKILL" }>((resolve) => {
+    timeoutHandle = setTimeout(() => resolve({ code: null, signal: "SIGKILL" }), options.timeout);
   });
 
   const { code, signal } = await Promise.race([agentExit, timeoutP]);
   clearTimeout(timeoutHandle!);
   untrackChild(child.pid!);
 
-  if (signal === 'SIGKILL') {
-    try { process.kill(-child.pid!, 'SIGKILL'); } catch {}
-    try { appendFileSync(logFile, `[at] timeout: killed after ${options.timeout}ms\n`); } catch {}
+  if (signal === "SIGKILL") {
+    try {
+      process.kill(-child.pid!, "SIGKILL");
+    } catch {}
+    try {
+      appendFileSync(logFile, `[at] timeout: killed after ${options.timeout}ms\n`);
+    } catch {}
     await updateRun(options.stateDir, runId, {
-      status: 'failed',
+      status: "failed",
       finishedAt: new Date().toISOString(),
       exitCode: 1,
     });
@@ -610,7 +626,7 @@ async function awaitDetachedExit(result: LaunchResult, options: RunOptions): Pro
   }
 
   const exitCode = code ?? 1;
-  let status: 'done' | 'failed' = exitCode === 0 ? 'done' : 'failed';
+  let status: "done" | "failed" = exitCode === 0 ? "done" : "failed";
   await updateRun(options.stateDir, runId, {
     status,
     finishedAt: new Date().toISOString(),
@@ -620,16 +636,16 @@ async function awaitDetachedExit(result: LaunchResult, options: RunOptions): Pro
   await recordResult(sfp, agent.name, exitCode === 0);
 
   // Post-agent verify hook: see streamLogsAndWatch for the full rationale.
-  if (options.verify && options.verify.trim()) {
+  if (options.verify?.trim()) {
     const verifyCmd = options.verify.trim();
     const verifyCwd = options.cwd ?? process.cwd();
     const { exitCode: verifyExit, output } = runVerify(verifyCmd, verifyCwd);
     if (verifyExit === 0) {
-      appendVerifyLogLine(logFile, 'ok', verifyCmd, 0);
+      appendVerifyLogLine(logFile, "ok", verifyCmd, 0);
     } else {
-      status = 'failed';
+      status = "failed";
       await updateRun(options.stateDir, runId, { status });
-      appendVerifyLogLine(logFile, 'failed', verifyCmd, verifyExit, output);
+      appendVerifyLogLine(logFile, "failed", verifyCmd, verifyExit, output);
       executeCallback(options.callback, {
         runId,
         agent: agent.name,
@@ -665,11 +681,13 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
       options,
       options.runName
         ? { name: options.runName, ...(providedRunId ? { runId: providedRunId } : {}) }
-        : providedRunId ? { runId: providedRunId } : undefined,
+        : providedRunId
+          ? { runId: providedRunId }
+          : undefined,
     );
     const { child, runId, logFile } = result;
 
-    child.removeAllListeners('error');
+    child.removeAllListeners("error");
     printReport(result, undefined, options.runName ?? UNNAMED_PLACEHOLDER);
 
     if (options.stream) {
@@ -686,8 +704,10 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
     // Detached without --wait (default): print the run box (already done above),
     // hand finalisation over to a detached supervisor and return immediately so
     // the caller is never killed by an outer timeout (CI, 120s Bash tool, ...).
-    child.on('error', (err) => {
-      try { appendFileSync(logFile, `[at] error: ${err.message}\n`); } catch {}
+    child.on("error", (err) => {
+      try {
+        appendFileSync(logFile, `[at] error: ${err.message}\n`);
+      } catch {}
     });
     // Detach the child from our event loop so the CLI can exit while the agent
     // keeps running, and stop tracking it (killActiveChildren must not reap it).
@@ -754,21 +774,18 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
   // (it otherwise dives into the task and skims a trailing suffix).
   let promptText = options.prompt;
   if (promptPrefix) {
-    promptText = promptPrefix + '\n\n' + promptText;
+    promptText = `${promptPrefix}\n\n${promptText}`;
   }
   if (promptSuffix) {
-    promptText = promptText + '\n\n' + promptSuffix;
+    promptText = `${promptText}\n\n${promptSuffix}`;
   }
 
   // Compute argv: if adapter provides transformArgs, give it the full base
   // args (with prompt already appended) so structured flags can be inserted
   // before the prompt. Otherwise, append adapter.args() after the prompt.
-  const baseArgs = applyNormkaFlag(
-    agent,
-    agent.buildArgs(promptText, options.model, options.cwd),
-    promptText,
-    { normka: options.normka },
-  );
+  const baseArgs = applyNormkaFlag(agent, agent.buildArgs(promptText, options.model, options.cwd), promptText, {
+    normka: options.normka,
+  });
   const finalArgs = adapter.transformArgs
     ? adapter.transformArgs(ctx, baseArgs)
     : (() => {
@@ -786,22 +803,22 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
     name: options.runName,
   });
   const { child, logFile } = result;
-  child.removeAllListeners('error');
+  child.removeAllListeners("error");
 
   hub.publish({
     runId,
     agent: agent.name,
     ts: new Date().toISOString(),
     seq: 0,
-    type: 'start',
+    type: "start",
     text: `started ${agent.name} (pid ${child.pid})`,
   });
 
   const tailer = tailLogFile(logFile, runId, agent.name, (e) => hub.publish(e), adapter);
 
   const agentExit = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
-    child.on('close', (code, signal) => resolve({ code, signal }));
-    child.on('error', () => resolve({ code: 1, signal: null }));
+    child.on("close", (code, signal) => resolve({ code, signal }));
+    child.on("error", () => resolve({ code: 1, signal: null }));
   });
 
   printReport(result, sseUrl, options.runName ?? UNNAMED_PLACEHOLDER);
@@ -809,13 +826,25 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
   if (options.stream) {
     try {
       const exitCode = await streamLogsAndWatch(result, options);
-      hub.publish({ ...buildDoneEvent('done', exitCode), runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+      hub.publish({
+        ...buildDoneEvent("done", exitCode),
+        runId,
+        agent: agent.name,
+        ts: new Date().toISOString(),
+        seq: 0,
+      } as NotifyEvent);
       tailer.stop();
       await closeProcessHub();
       return exitCode;
     } catch (err) {
       const exitCode = (err as AgentError).code ?? 1;
-      hub.publish({ ...buildDoneEvent('failed', exitCode), runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+      hub.publish({
+        ...buildDoneEvent("failed", exitCode),
+        runId,
+        agent: agent.name,
+        ts: new Date().toISOString(),
+        seq: 0,
+      } as NotifyEvent);
       tailer.stop();
       await closeProcessHub();
       throw err;
@@ -823,11 +852,20 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
   }
 
   // Detached + SSE: block until child exits so hub stays alive
-  child.on('error', (err) => {
-    try { appendFileSync(logFile, `[at] error: ${err.message}\n`); } catch {}
-    hub.publish({ type: 'error', text: err.message, runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+  child.on("error", (err) => {
+    try {
+      appendFileSync(logFile, `[at] error: ${err.message}\n`);
+    } catch {}
+    hub.publish({
+      type: "error",
+      text: err.message,
+      runId,
+      agent: agent.name,
+      ts: new Date().toISOString(),
+      seq: 0,
+    } as NotifyEvent);
     updateRun(options.stateDir, runId, {
-      status: 'failed',
+      status: "failed",
       finishedAt: new Date().toISOString(),
       exitCode: 1,
     }).catch(() => {});
@@ -837,7 +875,7 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
 
   const { code } = await agentExit;
   const exitCode = code ?? 1;
-  let status: 'done' | 'failed' = exitCode === 0 ? 'done' : 'failed';
+  let status: "done" | "failed" = exitCode === 0 ? "done" : "failed";
   await updateRun(options.stateDir, runId, {
     status,
     finishedAt: new Date().toISOString(),
@@ -847,17 +885,23 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
   await recordResult(sfp, agent.name, exitCode === 0);
 
   // Post-agent verify hook (see streamLogsAndWatch for the rationale).
-  if (options.verify && options.verify.trim()) {
+  if (options.verify?.trim()) {
     const verifyCmd = options.verify.trim();
     const verifyCwd = options.cwd ?? process.cwd();
     const { exitCode: verifyExit, output } = runVerify(verifyCmd, verifyCwd);
     if (verifyExit === 0) {
-      appendVerifyLogLine(logFile, 'ok', verifyCmd, 0);
+      appendVerifyLogLine(logFile, "ok", verifyCmd, 0);
     } else {
-      status = 'failed';
+      status = "failed";
       await updateRun(options.stateDir, runId, { status });
-      appendVerifyLogLine(logFile, 'failed', verifyCmd, verifyExit, output);
-      hub.publish({ ...buildDoneEvent(status, exitCode), runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+      appendVerifyLogLine(logFile, "failed", verifyCmd, verifyExit, output);
+      hub.publish({
+        ...buildDoneEvent(status, exitCode),
+        runId,
+        agent: agent.name,
+        ts: new Date().toISOString(),
+        seq: 0,
+      } as NotifyEvent);
       tailer.stop();
       executeCallback(options.callback, {
         runId,
@@ -873,7 +917,13 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
     }
   }
 
-  hub.publish({ ...buildDoneEvent(status, exitCode), runId, agent: agent.name, ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+  hub.publish({
+    ...buildDoneEvent(status, exitCode),
+    runId,
+    agent: agent.name,
+    ts: new Date().toISOString(),
+    seq: 0,
+  } as NotifyEvent);
   tailer.stop();
 
   executeCallback(options.callback, {
@@ -892,24 +942,96 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
 };
 
 function getEventFilePath(stateDir: string, runId: string): string {
-  return path.join(stateDir, 'events', `${runId}.jsonl`);
+  return path.join(stateDir, "events", `${runId}.jsonl`);
 }
 
 const COLORS = [
-  'red', 'blue', 'green', 'yellow', 'purple', 'orange', 'pink', 'black', 'white', 'gray',
-  'cyan', 'magenta', 'lime', 'teal', 'indigo', 'violet', 'gold', 'silver', 'bronze', 'crimson'
+  "red",
+  "blue",
+  "green",
+  "yellow",
+  "purple",
+  "orange",
+  "pink",
+  "black",
+  "white",
+  "gray",
+  "cyan",
+  "magenta",
+  "lime",
+  "teal",
+  "indigo",
+  "violet",
+  "gold",
+  "silver",
+  "bronze",
+  "crimson",
 ];
 
 const ADJECTIVES = [
-  'cheerful', 'bright', 'dark', 'swift', 'calm', 'bold', 'quiet', 'loud', 'sharp', 'soft',
-  'wild', 'gentle', 'fierce', 'silent', 'rapid', 'slow', 'heavy', 'light', 'strong', 'weak'
+  "cheerful",
+  "bright",
+  "dark",
+  "swift",
+  "calm",
+  "bold",
+  "quiet",
+  "loud",
+  "sharp",
+  "soft",
+  "wild",
+  "gentle",
+  "fierce",
+  "silent",
+  "rapid",
+  "slow",
+  "heavy",
+  "light",
+  "strong",
+  "weak",
 ];
 
 const STELLAR_BODIES = [
-  'jupiter', 'mars', 'venus', 'saturn', 'mercury', 'neptune', 'uranus', 'earth', 'pluto', 'ceres',
-  'halley', 'encke', 'tempel', 'borrelly', 'wild', 'schwassmann', 'kopff', 'daniel', 'brorsen', 'finlay',
-  'cygnus1', 'sagra', 'ton618', 'm87', 'andromeda', 'sombrero', 'whirlpool', 'pinwheel', 'cartwheel', 'sunflower',
-  'sirius', 'canopus', 'rigel', 'vega', 'arcturus', 'altair', 'aldebaran', 'antares', 'spica', 'pollux'
+  "jupiter",
+  "mars",
+  "venus",
+  "saturn",
+  "mercury",
+  "neptune",
+  "uranus",
+  "earth",
+  "pluto",
+  "ceres",
+  "halley",
+  "encke",
+  "tempel",
+  "borrelly",
+  "wild",
+  "schwassmann",
+  "kopff",
+  "daniel",
+  "brorsen",
+  "finlay",
+  "cygnus1",
+  "sagra",
+  "ton618",
+  "m87",
+  "andromeda",
+  "sombrero",
+  "whirlpool",
+  "pinwheel",
+  "cartwheel",
+  "sunflower",
+  "sirius",
+  "canopus",
+  "rigel",
+  "vega",
+  "arcturus",
+  "altair",
+  "aldebaran",
+  "antares",
+  "spica",
+  "pollux",
 ];
 
 function getRandomElement<T>(array: T[]): T {
@@ -917,8 +1039,8 @@ function getRandomElement<T>(array: T[]): T {
 }
 
 function generateRandomString(length: number): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
   for (let i = 0; i < length; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }

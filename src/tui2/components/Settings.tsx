@@ -1,17 +1,8 @@
-import { For } from 'solid-js';
-import type { JSX } from 'solid-js';
-import {
-  agent,
-  cycleAgent,
-  cycleMode,
-  cycleRetries,
-  cycleTier,
-  mode,
-  retries,
-  tier,
-} from '../../tui/store/settings';
-import { autoRefresh, setAutoRefresh } from '../../tui/store/log';
-import { settingsRow } from '../store/ui';
+import type { JSX } from "solid-js";
+import { For } from "solid-js";
+import { autoRefresh, setAutoRefresh } from "../../tui/store/log";
+import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, mode, retries, tier } from "../../tui/store/settings";
+import { settingsRow } from "../store/ui";
 
 export interface SettingAction {
   label: string;
@@ -25,11 +16,11 @@ export interface SettingAction {
  * runtime-only state in the log store.
  */
 export const SETTING_ACTIONS: SettingAction[] = [
-  { label: 'Default tier', value: () => String(tier()), act: cycleTier },
-  { label: 'Default agent', value: () => agent(), act: cycleAgent },
-  { label: 'Run mode', value: () => mode(), act: cycleMode },
-  { label: 'Retries', value: () => String(retries()), act: cycleRetries },
-  { label: 'Auto-refresh', value: () => (autoRefresh() ? 'ON' : 'OFF'), act: () => setAutoRefresh(!autoRefresh()) },
+  { label: "Default tier", value: () => String(tier()), act: cycleTier },
+  { label: "Default agent", value: () => agent(), act: cycleAgent },
+  { label: "Run mode", value: () => mode(), act: cycleMode },
+  { label: "Retries", value: () => String(retries()), act: cycleRetries },
+  { label: "Auto-refresh", value: () => (autoRefresh() ? "ON" : "OFF"), act: () => setAutoRefresh(!autoRefresh()) },
 ];
 
 export const SETTINGS_ROW_COUNT = SETTING_ACTIONS.length;
@@ -45,7 +36,7 @@ export function Settings(props: { focused: boolean }): JSX.Element {
       title="Settings"
       border
       borderStyle="single"
-      borderColor={props.focused ? '#00aaff' : '#555555'}
+      borderColor={props.focused ? "#00aaff" : "#555555"}
       focused={props.focused}
       flexDirection="column"
       flexGrow={1}
@@ -62,11 +53,12 @@ export function Settings(props: { focused: boolean }): JSX.Element {
               flexDirection="row"
               gap={2}
               paddingX={1}
-              backgroundColor={active ? '#1c2128' : undefined}
+              backgroundColor={active ? "#1c2128" : undefined}
               onMouseDown={() => row.act()}
             >
-              <text fg={active ? '#58a6ff' : '#8b949e'}>
-                {active ? '▶ ' : '  '}{row.label.padEnd(16)}
+              <text fg={active ? "#58a6ff" : "#8b949e"}>
+                {active ? "▶ " : "  "}
+                {row.label.padEnd(16)}
               </text>
               <text fg="#c9d1d9" content={row.value()} />
             </box>
@@ -74,10 +66,7 @@ export function Settings(props: { focused: boolean }): JSX.Element {
         }}
       </For>
 
-      <text
-        content="Defaults are stored under tui.settings in at's state file."
-        fg="#484f58"
-      />
+      <text content="Defaults are stored under tui.settings in at's state file." fg="#484f58" />
     </box>
   );
 }

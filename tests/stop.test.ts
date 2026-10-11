@@ -1,8 +1,8 @@
-import { stopRun } from '../src/commands/stop';
-import { RunRecord } from '../src/run-store';
-import { vi, describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { stopRun } from "../src/commands/stop";
+import type { RunRecord } from "../src/run-store";
 
-vi.mock('../src/run-store', async (importOriginal) => {
+vi.mock("../src/run-store", async (importOriginal) => {
   const original = (await importOriginal()) as object;
   return {
     ...original,
@@ -11,7 +11,7 @@ vi.mock('../src/run-store', async (importOriginal) => {
   };
 });
 
-vi.mock('../src/process-utils', async (importOriginal) => {
+vi.mock("../src/process-utils", async (importOriginal) => {
   const original = (await importOriginal()) as object;
   return {
     ...original,
@@ -19,27 +19,27 @@ vi.mock('../src/process-utils', async (importOriginal) => {
   };
 });
 
-import { loadRuns, updateRun } from '../src/run-store';
-import { isPidAlive } from '../src/process-utils';
+import { isPidAlive } from "../src/process-utils";
+import { loadRuns, updateRun } from "../src/run-store";
 
 function makeRun(overrides: Partial<RunRecord> = {}): RunRecord {
   return {
-    runId: 'r3k2a1b9',
-    agent: 'opencode',
+    runId: "r3k2a1b9",
+    agent: "opencode",
     tier: 2,
     pid: 28451,
-    prompt: 'fix the bug',
-    logFile: '/tmp/at-logs/at-test-opencode.log',
+    prompt: "fix the bug",
+    logFile: "/tmp/at-logs/at-test-opencode.log",
     startedAt: new Date().toISOString(),
     finishedAt: null,
     exitCode: null,
-    status: 'running',
-    name: 'unnamed',
+    status: "running",
+    name: "unnamed",
     ...overrides,
   };
 }
 
-describe('stopRun', () => {
+describe("stopRun", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -49,128 +49,128 @@ describe('stopRun', () => {
     vi.mocked(updateRun).mockClear();
   });
 
-  it('stops the most recent running run when runId is omitted', async () => {
+  it("stops the most recent running run when runId is omitted", async () => {
     const run = makeRun();
     vi.mocked(loadRuns).mockReturnValue([run]);
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
 
-    await stopRun('/tmp/state', undefined, false);
+    await stopRun("/tmp/state", undefined, false);
 
-    expect(killSpy).toHaveBeenCalledWith(-run.pid, 'SIGTERM');
-    expect(updateRun).toHaveBeenCalledWith('/tmp/state', run.runId, {
-      status: 'failed',
+    expect(killSpy).toHaveBeenCalledWith(-run.pid, "SIGTERM");
+    expect(updateRun).toHaveBeenCalledWith("/tmp/state", run.runId, {
+      status: "failed",
       finishedAt: expect.any(String),
     });
   });
 
-  it('throws when no running run exists and runId is omitted', async () => {
-    vi.mocked(loadRuns).mockReturnValue([makeRun({ status: 'done' })]);
+  it("throws when no running run exists and runId is omitted", async () => {
+    vi.mocked(loadRuns).mockReturnValue([makeRun({ status: "done" })]);
 
-    await expect(stopRun('/tmp/state', undefined, false)).rejects.toThrow('no running run to stop');
+    await expect(stopRun("/tmp/state", undefined, false)).rejects.toThrow("no running run to stop");
   });
 
-  it('resolves a run by prefix', async () => {
-    const run = makeRun({ runId: 'abcdef123456', pid: 12345 });
+  it("resolves a run by prefix", async () => {
+    const run = makeRun({ runId: "abcdef123456", pid: 12345 });
     vi.mocked(loadRuns).mockReturnValue([run]);
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
 
-    await stopRun('/tmp/state', 'abc', false);
+    await stopRun("/tmp/state", "abc", false);
 
-    expect(killSpy).toHaveBeenCalledWith(-12345, 'SIGTERM');
-    expect(updateRun).toHaveBeenCalledWith('/tmp/state', 'abcdef123456', expect.any(Object));
+    expect(killSpy).toHaveBeenCalledWith(-12345, "SIGTERM");
+    expect(updateRun).toHaveBeenCalledWith("/tmp/state", "abcdef123456", expect.any(Object));
   });
 
-  it('throws when runId is not found', async () => {
+  it("throws when runId is not found", async () => {
     vi.mocked(loadRuns).mockReturnValue([makeRun()]);
 
-    await expect(stopRun('/tmp/state', 'xyz', false)).rejects.toThrow('run not found: xyz');
+    await expect(stopRun("/tmp/state", "xyz", false)).rejects.toThrow("run not found: xyz");
   });
 
-  it('sends SIGKILL when force is true', async () => {
+  it("sends SIGKILL when force is true", async () => {
     const run = makeRun({ pid: 55555 });
     vi.mocked(loadRuns).mockReturnValue([run]);
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
 
-    await stopRun('/tmp/state', run.runId, true);
+    await stopRun("/tmp/state", run.runId, true);
 
-    expect(killSpy).toHaveBeenCalledWith(-55555, 'SIGKILL');
+    expect(killSpy).toHaveBeenCalledWith(-55555, "SIGKILL");
   });
 
-  it('does not signal when pid is not alive and returns successfully', async () => {
+  it("does not signal when pid is not alive and returns successfully", async () => {
     const run = makeRun({ pid: 77777 });
     vi.mocked(loadRuns).mockReturnValue([run]);
     vi.mocked(isPidAlive).mockReturnValue(false);
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
-    await stopRun('/tmp/state', run.runId, false);
+    await stopRun("/tmp/state", run.runId, false);
 
     expect(killSpy).not.toHaveBeenCalled();
     expect(updateRun).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(`[at] run ${run.runId} not running (pid ${run.pid} not alive)`);
   });
 
-  it('falls back to bare pid when the group kill fails', async () => {
+  it("falls back to bare pid when the group kill fails", async () => {
     const run = makeRun({ pid: 22222 });
     vi.mocked(loadRuns).mockReturnValue([run]);
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation((target: number) => {
-      if (typeof target === 'number' && target < 0) {
-        throw new Error('kill ESRCH');
+    const killSpy = vi.spyOn(process, "kill").mockImplementation((target: number) => {
+      if (typeof target === "number" && target < 0) {
+        throw new Error("kill ESRCH");
       }
       return true;
     });
 
-    await stopRun('/tmp/state', run.runId, false);
+    await stopRun("/tmp/state", run.runId, false);
 
-    expect(killSpy).toHaveBeenCalledWith(22222, 'SIGTERM');
-    expect(updateRun).toHaveBeenCalledWith('/tmp/state', run.runId, expect.any(Object));
+    expect(killSpy).toHaveBeenCalledWith(22222, "SIGTERM");
+    expect(updateRun).toHaveBeenCalledWith("/tmp/state", run.runId, expect.any(Object));
   });
 
-  it('propagates error when process.kill throws', async () => {
+  it("propagates error when process.kill throws", async () => {
     const run = makeRun({ pid: 88888 });
     vi.mocked(loadRuns).mockReturnValue([run]);
-    vi.spyOn(process, 'kill').mockImplementation(() => {
-      throw new Error('permission denied');
+    vi.spyOn(process, "kill").mockImplementation(() => {
+      throw new Error("permission denied");
     });
 
-    await expect(stopRun('/tmp/state', run.runId, false)).rejects.toThrow(
-      'failed to signal pid 88888: permission denied',
+    await expect(stopRun("/tmp/state", run.runId, false)).rejects.toThrow(
+      "failed to signal pid 88888: permission denied",
     );
   });
 
   // --- joined state dirs (project `.at/` + `~/.at/`, same scope as `at status`) ---
 
-  it('finds a run in a non-primary dir and writes the update there', async () => {
-    const run = makeRun({ runId: 'globalrun1', pid: 4242 });
+  it("finds a run in a non-primary dir and writes the update there", async () => {
+    const run = makeRun({ runId: "globalrun1", pid: 4242 });
     vi.mocked(loadRuns).mockReset();
-    vi.mocked(loadRuns).mockImplementation((dir: string) => (dir === '/tmp/home-at' ? [run] : []));
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    vi.mocked(loadRuns).mockImplementation((dir: string) => (dir === "/tmp/home-at" ? [run] : []));
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
 
-    await stopRun(['/tmp/project-at', '/tmp/home-at'], 'globalrun1', false);
+    await stopRun(["/tmp/project-at", "/tmp/home-at"], "globalrun1", false);
 
-    expect(loadRuns).toHaveBeenCalledWith('/tmp/project-at');
-    expect(loadRuns).toHaveBeenCalledWith('/tmp/home-at');
-    expect(killSpy).toHaveBeenCalledWith(-4242, 'SIGTERM');
-    expect(updateRun).toHaveBeenCalledWith('/tmp/home-at', 'globalrun1', expect.any(Object));
+    expect(loadRuns).toHaveBeenCalledWith("/tmp/project-at");
+    expect(loadRuns).toHaveBeenCalledWith("/tmp/home-at");
+    expect(killSpy).toHaveBeenCalledWith(-4242, "SIGTERM");
+    expect(updateRun).toHaveBeenCalledWith("/tmp/home-at", "globalrun1", expect.any(Object));
   });
 
-  it('stops the most recent running run across joined dirs when runId is omitted', async () => {
-    const older = makeRun({ runId: 'p-run', pid: 111, startedAt: new Date(Date.now() - 7_200_000).toISOString() });
-    const newer = makeRun({ runId: 'g-run', pid: 222, startedAt: new Date().toISOString() });
+  it("stops the most recent running run across joined dirs when runId is omitted", async () => {
+    const older = makeRun({ runId: "p-run", pid: 111, startedAt: new Date(Date.now() - 7_200_000).toISOString() });
+    const newer = makeRun({ runId: "g-run", pid: 222, startedAt: new Date().toISOString() });
     vi.mocked(loadRuns).mockReset();
-    vi.mocked(loadRuns).mockImplementation((dir: string) => (dir === '/tmp/home-at' ? [newer] : [older]));
-    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    vi.mocked(loadRuns).mockImplementation((dir: string) => (dir === "/tmp/home-at" ? [newer] : [older]));
+    const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
 
-    await stopRun(['/tmp/project-at', '/tmp/home-at'], undefined, false);
+    await stopRun(["/tmp/project-at", "/tmp/home-at"], undefined, false);
 
-    expect(killSpy).toHaveBeenCalledWith(-222, 'SIGTERM');
-    expect(updateRun).toHaveBeenCalledWith('/tmp/home-at', 'g-run', expect.any(Object));
+    expect(killSpy).toHaveBeenCalledWith(-222, "SIGTERM");
+    expect(updateRun).toHaveBeenCalledWith("/tmp/home-at", "g-run", expect.any(Object));
   });
 
-  it('throws not-found across joined dirs', async () => {
+  it("throws not-found across joined dirs", async () => {
     vi.mocked(loadRuns).mockReset();
     vi.mocked(loadRuns).mockImplementation(() => []);
 
-    await expect(stopRun(['/tmp/project-at', '/tmp/home-at'], 'xyz', false)).rejects.toThrow('run not found: xyz');
+    await expect(stopRun(["/tmp/project-at", "/tmp/home-at"], "xyz", false)).rejects.toThrow("run not found: xyz");
   });
 });

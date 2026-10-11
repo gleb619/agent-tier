@@ -20,21 +20,16 @@ export interface NamerProvider {
  * Runtime-usable tuple of provider `type` strings known to the loader /
  * registry. Keep in sync with `NamerProviderConfig['type']` in T06.
  */
-export const KNOWN_NAMER_PROVIDER_KINDS = [
-  'ollama',
-  'openrouter',
-] as const;
+export const KNOWN_NAMER_PROVIDER_KINDS = ["ollama", "openrouter"] as const;
 
 export type NamerProviderKind = (typeof KNOWN_NAMER_PROVIDER_KINDS)[number];
 
 /** Discriminated provider config — `type` selects which fields apply. */
-export type NamerProviderConfig =
-  | NamerOllamaConfig
-  | NamerOpenRouterConfig;
+export type NamerProviderConfig = NamerOllamaConfig | NamerOpenRouterConfig;
 
 export interface NamerOllamaConfig {
   name: string;
-  type: 'ollama';
+  type: "ollama";
   url: string;
   model: string;
   timeoutMs?: number;
@@ -42,7 +37,7 @@ export interface NamerOllamaConfig {
 
 export interface NamerOpenRouterConfig {
   name: string;
-  type: 'openrouter';
+  type: "openrouter";
   url: string;
   model: string;
   apiKeyRef?: string;

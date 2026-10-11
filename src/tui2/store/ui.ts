@@ -1,17 +1,17 @@
-import { createSignal } from 'solid-js';
+import { createSignal } from "solid-js";
 
-export type ActiveView = 'dashboard' | 'new-task' | 'settings' | 'run-details';
+export type ActiveView = "dashboard" | "new-task" | "settings" | "run-details";
 
 /**
  * Which zone owns keyboard input. Text-entry zones ('sidebar-filter',
  * 'prompt') swallow plain character keys, so global hotkeys (1-4, j/k, q)
  * stand down while the user is typing.
  */
-export type FocusZone = 'sidebar-filter' | 'sidebar-list' | 'prompt' | 'log' | 'settings';
+export type FocusZone = "sidebar-filter" | "sidebar-list" | "prompt" | "log" | "settings";
 
-const [activeView, setActiveView] = createSignal<ActiveView>('dashboard');
-const [sidebarFilter, setSidebarFilter] = createSignal<string>('');
-const [focusZone, setFocusZone] = createSignal<FocusZone>('sidebar-list');
+const [activeView, setActiveView] = createSignal<ActiveView>("dashboard");
+const [sidebarFilter, setSidebarFilter] = createSignal<string>("");
+const [focusZone, setFocusZone] = createSignal<FocusZone>("sidebar-list");
 const [showPromptOverlay, setShowPromptOverlay] = createSignal<boolean>(false);
 const [settingsRow, setSettingsRow] = createSignal<number>(0);
 
@@ -24,42 +24,42 @@ const [sidebarIndex, setSidebarIndex] = createSignal<number>(0);
 
 export {
   activeView,
-  setActiveView,
-  sidebarFilter,
-  setSidebarFilter,
   focusZone,
+  setActiveView,
   setFocusZone,
-  showPromptOverlay,
-  setShowPromptOverlay,
-  settingsRow,
   setSettingsRow,
-  sidebarIndex,
+  setShowPromptOverlay,
+  setSidebarFilter,
   setSidebarIndex,
+  settingsRow,
+  showPromptOverlay,
+  sidebarFilter,
+  sidebarIndex,
 };
 
 /** True while a text field owns the keyboard (plain-char hotkeys stay off). */
 export function isTextEntryFocused(): boolean {
   const zone = focusZone();
-  return zone === 'sidebar-filter' || zone === 'prompt';
+  return zone === "sidebar-filter" || zone === "prompt";
 }
 
 /** The main-column zone a view exposes, or null when it has nothing to focus. */
 const MAIN_ZONE: Record<ActiveView, FocusZone | null> = {
   dashboard: null,
-  'new-task': 'prompt',
-  'run-details': 'log',
-  settings: 'settings',
+  "new-task": "prompt",
+  "run-details": "log",
+  settings: "settings",
 };
 
 /** The main-column zone a view exposes, or the run list when it has none. */
 export function mainZoneForView(view: ActiveView): FocusZone {
-  return MAIN_ZONE[view] ?? 'sidebar-list';
+  return MAIN_ZONE[view] ?? "sidebar-list";
 }
 
 /** Zones Tab cycles through for a view: sidebar filter, run list, then main pane. */
 export function zonesForView(view: ActiveView): FocusZone[] {
   const main = MAIN_ZONE[view];
-  return main ? ['sidebar-filter', 'sidebar-list', main] : ['sidebar-filter', 'sidebar-list'];
+  return main ? ["sidebar-filter", "sidebar-list", main] : ["sidebar-filter", "sidebar-list"];
 }
 
 /**
@@ -69,8 +69,8 @@ export function zonesForView(view: ActiveView): FocusZone[] {
 export function goToView(view: ActiveView): void {
   setActiveView(view);
   setShowPromptOverlay(false);
-  if (view === 'new-task') {
-    setFocusZone('prompt');
+  if (view === "new-task") {
+    setFocusZone("prompt");
     return;
   }
   if (!zonesForView(view).includes(focusZone())) {

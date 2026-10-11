@@ -1,11 +1,11 @@
-import type { NotifyAdapter, NotifyEvent } from '../types';
-import { buildPromptSuffix } from '../prompt';
+import { buildPromptSuffix } from "../prompt";
+import type { NotifyAdapter, NotifyEvent } from "../types";
 
 const TEXT_LIMIT = 500;
 
 function truncate(s: string, n: number): string {
   if (s.length <= n) return s;
-  return s.slice(0, n) + '…';
+  return `${s.slice(0, n)}…`;
 }
 
 function summarizeArgs(command: string): string {
@@ -29,13 +29,13 @@ interface CodexItem {
 
 function getItem(payload: Record<string, unknown>): CodexItem | undefined {
   const direct = payload.item;
-  if (direct && typeof direct === 'object') return direct as CodexItem;
+  if (direct && typeof direct === "object") return direct as CodexItem;
   return undefined;
 }
 
 export function makeCodexAdapter(): NotifyAdapter {
   return {
-    name: 'codex',
+    name: "codex",
     promptSuffix(ctx) {
       return buildPromptSuffix(ctx);
     },
@@ -44,14 +44,14 @@ export function makeCodexAdapter(): NotifyAdapter {
     // '--json' right before the last element.
     transformArgs(_ctx, baseArgs) {
       const out = baseArgs.slice(0, -1);
-      out.push('--json');
+      out.push("--json");
       out.push(baseArgs[baseArgs.length - 1]!);
       return out;
     },
-    parseLine(line: string): Array<Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>> {
+    parseLine(line: string): Array<Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq">> {
       try {
         const trimmed = line.trim();
-        if (!trimmed || trimmed[0] !== '{') return [];
+        if (trimmed?.[0] !== "{") return [];
         let payload: Record<string, unknown>;
         try {
           payload = JSON.parse(trimmed) as Record<string, unknown>;
@@ -59,23 +59,23 @@ export function makeCodexAdapter(): NotifyAdapter {
           return [];
         }
         const t = payload.type;
-        if (t === 'thread.started') {
+        if (t === "thread.started") {
           const data: Record<string, unknown> = {};
-          if (typeof payload.thread_id === 'string') data.thread_id = payload.thread_id;
-          return [{ type: 'progress', text: 'session started', data }];
+          if (typeof payload.thread_id === "string") data.thread_id = payload.thread_id;
+          return [{ type: "progress", text: "session started", data }];
         }
-        if (t === 'turn.started') {
-          return [{ type: 'progress', text: 'turn started' }];
+        if (t === "turn.started") {
+          return [{ type: "progress", text: "turn started" }];
         }
-        if (t === 'turn.completed') {
+        if (t === "turn.completed") {
           const data: Record<string, unknown> = {};
-          if ('usage' in payload) data.usage = payload.usage;
-          return [{ type: 'progress', text: 'turn finished', data }];
+          if ("usage" in payload) data.usage = payload.usage;
+          return [{ type: "progress", text: "turn finished", data }];
         }
-        if (t === 'item.started' || t === 'item.completed') {
+        if (t === "item.started" || t === "item.completed") {
           const item = getItem(payload);
           if (!item) return [];
-          return mapItem(t === 'item.completed', item);
+          return mapItem(t === "item.completed", item);
         }
         return [];
       } catch {
@@ -85,51 +85,44 @@ export function makeCodexAdapter(): NotifyAdapter {
   };
 }
 
-function mapItem(
-  completed: boolean,
-  item: CodexItem,
-): Array<Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>> {
+function mapItem(completed: boolean, item: CodexItem): Array<Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq">> {
   switch (item.type) {
-    case 'agent_message': {
-      const text = typeof item.text === 'string' ? item.text : '';
+    case "agent_message": {
+      const text = typeof item.text === "string" ? item.text : "";
       if (!text) return [];
-      return [{ type: 'message', text: truncate(text, TEXT_LIMIT) }];
+      return [{ type: "message", text: truncate(text, TEXT_LIMIT) }];
     }
-    case 'reasoning': {
-      return completed
-        ? [{ type: 'progress', text: 'reasoning' }]
-        : [{ type: 'progress', text: 'reasoning…' }];
+    case "reasoning": {
+      return completed ? [{ type: "progress", text: "reasoning" }] : [{ type: "progress", text: "reasoning…" }];
     }
-    case 'command_execution': {
-      const cmd = typeof item.command === 'string' ? item.command : '';
-      const status = typeof item.status === 'string' ? item.status : '';
-      const data: Record<string, unknown> = { name: 'Bash' };
-      if (typeof item.exit_code === 'number') data.exit_code = item.exit_code;
+    case "command_execution": {
+      const cmd = typeof item.command === "string" ? item.command : "";
+      const status = typeof item.status === "string" ? item.status : "";
+      const data: Record<string, unknown> = { name: "Bash" };
+      if (typeof item.exit_code === "number") data.exit_code = item.exit_code;
       if (status) data.status = status;
-      const label = completed
-        ? `Bash ${summarizeArgs(cmd)}`
-        : `Bash ${summarizeArgs(cmd)}…`;
-      return [{ type: 'tool', text: truncate(label, TEXT_LIMIT), data }];
+      const label = completed ? `Bash ${summarizeArgs(cmd)}` : `Bash ${summarizeArgs(cmd)}…`;
+      return [{ type: "tool", text: truncate(label, TEXT_LIMIT), data }];
     }
-    case 'file_change': {
-      const path = typeof item.path === 'string' ? item.path : '';
-      const kind = typeof item.kind === 'string' ? item.kind : 'change';
+    case "file_change": {
+      const path = typeof item.path === "string" ? item.path : "";
+      const kind = typeof item.kind === "string" ? item.kind : "change";
       const label = path ? `File ${kind} ${path}` : `File ${kind}`;
-      return [{ type: 'tool', text: truncate(label, TEXT_LIMIT), data: { name: 'FileChange' } }];
+      return [{ type: "tool", text: truncate(label, TEXT_LIMIT), data: { name: "FileChange" } }];
     }
-    case 'web_search': {
-      const query = typeof item.query === 'string' ? item.query : '';
-      const label = query ? `WebSearch ${query}` : 'WebSearch';
-      return [{ type: 'tool', text: truncate(label, TEXT_LIMIT), data: { name: 'WebSearch' } }];
+    case "web_search": {
+      const query = typeof item.query === "string" ? item.query : "";
+      const label = query ? `WebSearch ${query}` : "WebSearch";
+      return [{ type: "tool", text: truncate(label, TEXT_LIMIT), data: { name: "WebSearch" } }];
     }
-    case 'mcp_tool_call': {
-      const name = typeof item.name === 'string' ? item.name : 'MCP';
+    case "mcp_tool_call": {
+      const name = typeof item.name === "string" ? item.name : "MCP";
       const label = `MCP ${name}`;
-      return [{ type: 'tool', text: truncate(label, TEXT_LIMIT), data: { name } }];
+      return [{ type: "tool", text: truncate(label, TEXT_LIMIT), data: { name } }];
     }
-    case 'error': {
-      const msg = typeof item.message === 'string' ? item.message : 'codex error';
-      return [{ type: 'error', text: truncate(msg, TEXT_LIMIT) }];
+    case "error": {
+      const msg = typeof item.message === "string" ? item.message : "codex error";
+      return [{ type: "error", text: truncate(msg, TEXT_LIMIT) }];
     }
     default:
       return [];

@@ -15,10 +15,10 @@
 // this structure exactly, and the vitest suite under tests/tui2 already
 // covers the per-component behaviour.
 
-import { testRender } from '@opentui/solid';
+import { testRender } from "@opentui/solid";
 
-const HEADER_MARKER = 'at — agent tier';
-const FOOTER_MARKER = '[1-4] views';
+const HEADER_MARKER = "at — agent tier";
+const FOOTER_MARKER = "[1-4] views";
 const TERMINAL_ROWS = 24;
 
 async function main(): Promise<void> {
@@ -34,7 +34,15 @@ async function main(): Promise<void> {
         </box>
         <box flexDirection="row" flexGrow={1} flexShrink={1}>
           <box width="28%" flexDirection="column">
-            <box title="Sidebar" border borderStyle="single" borderColor="#555555" flexDirection="column" flexGrow={1} padding={1}>
+            <box
+              title="Sidebar"
+              border
+              borderStyle="single"
+              borderColor="#555555"
+              flexDirection="column"
+              flexGrow={1}
+              padding={1}
+            >
               <scrollbox flexGrow={1}>
                 <box flexDirection="column">
                   <text content="(empty)" />
@@ -43,7 +51,15 @@ async function main(): Promise<void> {
             </box>
           </box>
           <box flexGrow={1} flexDirection="column">
-            <box title="Dashboard" border borderStyle="single" borderColor="#555555" flexDirection="column" flexGrow={1} padding={1}>
+            <box
+              title="Dashboard"
+              border
+              borderStyle="single"
+              borderColor="#555555"
+              flexDirection="column"
+              flexGrow={1}
+              padding={1}
+            >
               <scrollbox flexGrow={1}>
                 <box flexDirection="column" paddingX={1} paddingTop={1}>
                   <text content="Quick stats" fg="#58a6ff" />
@@ -68,19 +84,19 @@ async function main(): Promise<void> {
 
   await setup.waitForVisualIdle({});
   const frame = setup.captureCharFrame();
-  const lines = frame.split('\n');
+  const lines = frame.split("\n");
 
-  const headerLine = lines[0] ?? '';
-  const footerLine = lines[TERMINAL_ROWS - 1] ?? '';
+  const headerLine = lines[0] ?? "";
+  const footerLine = lines[TERMINAL_ROWS - 1] ?? "";
   const headerVisible = headerLine.includes(HEADER_MARKER);
   const footerVisible = footerLine.includes(FOOTER_MARKER);
 
   // eslint-disable-next-line no-console
   console.log(`--- tui2 render frame (${lines.length} lines, ${TERMINAL_ROWS} expected) ---`);
   for (let i = 0; i < TERMINAL_ROWS; i++) {
-    const mark = i === 0 ? 'H' : i === TERMINAL_ROWS - 1 ? 'F' : ' ';
+    const mark = i === 0 ? "H" : i === TERMINAL_ROWS - 1 ? "F" : " ";
     // eslint-disable-next-line no-console
-    console.log(`${mark} ${String(i).padStart(2, ' ')} | ${lines[i] ?? ''}`);
+    console.log(`${mark} ${String(i).padStart(2, " ")} | ${lines[i] ?? ""}`);
   }
 
   if (!headerVisible || !footerVisible || lines.length < TERMINAL_ROWS) {
@@ -91,11 +107,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   // eslint-disable-next-line no-console
-  console.log('OK: tui2 header and footer are visible at 80x24');
+  console.log("OK: tui2 header and footer are visible at 80x24");
 }
 
 main().catch((err: unknown) => {
   // eslint-disable-next-line no-console
-  console.error('tui2 render test crashed:', err);
+  console.error("tui2 render test crashed:", err);
   process.exit(1);
 });

@@ -1,4 +1,4 @@
-import fs from 'fs';
+import fs from "node:fs";
 
 /**
  * Read a prompt from a file path. Supports .md (raw text) and .json
@@ -9,13 +9,13 @@ import fs from 'fs';
  */
 export function readPromptFile(filePath: string): string {
   try {
-    const ext = filePath.split('.').pop()?.toLowerCase();
-    const content = fs.readFileSync(filePath, 'utf8');
+    const ext = filePath.split(".").pop()?.toLowerCase();
+    const content = fs.readFileSync(filePath, "utf8");
 
-    if (ext === 'json') {
+    if (ext === "json") {
       try {
         const parsed = JSON.parse(content);
-        if (parsed && typeof parsed === 'object' && typeof parsed.prompt === 'string') {
+        if (parsed && typeof parsed === "object" && typeof parsed.prompt === "string") {
           return parsed.prompt;
         }
         return content;

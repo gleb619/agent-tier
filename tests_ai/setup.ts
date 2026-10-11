@@ -1,9 +1,9 @@
-import { execSync } from 'child_process';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { isDeactivated } from '../src/health';
-import { resolveStateDir, getStateFilePath } from '../src/state-dir';
+import { execSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { isDeactivated } from "../src/health";
+import { getStateFilePath, resolveStateDir } from "../src/state-dir";
 
 export const DEFAULT_TIMEOUT = 120000;
 
@@ -15,14 +15,14 @@ export interface Sandbox {
 }
 
 export function createSandbox(): Sandbox {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'at-test-'));
-  
-  execSync('git init -q', { cwd: dir });
-  fs.writeFileSync(path.join(dir, 'main.js'), '// placeholder\n');
-  fs.writeFileSync(path.join(dir, '.gitignore'), 'node_modules/\n');
-  execSync('git add -A', { cwd: dir });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "at-test-"));
+
+  execSync("git init -q", { cwd: dir });
+  fs.writeFileSync(path.join(dir, "main.js"), "// placeholder\n");
+  fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules/\n");
+  execSync("git add -A", { cwd: dir });
   execSync('git commit -q -m "init" --author="Test <test@test.com>"', { cwd: dir });
-  
+
   return { dir };
 }
 
@@ -33,22 +33,47 @@ export function cleanupSandbox(sandbox: Sandbox): void {
 }
 
 export function agentBinExists(agent: string): boolean {
-  let binPath = '';
+  let binPath = "";
 
   switch (agent) {
-    case 'glm-code':  binPath = process.env.GLM_CODE_BIN ?? `${LOCAL_BIN}/glm-code`; break;
-    case 'codex':     binPath = process.env.CODEX_BIN ?? `${NODE_BIN}/codex`; break;
-    case 'kimi':      binPath = process.env.KIMI_BIN ?? `${LOCAL_BIN}/kimi`; break;
-    case 'opencode':  binPath = process.env.OPENCODE_BIN ?? `${NODE_BIN}/opencode`; break;
-    case 'qwen':      binPath = process.env.QWEN_BIN ?? `${NODE_BIN}/qwen`; break;
-    case 'kilo':      binPath = process.env.KILO_BIN ?? `${NODE_BIN}/kilo`; break;
-    case 'agy':       binPath = process.env.AGY_BIN ?? `${NODE_BIN}/agy`; break;
-    case 'pi':        binPath = process.env.PI_BIN ?? `${NODE_BIN}/pi`; break;
-    case 'cursor':    binPath = process.env.CURSOR_BIN ?? `${LOCAL_BIN}/cursor-agent`; break;
-    case 'cline':     binPath = process.env.CLINE_BIN ?? `${NODE_BIN}/cline`; break;
-    case 'mock':      binPath = process.env.MOCK_BIN ?? `${LOCAL_BIN}/mock-agent`; break;
-    case 'mock-long': binPath = process.env.MOCK_LONG_BIN ?? `${LOCAL_BIN}/mock-long-agent`; break;
-    default:          return false;
+    case "glm-code":
+      binPath = process.env.GLM_CODE_BIN ?? `${LOCAL_BIN}/glm-code`;
+      break;
+    case "codex":
+      binPath = process.env.CODEX_BIN ?? `${NODE_BIN}/codex`;
+      break;
+    case "kimi":
+      binPath = process.env.KIMI_BIN ?? `${LOCAL_BIN}/kimi`;
+      break;
+    case "opencode":
+      binPath = process.env.OPENCODE_BIN ?? `${NODE_BIN}/opencode`;
+      break;
+    case "qwen":
+      binPath = process.env.QWEN_BIN ?? `${NODE_BIN}/qwen`;
+      break;
+    case "kilo":
+      binPath = process.env.KILO_BIN ?? `${NODE_BIN}/kilo`;
+      break;
+    case "agy":
+      binPath = process.env.AGY_BIN ?? `${NODE_BIN}/agy`;
+      break;
+    case "pi":
+      binPath = process.env.PI_BIN ?? `${NODE_BIN}/pi`;
+      break;
+    case "cursor":
+      binPath = process.env.CURSOR_BIN ?? `${LOCAL_BIN}/cursor-agent`;
+      break;
+    case "cline":
+      binPath = process.env.CLINE_BIN ?? `${NODE_BIN}/cline`;
+      break;
+    case "mock":
+      binPath = process.env.MOCK_BIN ?? `${LOCAL_BIN}/mock-agent`;
+      break;
+    case "mock-long":
+      binPath = process.env.MOCK_LONG_BIN ?? `${LOCAL_BIN}/mock-long-agent`;
+      break;
+    default:
+      return false;
   }
 
   try {
@@ -71,7 +96,7 @@ export function isAgentEnabled(agent: string): boolean {
 }
 
 export function getCliPath(): string {
-  return path.resolve(__dirname, '../dist/cli.js');
+  return path.resolve(__dirname, "../dist/cli.js");
 }
 
 /**
@@ -90,7 +115,7 @@ const EXTERNAL_FAILURE_PATTERNS: RegExp[] = [
   /rate.?limit|HTTP 429|status.{0,4}429|quota exceeded/i,
 ];
 
-export type AgentExitClass = 'success' | 'external-failure' | 'code-failure';
+export type AgentExitClass = "success" | "external-failure" | "code-failure";
 
 /**
  * Read the agent's log file content for a run. `at` prints the log path in its
@@ -101,7 +126,7 @@ export type AgentExitClass = 'success' | 'external-failure' | 'code-failure';
  * auth/eligibility errors reach the log file but NOT `at`'s stdout.
  */
 export function readAgentLog(agent: string, capturedOutput: string): string {
-  const logDir = process.env.AT_LOGS_DIR ?? '/tmp/at-logs';
+  const logDir = process.env.AT_LOGS_DIR ?? "/tmp/at-logs";
   const fromBanner = /Log:\s*(\S*at-[^\s]*\.log)/.exec(capturedOutput);
   const candidates: string[] = [];
   if (fromBanner?.[1]) candidates.push(fromBanner[1]);
@@ -109,24 +134,31 @@ export function readAgentLog(agent: string, capturedOutput: string): string {
     for (const f of fs.readdirSync(logDir)) {
       if (f.includes(`-${agent}.log`)) candidates.push(path.join(logDir, f));
     }
-  } catch { /* dir may not exist */ }
-  let latest = '';
+  } catch {
+    /* dir may not exist */
+  }
+  let latest = "";
   let latestMtime = 0;
   for (const c of candidates) {
     try {
       const st = fs.statSync(c);
-      if (st.mtimeMs > latestMtime) { latestMtime = st.mtimeMs; latest = c; }
-    } catch { /* ignore */ }
+      if (st.mtimeMs > latestMtime) {
+        latestMtime = st.mtimeMs;
+        latest = c;
+      }
+    } catch {
+      /* ignore */
+    }
   }
   try {
-    return latest ? fs.readFileSync(latest, 'utf8') : '';
+    return latest ? fs.readFileSync(latest, "utf8") : "";
   } catch {
-    return '';
+    return "";
   }
 }
 
 /** Classify an agent run's exit: success, external/env failure (SKIP), or code failure (FAIL). */
 export function classifyAgentExit(exitCode: number, output: string): AgentExitClass {
-  if (exitCode === 0) return 'success';
-  return EXTERNAL_FAILURE_PATTERNS.some((p) => p.test(output)) ? 'external-failure' : 'code-failure';
+  if (exitCode === 0) return "success";
+  return EXTERNAL_FAILURE_PATTERNS.some((p) => p.test(output)) ? "external-failure" : "code-failure";
 }

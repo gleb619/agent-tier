@@ -1,9 +1,9 @@
-import { existsSync } from 'fs';
-import path from 'path';
-import os from 'os';
+import { existsSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-const AT_DIR = '.at';
-const HOME_AT_DIR = path.join(os.homedir(), '.at');
+const AT_DIR = ".at";
+const HOME_AT_DIR = path.join(os.homedir(), ".at");
 
 /**
  * Walk up from `startDir` to find the nearest directory containing `.git/`.
@@ -14,14 +14,14 @@ export function findProjectRoot(startDir: string): string | undefined {
   const root = path.parse(dir).root;
 
   while (dir !== root) {
-    if (existsSync(path.join(dir, '.git'))) {
+    if (existsSync(path.join(dir, ".git"))) {
       return dir;
     }
     dir = path.dirname(dir);
   }
 
   // Check root itself
-  if (existsSync(path.join(root, '.git'))) {
+  if (existsSync(path.join(root, ".git"))) {
     return root;
   }
 
@@ -45,14 +45,14 @@ export function resolveStateDir(explicit?: string): string {
   const projectRoot = findProjectRoot(process.cwd());
   if (projectRoot) {
     const projectAt = path.join(projectRoot, AT_DIR);
-    if (existsSync(path.join(projectAt, 'state.json')) || existsSync(path.join(projectAt, 'runs.jsonl'))) {
+    if (existsSync(path.join(projectAt, "state.json")) || existsSync(path.join(projectAt, "runs.jsonl"))) {
       return projectAt;
     }
   }
 
   // Check CWD
   const cwdAt = path.join(process.cwd(), AT_DIR);
-  if (existsSync(path.join(cwdAt, 'state.json')) || existsSync(path.join(cwdAt, 'runs.jsonl'))) {
+  if (existsSync(path.join(cwdAt, "state.json")) || existsSync(path.join(cwdAt, "runs.jsonl"))) {
     return cwdAt;
   }
 
@@ -71,7 +71,7 @@ export function resolveStateDir(explicit?: string): string {
  * feedback.jsonl → CWD `.at/` with feedback.jsonl → ~/.at/.
  */
 function hasAtState(dir: string): boolean {
-  return existsSync(path.join(dir, 'state.json')) || existsSync(path.join(dir, 'runs.jsonl'));
+  return existsSync(path.join(dir, "state.json")) || existsSync(path.join(dir, "runs.jsonl"));
 }
 
 function homeAtDir(): string {
@@ -108,13 +108,13 @@ export function resolveFeedbackDir(explicit?: string): string {
   const projectRoot = findProjectRoot(process.cwd());
   if (projectRoot) {
     const projectAt = path.join(projectRoot, AT_DIR);
-    if (existsSync(path.join(projectAt, 'feedback.jsonl'))) {
+    if (existsSync(path.join(projectAt, "feedback.jsonl"))) {
       return projectAt;
     }
   }
 
   const cwdAt = path.join(process.cwd(), AT_DIR);
-  if (existsSync(path.join(cwdAt, 'feedback.jsonl'))) {
+  if (existsSync(path.join(cwdAt, "feedback.jsonl"))) {
     return cwdAt;
   }
 
@@ -122,9 +122,9 @@ export function resolveFeedbackDir(explicit?: string): string {
 }
 
 export function getStateFilePath(stateDir: string): string {
-  return path.join(stateDir, 'state.json');
+  return path.join(stateDir, "state.json");
 }
 
 export function getRunsFilePath(stateDir: string): string {
-  return path.join(stateDir, 'runs.jsonl');
+  return path.join(stateDir, "runs.jsonl");
 }

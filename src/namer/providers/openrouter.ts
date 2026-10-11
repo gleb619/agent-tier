@@ -8,9 +8,9 @@
  * orchestrator skips this provider entirely.
  */
 
-import type { NamerProvider } from '../types';
-import { deriveName } from './ollama';
-import { fetchWithTimeout } from './shared';
+import type { NamerProvider } from "../types";
+import { deriveName } from "./ollama";
+import { fetchWithTimeout } from "./shared";
 
 export interface OpenRouterOptions {
   name?: string;
@@ -28,7 +28,7 @@ interface OpenRouterResponse {
 }
 
 const DEFAULT_TIMEOUT_MS = 4000;
-const DEFAULT_NAME = 'openrouter';
+const DEFAULT_NAME = "openrouter";
 
 export class OpenRouterProvider implements NamerProvider {
   readonly name: string;
@@ -49,39 +49,43 @@ export class OpenRouterProvider implements NamerProvider {
 
   /** No key → skip. The orchestrator will move on. */
   async isAvailable(_signal: AbortSignal): Promise<boolean> {
-    return typeof this.apiKey === 'string' && this.apiKey.length > 0;
+    return typeof this.apiKey === "string" && this.apiKey.length > 0;
   }
 
   /** POST chat/completions; never throws. */
   async generate(prompt: string, signal: AbortSignal): Promise<string | null> {
-    if (!prompt || !prompt.trim()) return null;
+    if (!prompt?.trim()) return null;
     if (!this.apiKey) return null;
-    if (typeof this.fetchImpl !== 'function') return null;
+    if (typeof this.fetchImpl !== "function") return null;
 
     try {
-      const res = await fetchWithTimeout(this.url, {
-        method: 'POST',
-        headers: {
-          'authorization': `Bearer ${this.apiKey}`,
-          'content-type': 'application/json',
+      const res = await fetchWithTimeout(
+        this.url,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${this.apiKey}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: [{ role: "user", content: prompt }],
+            stream: false,
+          }),
         },
-        body: JSON.stringify({
-          model: this.model,
-          messages: [{ role: 'user', content: prompt }],
-          stream: false,
-        }),
-      }, {
-        timeoutMs: this.timeoutMs,
-        signal,
-        fetchImpl: this.fetchImpl,
-      });
+        {
+          timeoutMs: this.timeoutMs,
+          signal,
+          fetchImpl: this.fetchImpl,
+        },
+      );
 
-      if (!res || res.ok !== true) return null;
+      if (res?.ok !== true) return null;
       const body = (await res.json().catch(() => null)) as OpenRouterResponse | null;
       if (!body || !Array.isArray(body.choices) || body.choices.length === 0) return null;
 
       const content = body.choices[0]?.message?.content;
-      if (typeof content !== 'string') return null;
+      if (typeof content !== "string") return null;
 
       return deriveName(content, prompt);
     } catch {

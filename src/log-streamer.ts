@@ -1,5 +1,5 @@
-import { existsSync, openSync, closeSync, readSync } from 'fs';
-import { loadFilterConfig, buildDropPatterns, shouldDrop, renderStreamJsonLine, FilterConfig } from './chop';
+import { closeSync, openSync, readSync } from "node:fs";
+import { buildDropPatterns, loadFilterConfig, renderStreamJsonLine, shouldDrop } from "./chop";
 
 interface ParseArgsResult {
   log: string;
@@ -9,24 +9,24 @@ interface ParseArgsResult {
 
 function parseArgs(): ParseArgsResult {
   const args = process.argv.slice(2);
-  let log = '';
+  let log = "";
   let pid = 0;
   let config: string | undefined;
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case '--log':
+      case "--log":
         log = args[++i];
         break;
-      case '--pid':
+      case "--pid":
         pid = parseInt(args[++i], 10);
         break;
-      case '--config':
+      case "--config":
         config = args[++i];
         break;
     }
   }
   if (!log || !pid) {
-    console.error('Usage: log-streamer --log <path> --pid <pid> [--config <path>]');
+    console.error("Usage: log-streamer --log <path> --pid <pid> [--config <path>]");
     process.exit(1);
   }
   return { log, pid, config };
@@ -38,7 +38,7 @@ function main() {
   const dropPatterns = buildDropPatterns(filterConfig);
   const groupRepeated = filterConfig.groupRepeated ?? true;
 
-  const fd = openSync(log, 'r');
+  const fd = openSync(log, "r");
   let position = 0;
 
   let lastLine: string | null = null;
@@ -50,7 +50,7 @@ function main() {
     if (shouldDrop(line, dropPatterns)) return;
     const rendered = renderStreamJsonLine(line);
     if (rendered !== null) {
-      const subLines = rendered.split('\n');
+      const subLines = rendered.split("\n");
       for (const sub of subLines) {
         if (!sub) continue;
         if (shouldDrop(sub, dropPatterns)) continue;
@@ -65,7 +65,7 @@ function main() {
           lastLine = sub;
           repeatCount = 1;
         }
-        process.stdout.write(sub + '\n');
+        process.stdout.write(`${sub}\n`);
       }
       return;
     }
@@ -80,7 +80,7 @@ function main() {
       lastLine = line;
       repeatCount = 1;
     }
-    process.stdout.write(line + '\n');
+    process.stdout.write(`${line}\n`);
   }
 
   function flushRepeated() {
@@ -100,17 +100,17 @@ function main() {
       if (bytesRead === 0) break;
       newData = true;
       position += bytesRead;
-      const chunk = buffer.toString('utf8', 0, bytesRead);
-      const lines = chunk.split('\n');
+      const chunk = buffer.toString("utf8", 0, bytesRead);
+      const lines = chunk.split("\n");
       // All elements except the last are complete lines (they had a trailing \n)
       for (let i = 0; i < lines.length - 1; i++) {
         flushLine(lines[i]);
       }
       const lastPart = lines[lines.length - 1];
-      if (!chunk.endsWith('\n')) {
+      if (!chunk.endsWith("\n")) {
         // lastPart is an incomplete line — rewind so it gets read again
         // once more data (or the final newline) arrives.
-        position -= Buffer.byteLength(lastPart, 'utf8');
+        position -= Buffer.byteLength(lastPart, "utf8");
       }
     }
     return newData;
@@ -158,8 +158,8 @@ function main() {
     process.exit(0);
   }
 
-  process.once('SIGTERM', handleSignal);
-  process.once('SIGINT', handleSignal);
+  process.once("SIGTERM", handleSignal);
+  process.once("SIGINT", handleSignal);
 }
 
 main();

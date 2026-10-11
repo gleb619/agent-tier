@@ -1,5 +1,5 @@
-import { readFileSync, statSync, existsSync } from 'fs';
-import type { NotifyEvent, NotifyAdapter } from './types';
+import { existsSync, readFileSync, statSync } from "node:fs";
+import type { NotifyAdapter, NotifyEvent } from "./types";
 
 export interface Tailer {
   stop(): void;
@@ -23,13 +23,13 @@ export function tailLogFile(
     try {
       const stats = statSync(logFile);
       if (stats.size <= position) return;
-      const full = readFileSync(logFile, 'utf8');
+      const full = readFileSync(logFile, "utf8");
       const chunk = full.slice(position);
       position = stats.size;
       if (!chunk) return;
-      const lines = chunk.split('\n');
+      const lines = chunk.split("\n");
       // If chunk didn't end with newline, last line is incomplete; keep for next read.
-      const complete = chunk.endsWith('\n') ? lines : lines.slice(0, -1);
+      const complete = chunk.endsWith("\n") ? lines : lines.slice(0, -1);
       for (const line of complete) {
         if (!line.trim()) continue;
         const parsed = adapter.parseLine ? adapter.parseLine(line) : [];

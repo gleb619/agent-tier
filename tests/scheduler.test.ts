@@ -1,65 +1,69 @@
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
-import { pickAgent, getStateFile } from '../src/scheduler';
-import { AgentDef } from '../src/agents/registry';
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import type { AgentDef } from "../src/agents/registry";
+import { getStateFile, pickAgent } from "../src/scheduler";
 
 function makeAgent(name: string): AgentDef {
   return { name, tier: 2, bin: () => `/usr/bin/${name}`, buildArgs: (p) => [p] };
 }
 
-const agents = [makeAgent('a'), makeAgent('b'), makeAgent('c')];
+const agents = [makeAgent("a"), makeAgent("b"), makeAgent("c")];
 
-describe('getStateFile', () => {
-  it('returns state.json inside the given state dir', () => {
-    expect(getStateFile('/home/user/.at')).toBe('/home/user/.at/state.json');
+describe("getStateFile", () => {
+  it("returns state.json inside the given state dir", () => {
+    expect(getStateFile("/home/user/.at")).toBe("/home/user/.at/state.json");
   });
 });
 
-describe('pickAgent', () => {
+describe("pickAgent", () => {
   let stateFile: string;
   let stateDir: string;
 
   beforeEach(() => {
     stateDir = path.join(os.tmpdir(), `at-test-${Date.now()}`);
-    stateFile = path.join(stateDir, 'state.json');
+    stateFile = path.join(stateDir, "state.json");
     fs.mkdirSync(stateDir, { recursive: true });
   });
 
   afterEach(() => {
     if (fs.existsSync(stateFile)) fs.unlinkSync(stateFile);
-    try { fs.rmdirSync(stateDir); } catch { /* not empty */ }
+    try {
+      fs.rmdirSync(stateDir);
+    } catch {
+      /* not empty */
+    }
   });
 
-  it('starts at index 0 with no state file', async () => {
+  it("starts at index 0 with no state file", async () => {
     // Delete the file so pickAgent starts fresh
     if (fs.existsSync(stateFile)) fs.unlinkSync(stateFile);
-    expect((await pickAgent(agents, stateFile)).name).toBe('a');
+    expect((await pickAgent(agents, stateFile)).name).toBe("a");
   });
 
-  it('advances to next agent on each call', async () => {
-    expect((await pickAgent(agents, stateFile)).name).toBe('a');
-    expect((await pickAgent(agents, stateFile)).name).toBe('b');
-    expect((await pickAgent(agents, stateFile)).name).toBe('c');
+  it("advances to next agent on each call", async () => {
+    expect((await pickAgent(agents, stateFile)).name).toBe("a");
+    expect((await pickAgent(agents, stateFile)).name).toBe("b");
+    expect((await pickAgent(agents, stateFile)).name).toBe("c");
   });
 
-  it('wraps around to 0 after last agent', async () => {
+  it("wraps around to 0 after last agent", async () => {
     await pickAgent(agents, stateFile);
     await pickAgent(agents, stateFile);
     await pickAgent(agents, stateFile);
-    expect((await pickAgent(agents, stateFile)).name).toBe('a');
+    expect((await pickAgent(agents, stateFile)).name).toBe("a");
   });
 
-  it('persists index to state file after each pick', async () => {
+  it("persists index to state file after each pick", async () => {
     await pickAgent(agents, stateFile);
-    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+    const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
     expect(state.scheduler.default.index).toBe(0);
   });
 
-  it('uses different keys for different scheduler contexts', async () => {
-    expect((await pickAgent(agents, stateFile, 'tier-1')).name).toBe('a');
-    expect((await pickAgent(agents, stateFile, 'tier-1')).name).toBe('b');
+  it("uses different keys for different scheduler contexts", async () => {
+    expect((await pickAgent(agents, stateFile, "tier-1")).name).toBe("a");
+    expect((await pickAgent(agents, stateFile, "tier-1")).name).toBe("b");
     // Different key starts fresh
-    expect((await pickAgent(agents, stateFile, 'tier-2')).name).toBe('a');
+    expect((await pickAgent(agents, stateFile, "tier-2")).name).toBe("a");
   });
 });

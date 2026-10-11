@@ -1,15 +1,9 @@
-import http from 'http';
-import type { Socket } from 'net';
-import type { NotifyEvent } from './types';
-import type { DiscussEntry, DiscussFrom, DiscussKind } from './types';
-import { appendEvent, readEvents, readEventsSince, getEventsDir } from './store';
-import {
-  appendDiscuss,
-  readThread,
-  nextDiscussId,
-  unansweredQuestions,
-} from './discuss-store';
-import { readdirSync, existsSync } from 'fs';
+import { existsSync, readdirSync } from "node:fs";
+import http from "node:http";
+import type { Socket } from "node:net";
+import { appendDiscuss, nextDiscussId, readThread, unansweredQuestions } from "./discuss-store";
+import { appendEvent, getEventsDir, readEvents, readEventsSince } from "./store";
+import type { DiscussEntry, DiscussFrom, DiscussKind, NotifyEvent } from "./types";
 
 export interface Hub {
   port: number;
@@ -46,9 +40,9 @@ function listenWithFallback(server: http.Server, port: number, warn: (msg: strin
     let triedFallback = false;
     const attempt = (p: number) => {
       const onError = (err: Error) => {
-        server.removeListener('listening', onListening);
+        server.removeListener("listening", onListening);
         const code = (err as NodeJS.ErrnoException).code;
-        if (!triedFallback && p !== 0 && code === 'EADDRINUSE') {
+        if (!triedFallback && p !== 0 && code === "EADDRINUSE") {
           triedFallback = true;
           warn(`[at] SSE hub port ${p} busy, falling back to random port`);
           attempt(0);
@@ -57,13 +51,13 @@ function listenWithFallback(server: http.Server, port: number, warn: (msg: strin
         reject(err);
       };
       const onListening = () => {
-        server.removeListener('error', onError);
+        server.removeListener("error", onError);
         const addr = server.address();
-        resolve(typeof addr === 'object' && addr ? addr.port : p);
+        resolve(typeof addr === "object" && addr ? addr.port : p);
       };
-      server.once('error', onError);
-      server.once('listening', onListening);
-      server.listen(p, '127.0.0.1');
+      server.once("error", onError);
+      server.once("listening", onListening);
+      server.listen(p, "127.0.0.1");
     };
     attempt(port);
   });
@@ -108,7 +102,9 @@ export function startHub({
     const line = sseLine(e);
     for (const client of clients) {
       if (client.runId === undefined || client.runId === e.runId) {
-        try { client.res.write(line); } catch {}
+        try {
+          client.res.write(line);
+        } catch {}
       }
     }
   }
@@ -116,14 +112,16 @@ export function startHub({
   function replaySingle(client: Client, runId: string): void {
     const events = readEventsSince(stateDir, runId, client.sinceSeq);
     for (const e of events) {
-      try { client.res.write(sseLine(e)); } catch {}
+      try {
+        client.res.write(sseLine(e));
+      } catch {}
     }
   }
 
   function replayAll(client: Client): void {
     const dir = getEventsDir(stateDir);
     if (!existsSync(dir)) return;
-    const files = readdirSync(dir).filter((f) => f.endsWith('.jsonl'));
+    const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl"));
     const all: NotifyEvent[] = [];
     for (const f of files) {
       const runId = f.slice(0, -6);
@@ -131,63 +129,65 @@ export function startHub({
     }
     all.sort((a, b) => a.seq - b.seq);
     for (const e of all) {
-      try { client.res.write(sseLine(e)); } catch {}
+      try {
+        client.res.write(sseLine(e));
+      } catch {}
     }
   }
 
   const server = http.createServer((req, res) => {
-    const url = req.url ?? '/';
+    const url = req.url ?? "/";
     const runMatch = url.match(/^\/events\/([^/]+)$/);
-    if (runMatch && req.method === 'GET') {
+    if (runMatch && req.method === "GET") {
       const runId = decodeURIComponent(runMatch[1]);
-      const sinceSeq = Number(req.headers['last-event-id'] ?? 0);
+      const sinceSeq = Number(req.headers["last-event-id"] ?? 0);
       res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       });
       res.flushHeaders();
       const client: Client = { res, runId, sinceSeq, socket: res.socket };
       clients.add(client);
       hadActiveClients = true;
       replaySingle(client, runId);
-      req.on('close', () => clients.delete(client));
-      req.on('error', () => clients.delete(client));
+      req.on("close", () => clients.delete(client));
+      req.on("error", () => clients.delete(client));
       return;
     }
 
-    if (url === '/events' && req.method === 'GET') {
-      const sinceSeq = Number(req.headers['last-event-id'] ?? 0);
+    if (url === "/events" && req.method === "GET") {
+      const sinceSeq = Number(req.headers["last-event-id"] ?? 0);
       res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       });
       res.flushHeaders();
       const client: Client = { res, sinceSeq, socket: res.socket };
       clients.add(client);
       hadActiveClients = true;
       replayAll(client);
-      req.on('close', () => clients.delete(client));
-      req.on('error', () => clients.delete(client));
+      req.on("close", () => clients.delete(client));
+      req.on("error", () => clients.delete(client));
       return;
     }
 
     const emitMatch = url.match(/^\/emit\/([^/]+)$/);
-    if (emitMatch && req.method === 'POST') {
+    if (emitMatch && req.method === "POST") {
       const runId = decodeURIComponent(emitMatch[1]);
-      let body = '';
-      req.setEncoding('utf8');
-      req.on('data', (chunk) => (body += chunk));
-      req.on('end', () => {
+      let body = "";
+      req.setEncoding("utf8");
+      req.on("data", (chunk) => (body += chunk));
+      req.on("end", () => {
         try {
-          const parsed = JSON.parse(body) as Omit<NotifyEvent, 'runId' | 'agent' | 'ts' | 'seq'>;
-          broadcast({ ...parsed, runId, agent: 'agent', ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
+          const parsed = JSON.parse(body) as Omit<NotifyEvent, "runId" | "agent" | "ts" | "seq">;
+          broadcast({ ...parsed, runId, agent: "agent", ts: new Date().toISOString(), seq: 0 } as NotifyEvent);
           res.writeHead(202);
-          res.end('ok');
+          res.end("ok");
         } catch {
           res.writeHead(400);
-          res.end('bad request');
+          res.end("bad request");
         }
       });
       return;
@@ -196,18 +196,18 @@ export function startHub({
     const discussMatch = url.match(/^\/discuss\/([^/?]+)(\?.*)?$/);
     if (discussMatch) {
       const runId = decodeURIComponent(discussMatch[1]);
-      if (req.method === 'GET') {
+      if (req.method === "GET") {
         const pending = /[?&]pending=1\b/.test(url);
         const list = pending ? unansweredQuestions(stateDir, runId) : readThread(stateDir, runId);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(list));
         return;
       }
-      if (req.method === 'POST') {
-        let body = '';
-        req.setEncoding('utf8');
-        req.on('data', (chunk) => (body += chunk));
-        req.on('end', () => {
+      if (req.method === "POST") {
+        let body = "";
+        req.setEncoding("utf8");
+        req.on("data", (chunk) => (body += chunk));
+        req.on("end", () => {
           try {
             const parsed = JSON.parse(body) as {
               from?: DiscussFrom;
@@ -216,16 +216,16 @@ export function startHub({
               options?: unknown;
               replyTo?: unknown;
             };
-            const from: DiscussFrom = parsed.from === 'host' ? 'host' : 'agent';
+            const from: DiscussFrom = parsed.from === "host" ? "host" : "agent";
             const kind = parsed.kind;
-            const text = typeof parsed.text === 'string' ? parsed.text : '';
+            const text = typeof parsed.text === "string" ? parsed.text : "";
             const options = Array.isArray(parsed.options)
-              ? parsed.options.filter((o): o is string => typeof o === 'string')
+              ? parsed.options.filter((o): o is string => typeof o === "string")
               : undefined;
-            const replyTo = typeof parsed.replyTo === 'string' ? parsed.replyTo : undefined;
-            if (!text || (kind !== 'question' && kind !== 'answer' && kind !== 'say' && kind !== 'note')) {
+            const replyTo = typeof parsed.replyTo === "string" ? parsed.replyTo : undefined;
+            if (!text || (kind !== "question" && kind !== "answer" && kind !== "say" && kind !== "note")) {
               res.writeHead(400);
-              res.end('bad request');
+              res.end("bad request");
               return;
             }
             const entry: DiscussEntry = {
@@ -235,13 +235,12 @@ export function startHub({
               text,
               ts: new Date().toISOString(),
             };
-            if (options && options.length) entry.options = options;
+            if (options?.length) entry.options = options;
             if (replyTo) entry.replyTo = replyTo;
             appendDiscuss(stateDir, runId, entry);
 
             // Mirror as SSE event: question/answer -> matching type; say/note -> 'message'
-            const sseType: NotifyEvent['type'] =
-              kind === 'question' || kind === 'answer' ? kind : 'message';
+            const sseType: NotifyEvent["type"] = kind === "question" || kind === "answer" ? kind : "message";
             broadcast({
               runId,
               agent: from,
@@ -249,13 +248,19 @@ export function startHub({
               seq: 0,
               type: sseType,
               text: entry.text,
-              data: { id: entry.id, kind: entry.kind, options: entry.options, replyTo: entry.replyTo, from: entry.from },
+              data: {
+                id: entry.id,
+                kind: entry.kind,
+                options: entry.options,
+                replyTo: entry.replyTo,
+                from: entry.from,
+              },
             });
             res.writeHead(202);
             res.end(JSON.stringify({ id: entry.id }));
           } catch {
             res.writeHead(400);
-            res.end('bad request');
+            res.end("bad request");
           }
         });
         return;
@@ -263,7 +268,7 @@ export function startHub({
     }
 
     res.writeHead(404);
-    res.end('not found');
+    res.end("not found");
   });
 
   return listenWithFallback(server, port, warn).then((actualPort) => ({
@@ -278,10 +283,14 @@ export function startHub({
     // End + destroy every open SSE response + its socket so the http server
     // is not stuck waiting on keep-alive connections to drain on its own.
     for (const client of clients) {
-      try { client.res.end(); } catch {}
-      const sock = client.socket ?? (client.res as unknown as { socket?: import('net').Socket }).socket;
-      if (sock && typeof sock.destroy === 'function' && !sock.destroyed) {
-        try { sock.destroy(); } catch {}
+      try {
+        client.res.end();
+      } catch {}
+      const sock = client.socket ?? (client.res as unknown as { socket?: import("net").Socket }).socket;
+      if (sock && typeof sock.destroy === "function" && !sock.destroyed) {
+        try {
+          sock.destroy();
+        } catch {}
       }
     }
     clients.clear();
@@ -289,8 +298,10 @@ export function startHub({
     // Node 18.2+ — destroys any remaining idle/active connections on the
     // server, so server.close() can settle promptly.
     const maybe = server as unknown as { closeAllConnections?: () => void };
-    if (typeof maybe.closeAllConnections === 'function') {
-      try { maybe.closeAllConnections(); } catch {}
+    if (typeof maybe.closeAllConnections === "function") {
+      try {
+        maybe.closeAllConnections();
+      } catch {}
     }
 
     return new Promise((resolve) => {

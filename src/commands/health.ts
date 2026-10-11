@@ -1,7 +1,7 @@
-import { Command } from 'commander';
-import { setDeactivated } from '../health';
-import { resolveStateDir, getStateFilePath } from '../state-dir';
-import { getAgentByName } from '../agents/registry';
+import type { Command } from "commander";
+import { getAgentByName } from "../agents/registry";
+import { setDeactivated } from "../health";
+import { getStateFilePath, resolveStateDir } from "../state-dir";
 
 function validateAgent(agent: string): void {
   if (!getAgentByName(agent)) {
@@ -12,8 +12,8 @@ function validateAgent(agent: string): void {
 
 export function registerHealthCommands(program: Command): void {
   program
-    .command('enable <agent>')
-    .description('Re-enable a deactivated agent')
+    .command("enable <agent>")
+    .description("Re-enable a deactivated agent")
     .action(async (agent: string) => {
       try {
         validateAgent(agent);
@@ -28,8 +28,8 @@ export function registerHealthCommands(program: Command): void {
     });
 
   program
-    .command('disable <agent>')
-    .description('Deactivate an agent (cannot be used even with -a)')
+    .command("disable <agent>")
+    .description("Deactivate an agent (cannot be used even with -a)")
     .action(async (agent: string) => {
       try {
         validateAgent(agent);

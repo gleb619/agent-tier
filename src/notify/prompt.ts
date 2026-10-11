@@ -1,4 +1,4 @@
-import type { NotifyAdapterContext } from './types';
+import type { NotifyAdapterContext } from "./types";
 
 /**
  * Shared instruction appended to every adapter's promptSuffix.
@@ -23,6 +23,6 @@ export function appendDiscussInstruction(existing: string): string {
  * Convenience for adapters: builds the suffix using the shared helper.
  * Pass `existing` to keep any adapter-specific instructions intact.
  */
-export function buildPromptSuffix(_ctx: NotifyAdapterContext, existing = ''): string {
+export function buildPromptSuffix(_ctx: NotifyAdapterContext, existing = ""): string {
   return appendDiscussInstruction(existing);
 }

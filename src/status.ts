@@ -1,18 +1,18 @@
-import { RunRecord, refreshRuns } from './run-store';
-import { loadStateFile } from './scheduler';
-import { getStateFilePath } from './state-dir';
-import { AGENTS, getAgentsByTier } from './agents/registry';
-import { loadGenericAgents } from './agents/generic-loader';
-import { loadConfig, getLineAgents } from './config';
-import { loadHealth, AgentHealth } from './health';
-import { drainNamingQueue } from './naming';
-import os from 'os';
-import path from 'path';
+import os from "os";
+import path from "path";
+import { loadGenericAgents } from "./agents/generic-loader";
+import { AGENTS, getAgentsByTier } from "./agents/registry";
+import { getLineAgents, loadConfig } from "./config";
+import { type AgentHealth, loadHealth } from "./health";
+import { drainNamingQueue } from "./naming";
+import { type RunRecord, refreshRuns } from "./run-store";
+import { loadStateFile } from "./scheduler";
+import { getStateFilePath } from "./state-dir";
 
 // --- Data types ---
 
 /** A run tagged with the state dir it came from (joined `at status` only). */
-export type ScopedRun = RunRecord & { scope?: 'project' | 'global' };
+export type ScopedRun = RunRecord & { scope?: "project" | "global" };
 
 export interface StatusReport {
   total: number;
@@ -25,7 +25,7 @@ export interface SchedulerEntry {
   index: number;
   agentName: string | null;
   /** Which state dir the entry came from (joined `at status` only). */
-  scope?: 'project' | 'global';
+  scope?: "project" | "global";
 }
 
 export interface AgentHealthEntry {
@@ -59,7 +59,7 @@ export function buildStateReport(stateDir: string, opts?: { quiet?: boolean }): 
     const lineAgents = getLineAgents(allAgents, config, opts);
     for (const [key, sched] of Object.entries(state.scheduler)) {
       let agentName: string | null = null;
-      if (key === 'line') {
+      if (key === "line") {
         agentName = lineAgents[sched.index]?.name ?? null;
       } else {
         const tierMatch = key.match(/^tier-([1-4])$/) || key.match(/^([1-4])$/);
@@ -75,17 +75,15 @@ export function buildStateReport(stateDir: string, opts?: { quiet?: boolean }): 
   }
 
   const health = loadHealth(stateFilePath);
-  const agents: AgentHealthEntry[] = Object.entries(health.agents).map(
-    ([name, h]) => buildAgentHealthEntry(name, h),
-  );
+  const agents: AgentHealthEntry[] = Object.entries(health.agents).map(([name, h]) => buildAgentHealthEntry(name, h));
 
   return { scheduler, maxEntries: state.runs?.maxEntries ?? null, agents };
 }
 
 // --- Joined (multi-dir) reports ---
 
-function scopeOf(stateDir: string): 'project' | 'global' {
-  return stateDir === path.join(os.homedir(), '.at') ? 'global' : 'project';
+function scopeOf(stateDir: string): "project" | "global" {
+  return stateDir === path.join(os.homedir(), ".at") ? "global" : "project";
 }
 
 /** Merge per-dir state reports: scheduler entries keep both (scoped), agent
@@ -127,9 +125,7 @@ export function joinRuns(dirs: string[], runsPerDir: RunRecord[][]): ScopedRun[]
       if (!byId.has(r.runId)) byId.set(r.runId, { ...r, scope });
     }
   });
-  return [...byId.values()].sort(
-    (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
-  );
+  return [...byId.values()].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
 }
 
 function formatIsoRelative(iso: string): string {
@@ -138,13 +134,14 @@ function formatIsoRelative(iso: string): string {
   const diffMs = d.getTime() - now;
   const absDiff = Math.abs(diffMs);
 
-  const relative = absDiff < 60_000
-    ? 'just now'
-    : absDiff < 3_600_000
-      ? `${Math.floor(absDiff / 60_000)}m ${diffMs < 0 ? 'ago' : 'from now'}`
-      : absDiff < 86_400_000
-        ? `${Math.floor(absDiff / 3_600_000)}h ${diffMs < 0 ? 'ago' : 'from now'}`
-        : `${Math.floor(absDiff / 86_400_000)}d ${diffMs < 0 ? 'ago' : 'from now'}`;
+  const relative =
+    absDiff < 60_000
+      ? "just now"
+      : absDiff < 3_600_000
+        ? `${Math.floor(absDiff / 60_000)}m ${diffMs < 0 ? "ago" : "from now"}`
+        : absDiff < 86_400_000
+          ? `${Math.floor(absDiff / 3_600_000)}h ${diffMs < 0 ? "ago" : "from now"}`
+          : `${Math.floor(absDiff / 86_400_000)}d ${diffMs < 0 ? "ago" : "from now"}`;
 
   const time = d.toLocaleString();
   return `${relative} (${time})`;
@@ -152,7 +149,7 @@ function formatIsoRelative(iso: string): string {
 
 function buildAgentHealthEntry(name: string, h: AgentHealth): AgentHealthEntry {
   const sorted = [...h.failureTimes].sort();
-  const lastFailure = sorted.length > 0 ? sorted[sorted.length - 1] ?? null : null;
+  const lastFailure = sorted.length > 0 ? (sorted[sorted.length - 1] ?? null) : null;
   return {
     name,
     deactivated: h.deactivated === true,
@@ -176,31 +173,35 @@ function formatDuration(ms: number): string {
   return `${hours}h ${mins}m`;
 }
 
-function statusIcon(status: RunRecord['status']): string {
+function statusIcon(status: RunRecord["status"]): string {
   switch (status) {
-    case 'running': return 'running';
-    case 'done': return 'done';
-    case 'failed': return 'failed';
-    case 'stuck': return 'stuck';
+    case "running":
+      return "running";
+    case "done":
+      return "done";
+    case "failed":
+      return "failed";
+    case "stuck":
+      return "stuck";
   }
 }
 
 function padRight(s: string, len: number): string {
-  return s.length >= len ? s : s + ' '.repeat(len - s.length);
+  return s.length >= len ? s : s + " ".repeat(len - s.length);
 }
 
 const NAME_COL_MAX = 24;
 
 /** Truncate a session name for table display. */
 function formatNameCell(name: string): string {
-  if (!name) return '';
+  if (!name) return "";
   if (name.length <= NAME_COL_MAX) return name;
-  return name.slice(0, NAME_COL_MAX - 1) + '…';
+  return name.slice(0, NAME_COL_MAX - 1) + "…";
 }
 
 export function formatStatusTable(runs: RunRecord[]): string {
-  const headerSection = '# Runs\n\n';
-  if (runs.length === 0) return headerSection + '[at] no runs found';
+  const headerSection = "# Runs\n\n";
+  if (runs.length === 0) return headerSection + "[at] no runs found";
 
   const now = Date.now();
   const rows = runs.map((r) => {
@@ -225,40 +226,59 @@ export function formatStatusTable(runs: RunRecord[]): string {
   const colStatus = Math.max(6, ...rows.map((r) => r.status.length));
   const colDur = Math.max(8, ...rows.map((r) => r.duration.length));
   const colLog = Math.max(3, ...rows.map((r) => r.log.length));
-  const colScope = Math.max(5, ...rows.map((r) => (r.scope ?? '').length));
+  const colScope = Math.max(5, ...rows.map((r) => (r.scope ?? "").length));
 
   const header =
-    '| ' +
-    padRight('RUN', colRun) + ' | ' +
-    padRight('NAME', colName) + ' | ' +
-    padRight('AGENT', colAgent) + ' | ' +
-    padRight('STATUS', colStatus) + ' | ' +
-    padRight('DURATION', colDur) + ' | ' +
-    (showScope ? padRight('SCOPE', colScope) + ' | ' : '') +
-    padRight('LOG', colLog) + ' |';
+    "| " +
+    padRight("RUN", colRun) +
+    " | " +
+    padRight("NAME", colName) +
+    " | " +
+    padRight("AGENT", colAgent) +
+    " | " +
+    padRight("STATUS", colStatus) +
+    " | " +
+    padRight("DURATION", colDur) +
+    " | " +
+    (showScope ? padRight("SCOPE", colScope) + " | " : "") +
+    padRight("LOG", colLog) +
+    " |";
 
   const divider =
-    '| ' +
-    '-'.repeat(colRun) + ' | ' +
-    '-'.repeat(colName) + ' | ' +
-    '-'.repeat(colAgent) + ' | ' +
-    '-'.repeat(colStatus) + ' | ' +
-    '-'.repeat(colDur) + ' | ' +
-    (showScope ? '-'.repeat(colScope) + ' | ' : '') +
-    '-'.repeat(colLog) + ' |';
+    "| " +
+    "-".repeat(colRun) +
+    " | " +
+    "-".repeat(colName) +
+    " | " +
+    "-".repeat(colAgent) +
+    " | " +
+    "-".repeat(colStatus) +
+    " | " +
+    "-".repeat(colDur) +
+    " | " +
+    (showScope ? "-".repeat(colScope) + " | " : "") +
+    "-".repeat(colLog) +
+    " |";
 
-  const lines = rows.map((r) =>
-    '| ' +
-    padRight(r.runId, colRun) + ' | ' +
-    padRight(r.name, colName) + ' | ' +
-    padRight(r.agent, colAgent) + ' | ' +
-    padRight(r.status, colStatus) + ' | ' +
-    padRight(r.duration, colDur) + ' | ' +
-    (showScope ? padRight(r.scope ?? '', colScope) + ' | ' : '') +
-    padRight(r.log, colLog) + ' |',
+  const lines = rows.map(
+    (r) =>
+      "| " +
+      padRight(r.runId, colRun) +
+      " | " +
+      padRight(r.name, colName) +
+      " | " +
+      padRight(r.agent, colAgent) +
+      " | " +
+      padRight(r.status, colStatus) +
+      " | " +
+      padRight(r.duration, colDur) +
+      " | " +
+      (showScope ? padRight(r.scope ?? "", colScope) + " | " : "") +
+      padRight(r.log, colLog) +
+      " |",
   );
 
-  return headerSection + [header, divider, ...lines].join('\n');
+  return headerSection + [header, divider, ...lines].join("\n");
 }
 
 export function formatStatusJson(runs: RunRecord[], state?: StateReport): string {
@@ -274,13 +294,13 @@ export function formatStateReports(dirs: string[]): string {
   const report = scoped ? buildJoinedStateReport(dirs) : buildStateReport(dirs[0]);
   const lines: string[] = [];
 
-  lines.push('## State');
-  lines.push('');
-  lines.push('**Scheduler:**');
+  lines.push("## State");
+  lines.push("");
+  lines.push("**Scheduler:**");
 
   if (report.scheduler.length > 0) {
     for (const entry of report.scheduler) {
-      const label = scoped && entry.scope ? `[${entry.scope}] ` : '';
+      const label = scoped && entry.scope ? `[${entry.scope}] ` : "";
       if (entry.agentName) {
         lines.push(`- ${label}${entry.key} → index ${entry.index} (${entry.agentName})`);
       } else {
@@ -288,36 +308,36 @@ export function formatStateReports(dirs: string[]): string {
       }
     }
   } else {
-    lines.push('- (none)');
+    lines.push("- (none)");
   }
 
-  lines.push('');
-  lines.push('**Config:**');
+  lines.push("");
+  lines.push("**Config:**");
   if (report.maxEntries != null) {
     lines.push(`- max runs: ${report.maxEntries}`);
   } else {
-    lines.push('- (none)');
+    lines.push("- (none)");
   }
 
   if (report.agents.length > 0) {
-    lines.push('');
-    lines.push('**Agents:**');
+    lines.push("");
+    lines.push("**Agents:**");
     for (const a of report.agents) {
       const flags: string[] = [];
-      if (a.deactivated) flags.push('DEACTIVATED');
+      if (a.deactivated) flags.push("DEACTIVATED");
       if (a.failures > 0) flags.push(`${a.failures} failures`);
       if (a.disabledTo) flags.push(`disabled until ${formatIsoRelative(a.disabledTo)}`);
       if (a.lastFailure) flags.push(`last: ${formatIsoRelative(a.lastFailure)}`);
-      lines.push(flags.length > 0 ? `- ${a.name}: ${flags.join(', ')}` : `- ${a.name}: ok`);
+      lines.push(flags.length > 0 ? `- ${a.name}: ${flags.join(", ")}` : `- ${a.name}: ok`);
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 export function formatCombinedReport(stateDirs: string | string[], runs: RunRecord[]): string {
   const dirs = Array.isArray(stateDirs) ? stateDirs : [stateDirs];
-  return formatStatusTable(runs) + '\n\n' + formatStateReports(dirs);
+  return formatStatusTable(runs) + "\n\n" + formatStateReports(dirs);
 }
 
 export async function runStatus(stateDirs: string | string[], opts?: { json?: boolean }): Promise<void> {
@@ -345,7 +365,7 @@ export async function runStatus(stateDirs: string | string[], opts?: { json?: bo
 
   if (opts?.json) {
     const state = buildStateReportFor(dirs);
-    process.stdout.write(formatStatusJson(runs, state) + '\n');
+    process.stdout.write(formatStatusJson(runs, state) + "\n");
     return;
   }
 

@@ -1,5 +1,5 @@
-import { For, Switch, Match } from "solid-js";
 import type { JSX } from "solid-js";
+import { For } from "solid-js";
 import { selectedSession } from "../store/sessions";
 
 interface HotkeyBarProps {
@@ -19,8 +19,8 @@ function getHotkeysForZone(zone: number): HotkeyItem[] {
       return [
         { key: "↑↓", desc: "select" },
         { key: "Tab", desc: "input/list" },
-        ...(status === 'running' ? [{ key: "^K", desc: "kill" }] : []),
-        ...(status !== 'done' ? [{ key: "^E", desc: "retry" }] : []),
+        ...(status === "running" ? [{ key: "^K", desc: "kill" }] : []),
+        ...(status !== "done" ? [{ key: "^E", desc: "retry" }] : []),
         { key: "^R", desc: "refresh" },
         { key: "^]", desc: "panels" },
         { key: "^C", desc: "exit" },
@@ -56,20 +56,12 @@ export function HotkeyBar(props: HotkeyBarProps): JSX.Element {
   const hotkeys = () => getHotkeysForZone(props.focusZone);
 
   return (
-    <box
-      flexDirection="row"
-      padding={1}
-      paddingY={0}
-      gap={3}
-      border
-      borderStyle="single"
-      borderColor="#21262d"
-    >
+    <box flexDirection="row" padding={1} paddingY={0} gap={3} border borderStyle="single" borderColor="#21262d">
       <For each={hotkeys()}>
         {(item) => (
           <box flexDirection="row" gap={0}>
-            <text content={"[" + item.key + "]"} fg="#58a6ff" />
-            <text content={'\u00A0' + item.desc} fg="#8b949e" />
+            <text content={`[${item.key}]`} fg="#58a6ff" />
+            <text content={`\u00A0${item.desc}`} fg="#8b949e" />
           </box>
         )}
       </For>

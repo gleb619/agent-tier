@@ -1,45 +1,44 @@
-import { For, createMemo } from 'solid-js';
-import type { JSX } from 'solid-js';
+import type { JSX } from "solid-js";
+import { createMemo, For } from "solid-js";
+import type { RunRecord } from "../../run-store";
 import {
   filteredSessions,
   selectedRunId,
   setSelectedRunId,
-  sidebarFilter,
+  setShowDashboard,
   setSidebarFilter,
   showDashboard,
-  setShowDashboard,
-} from '../store/sessions';
-
-import type { RunRecord } from '../../run-store';
+  sidebarFilter,
+} from "../store/sessions";
 
 interface SidebarProps {
   focused: boolean;
   focusZone: 0 | 1;
 }
 
-export function statusIcon(status: RunRecord['status']): string {
+export function statusIcon(status: RunRecord["status"]): string {
   switch (status) {
-    case 'running':
-      return '●';
-    case 'done':
-      return '✓';
-    case 'failed':
-      return '✗';
-    case 'stuck':
-      return '⚠';
+    case "running":
+      return "●";
+    case "done":
+      return "✓";
+    case "failed":
+      return "✗";
+    case "stuck":
+      return "⚠";
   }
 }
 
-export function statusColor(status: RunRecord['status']): string {
+export function statusColor(status: RunRecord["status"]): string {
   switch (status) {
-    case 'running':
-      return '#3fb950';
-    case 'done':
-      return '#388bfd';
-    case 'failed':
-      return '#f85149';
-    case 'stuck':
-      return '#d29922';
+    case "running":
+      return "#3fb950";
+    case "done":
+      return "#388bfd";
+    case "failed":
+      return "#f85149";
+    case "stuck":
+      return "#d29922";
   }
 }
 
@@ -57,7 +56,7 @@ export function formatDuration(r: RunRecord): string {
 
 export function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen - 1) + '…';
+  return `${text.slice(0, maxLen - 1)}…`;
 }
 
 function selectSession(s: RunRecord): void {
@@ -68,8 +67,8 @@ function selectSession(s: RunRecord): void {
 }
 
 export type SidebarItem =
-  | { type: 'session'; data: RunRecord; isSelected: boolean }
-  | { type: 'action'; label: string; icon: string; active: boolean; onSelect: () => void };
+  | { type: "session"; data: RunRecord; isSelected: boolean }
+  | { type: "action"; label: string; icon: string; active: boolean; onSelect: () => void };
 
 export interface SidebarGroup {
   label: string;
@@ -94,13 +93,13 @@ function getDateBucket(dateStr: string): string {
   const yesterdayDay = yesterday.getDate();
 
   if (year === todayYear && month === todayMonth && day === todayDay) {
-    return 'Today';
+    return "Today";
   }
   if (year === yesterdayYear && month === yesterdayMonth && day === yesterdayDay) {
-    return 'Yesterday';
+    return "Yesterday";
   }
 
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${day} ${months[month]}`;
 }
 
@@ -113,7 +112,7 @@ export function groupSessionsByDate(sessions: RunRecord[], selectedId: string | 
     const session = sessions[i];
     const label = getDateBucket(session.startedAt);
     const item: SidebarItem = {
-      type: 'session',
+      type: "session",
       data: session,
       isSelected: session.runId === selectedId,
     };
@@ -139,16 +138,16 @@ export function buildSidebarGroups(
   sessions: RunRecord[],
   selectedId: string | null,
   dashboardActive: boolean,
-  onSelectDashboard: () => void
+  onSelectDashboard: () => void,
 ): SidebarGroup[] {
   const sessionGroups = groupSessionsByDate(sessions, selectedId);
   const actionGroup: SidebarGroup = {
-    label: 'Actions',
+    label: "Actions",
     items: [
       {
-        type: 'action',
-        label: 'Dashboard',
-        icon: '📊',
+        type: "action",
+        label: "Dashboard",
+        icon: "📊",
         active: dashboardActive,
         onSelect: onSelectDashboard,
       },
@@ -159,15 +158,10 @@ export function buildSidebarGroups(
 
 export function Sidebar(props: SidebarProps): JSX.Element {
   const groups = createMemo(() =>
-    buildSidebarGroups(
-      filteredSessions(),
-      selectedRunId(),
-      showDashboard(),
-      () => {
-        setShowDashboard(true);
-        setSelectedRunId(null);
-      }
-    )
+    buildSidebarGroups(filteredSessions(), selectedRunId(), showDashboard(), () => {
+      setShowDashboard(true);
+      setSelectedRunId(null);
+    }),
   );
 
   return (
@@ -175,7 +169,7 @@ export function Sidebar(props: SidebarProps): JSX.Element {
       title="Sessions"
       border
       borderStyle="single"
-      borderColor={props.focused ? (props.focusZone === 1 ? '#00ddff' : '#00aaff') : '#555555'}
+      borderColor={props.focused ? (props.focusZone === 1 ? "#00ddff" : "#00aaff") : "#555555"}
       focused={props.focused}
       flexDirection="column"
       flexGrow={1}
@@ -183,38 +177,35 @@ export function Sidebar(props: SidebarProps): JSX.Element {
     >
       <input
         value={sidebarFilter()}
-        placeholder={props.focusZone === 0 ? '🔍 Filter runs...' : 'Filter runs...'}
+        placeholder={props.focusZone === 0 ? "🔍 Filter runs..." : "Filter runs..."}
         focused={props.focusZone === 0}
         onInput={(v: string) => setSidebarFilter(v)}
         width="100%"
       />
 
-      <text content="───────────────────────────" fg={props.focusZone === 0 ? '#00aaff' : '#555555'} />
+      <text content="───────────────────────────" fg={props.focusZone === 0 ? "#00aaff" : "#555555"} />
 
       <scrollbox flexGrow={1}>
         <For each={groups()}>
           {(group) => (
             <>
-              <box
-                width="100%"
-                justifyContent="center"
-                alignItems="center"
-                paddingBottom={1}>
-                <text content={'── ' + group.label + ' ──'} fg="#484f58" marginY={0} />
+              <box width="100%" justifyContent="center" alignItems="center" paddingBottom={1}>
+                <text content={`── ${group.label} ──`} fg="#484f58" marginY={0} />
               </box>
               <For each={group.items}>
                 {(item) => {
-                  if (item.type === 'action') {
+                  if (item.type === "action") {
                     return (
                       <box
                         flexDirection="column"
                         paddingY={0}
                         paddingX={1}
-                        backgroundColor={item.active ? '#1c2128' : undefined}
+                        backgroundColor={item.active ? "#1c2128" : undefined}
                         onMouseDown={() => item.onSelect()}
                       >
                         <text fg="#58a6ff" paddingY={1}>
-                          {item.active ? '▶ ' : '  '}{item.icon} {item.label}
+                          {item.active ? "▶ " : "  "}
+                          {item.icon} {item.label}
                         </text>
                       </box>
                     );
@@ -224,14 +215,16 @@ export function Sidebar(props: SidebarProps): JSX.Element {
                       flexDirection="column"
                       paddingY={0}
                       paddingX={1}
-                      backgroundColor={item.isSelected ? '#1c2128' : undefined}
+                      backgroundColor={item.isSelected ? "#1c2128" : undefined}
                       onMouseDown={() => selectSession(item.data)}
                     >
                       <text>
-                        {item.isSelected ? '▶ ' : '  '}{statusIcon(item.data.status)} {truncate(item.data.runId, 20)}
+                        {item.isSelected ? "▶ " : "  "}
+                        {statusIcon(item.data.status)} {truncate(item.data.runId, 20)}
                       </text>
                       <text fg="#8b949e" marginBottom={1}>
-                        {item.isSelected ? '   ' : '    '}{item.data.agent} t{item.data.tier} · {formatDuration(item.data)}
+                        {item.isSelected ? "   " : "    "}
+                        {item.data.agent} t{item.data.tier} · {formatDuration(item.data)}
                       </text>
                     </box>
                   );
