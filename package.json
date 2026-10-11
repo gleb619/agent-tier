@@ -24,7 +24,10 @@
     "lint:fix": "biome check . --write --unsafe",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "ci:check": "bash scripts/ci-check.sh"
+    "ci:check": "bash scripts/ci-check.sh",
+    "web:dev": "pnpm -C src/webui dev",
+    "web:build": "pnpm -C src/webui build",
+    "web:check": "pnpm -C src/webui check"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.78.1",

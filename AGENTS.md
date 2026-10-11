@@ -88,6 +88,7 @@ git worktree prune
 | Compose | Multi-agent goal pipeline: arch → dev → test → review stages; `--task <id>` / `--loop` / `--board <file>` run kanban tasks (adapter `compose/kanban-source.ts`, board mutated only under the kanban file lock; goalId = lowercase task id, resume implicit) | `src/compose/` |
 | CodeGraph index | Wrap `codegraph` CLI for semantic code graph (`at index`) | `src/commands/codegraph.ts` |
 | Kanban board | Markdown task board mutated only via `at kanban` (AST, not regex): `list`/`next`/`show`/`add`/`status`/`remove`/`clean`/`lint`/`guard`/`init` | `src/kanban/`, `src/commands/kanban.ts`, `docs/kanban.md` |
+| WebUI scaffold | Self-contained Vite+Svelte+Tailwind app at `src/webui` (own package.json, own node_modules; excluded from root tsc via `tsconfig.webui.json`); dev server proxies `/api` → `at web` | `src/webui/`, `tsconfig.webui.json`, design `docs/ideas/webui-ideas.ignore.md` |
 | Normka mock agents | Tier-4 `mock`/`mock-long` Go binaries; `#NORMKA` / `// normka:on` / `--normka` trigger JSON step specs (lorem, file, http, sse, discuss) | `mock-agent/`, `src/agents/normka-flag.ts`, `bin/mock-agent`, `bin/mock-long-agent` |
 
 ## Commands
@@ -101,6 +102,8 @@ pnpm run test:agents # LIVE real-agent suite (tests_ai/**, AT_LIVE_AGENTS=1) —
 pnpm run test:all    # test then test:agents (documented as costly)
 pnpm run test:guard  # scripts/test-guard.sh check — unit-only default path + CI live-gate
 pnpm run test:orphans # list orphan `dist/cli.js -s -a` processes for this worktree
+pnpm run web:dev       # WebUI Vite dev server (src/webui)
+pnpm run web:build     # WebUI build; web:check = svelte-check
 pnpm run hooks:install # enable .githooks/pre-commit (runs test-guard check)
 
 # Run a single test file

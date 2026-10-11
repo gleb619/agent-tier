@@ -55,6 +55,19 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/webui/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noUnknownAtRules": "off"
+          },
+          "correctness": {
+            "noUnusedVariables": "off"
+          }
+        }
+      }
     }
   ]
 }

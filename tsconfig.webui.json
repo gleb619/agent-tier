@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "isolatedModules": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "useDefineForClassFields": true,
+    "paths": {
+      "$/*": ["./src/webui/*"],
+      "$components/*": ["./src/webui/components/*"],
+      "$stores/*": ["./src/webui/stores/*"],
+      "$types/*": ["./src/webui/types/*"],
+      "$utils/*": ["./src/webui/utils/*"]
+    }
+  },
+  "include": ["src/webui/**/*"],
+  "exclude": ["node_modules", "dist", "src/webui/node_modules", "src/webui/dist"]
+}

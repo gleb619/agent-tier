@@ -23,7 +23,7 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T2  | Done    | at kanban CLI             | src/commands/kanban.ts subcommands wired into root program | Medium   | loop  | T3     | T1                | -                                     |
 | T3  | Done    | kanban test suite         | tests/kanban: parse, select, board, ops, lint, guard, cli  | Medium   | loop  | -      | T2                | -                                     |
 | T4  | Done    | WebUI API server          | at web: REST+static+SSE over run-store/health/settings     | High     | loop  | -      | -                 | docs/plans/webui-01-api-server.md     |
-| T5  | Backlog | WebUI scaffold            | Vite+Svelte+Tailwind at src/webui, types, build scripts    | High     | loop  | -      | -                 | docs/plans/webui-02-scaffold.md       |
+| T5  | Done    | WebUI scaffold            | Vite+Svelte+Tailwind at src/webui, types, build scripts    | High     | loop  | -      | -                 | docs/plans/webui-02-scaffold.md       |
 | T6  | Backlog | API client + SSE + stores | fetch client, SSE reconnect manager, svelte stores         | High     | loop  | -      | T4,T5             | docs/plans/webui-03-api-sse-stores.md |
 | T7  | Backlog | Layout + nav + common UI  | shell, sidebar nav, common components, badges              | Medium   | loop  | -      | T5                | docs/plans/webui-04-layout-nav.md     |
 | T8  | Backlog | Sidebar run list + filter | RunList/RunItem/FilterInput, date groups, virtual list     | Medium   | loop  | -      | T6,T7             | docs/plans/webui-05-run-list.md       |
@@ -53,11 +53,11 @@ at compose --loop --board <file>     # use a non-default board
   implicit `--resume`: a non-terminal `state.json` continues, a terminal one is skipped.
 * Status mapping (configurable via `statusMap` in `createKanbanSource`):
 
-  | Compose event        | Board status  |
-  |----------------------|---------------|
-  | claim (`--task`/`--loop`) | `In Progress` |
-  | run DONE             | `Done`        |
-  | run FAILED           | `Blocked` (+ `outcome.md` in the goal dir; `Plan File` set to the compose plan only when still `-`) |
+  | Compose event             | Board status                                                                                        |
+  | ------------------------- | --------------------------------------------------------------------------------------------------- |
+  | claim (`--task`/`--loop`) | `In Progress`                                                                                       |
+  | run DONE                  | `Done`                                                                                              |
+  | run FAILED                | `Blocked` (+ `outcome.md` in the goal dir; `Plan File` set to the compose plan only when still `-`) |
 
   The loop then continues with the next executable task (`Blocked By` dependencies gate on `Done`).
   A status missing from the board's legend is warned about and the row is left unchanged.
