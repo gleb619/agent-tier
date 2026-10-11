@@ -343,4 +343,34 @@ describe("formatStateReport", () => {
     const out = formatStateReport(tmpDir);
     expect(out).toContain("- line → index 1 (agy)");
   });
+
+  it("appends a mermaid diagram of the scheduler when state exists", () => {
+    mockLineConfig(["kilo", "agy", "mm-code", "glm-code", "mock"]);
+    writeTestStateFile(
+      {
+        agy: { failureTimes: [], disabledTo: null, deactivated: false },
+        "mm-code": { failureTimes: [], disabledTo: null, deactivated: false },
+        "glm-code": { failureTimes: [], disabledTo: null, deactivated: false },
+        kilo: { failureTimes: [], disabledTo: null, deactivated: false },
+        mock: { failureTimes: [], disabledTo: null, deactivated: false },
+      },
+      {
+        line: { index: 1 }, // agy
+      },
+    );
+
+    const out = formatStateReport(tmpDir);
+    expect(out).toContain("```mermaid");
+    expect(out).toContain("flowchart LR");
+    expect(out).toContain('subgraph g0["line"]');
+    expect(out).toContain('(("agy")):::current');
+  });
+
+  it("omits the mermaid diagram when there is no scheduler state", () => {
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(path.join(tmpDir, "state.json"), JSON.stringify({ agents: {} }));
+
+    const out = formatStateReport(tmpDir);
+    expect(out).not.toContain("```mermaid");
+  });
 });

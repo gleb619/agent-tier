@@ -7,6 +7,7 @@ import { type AgentHealth, loadHealth } from "./health";
 import { drainNamingQueue } from "./naming";
 import { type RunRecord, refreshRuns } from "./run-store";
 import { loadStateFile } from "./scheduler";
+import { buildSchedulerMermaid, resolveSchedulerDiagram } from "./scheduler-diagram";
 import { getStateFilePath } from "./state-dir";
 
 // --- Data types ---
@@ -306,6 +307,11 @@ export function formatStateReports(dirs: string[]): string {
       } else {
         lines.push(`- ${label}${entry.key} → index ${entry.index}`);
       }
+    }
+    const mermaid = buildSchedulerMermaid(resolveSchedulerDiagram(dirs));
+    if (mermaid) {
+      lines.push("");
+      lines.push(mermaid);
     }
   } else {
     lines.push("- (none)");

@@ -1,6 +1,7 @@
 import type { JSX } from "solid-js";
 import { createMemo, For, Show } from "solid-js";
 import type { RunRecord } from "../../run-store";
+import { diagramGroupLabel, resolveSchedulerDiagram, type DiagramGroup } from "../../scheduler-diagram";
 import { resolveStatusDirs } from "../../state-dir";
 import { buildStateReportFor, type StateReport } from "../../status";
 import { durationMs, formatAgentRow, formatMs, formatRunRow, isToday, statusColor, TUI_COLORS } from "../format";
@@ -66,6 +67,36 @@ function EmptyState(props: { message: string }): JSX.Element {
   );
 }
 
+/** One scheduler queue drawn as agent boxes left-to-right, round-robin wrap included. */
+export function SchedulerGroupView(props: { group: DiagramGroup }): JSX.Element {
+  return (
+    <box flexDirection="column" marginBottom={1}>
+      <text fg={TUI_COLORS.muted} content={`  ${diagramGroupLabel(props.group)}`} />
+      <box flexDirection="row" gap={1} marginTop={1}>
+        <For each={props.group.agents}>
+          {(a, i) => (
+            <box flexDirection="row" gap={1}>
+              <text fg={TUI_COLORS.dim} content={i() > 0 ? "→" : " "} />
+              <box
+                border
+                borderStyle="rounded"
+                paddingX={1}
+                borderColor={a.current ? TUI_COLORS.accent : TUI_COLORS.dim}
+              >
+                <text fg={a.current ? TUI_COLORS.accent : TUI_COLORS.fg} content={a.name} />
+              </box>
+              <text
+                fg={TUI_COLORS.dimmer}
+                content={i() === props.group.agents.length - 1 && props.group.agents.length > 1 ? "↩" : " "}
+              />
+            </box>
+          )}
+        </For>
+      </box>
+    </box>
+  );
+}
+
 export function Dashboard(): JSX.Element {
   const stats = createMemo(() => computeStats(filteredSessions2()));
   const successText = createMemo(() => {
@@ -75,6 +106,8 @@ export function Dashboard(): JSX.Element {
   // Same reports `at status` prints — joined across project `.at/` + `~/.at/`
   // when the project has its own scope, so agent health matches the run list.
   const health = createMemo((): StateReport => buildStateReportFor(stateDirs));
+  // Scheduler round-robin queues, same data `at status` draws as mermaid.
+  const schedulerGroups = createMemo((): DiagramGroup[] => resolveSchedulerDiagram(stateDirs));
 
   return (
     <box
@@ -149,6 +182,16 @@ export function Dashboard(): JSX.Element {
               </box>
             </Show>
           </box>
+
+          {/* Scheduler round-robin queues (same model as the `at status` mermaid) */}
+          <Show when={schedulerGroups().length > 0}>
+            <box>
+              <SectionHeader title="Scheduler" />
+              <box flexDirection="column">
+                <For each={schedulerGroups()}>{(group) => <SchedulerGroupView group={group} />}</For>
+              </box>
+            </box>
+          </Show>
         </box>
       </scrollbox>
     </box>
