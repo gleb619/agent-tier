@@ -39,6 +39,7 @@ CONFIG = {
     "TEMP_SUSTAIN_S": 9,
     "PAUSE_MAX_S": 600,
     "TERM_GRACE_S": 5,
+    "MAX_AT_RUNS": 6,             # fan-out breaker: concurrent `at` supervisors (run-watch.js)
 }
 for _k, _v in list(CONFIG.items()):
     _e = os.environ.get("AT_GUARD_" + _k)
@@ -234,6 +235,27 @@ def main():
         def heaviest():
             return max(stats, key=lambda r: stats[r][0] + stats[r][1] / 100.0) if stats else None
 
+        # 0. fan-out breaker: runaway recursive delegation spawns many detached runs
+        watchers = [pid for pid in targets if "run-watch.js" in procs[pid]["cmd"]]
+        if len(watchers) > CONFIG["MAX_AT_RUNS"]:
+            log("FANOUT %d at-runs > %d: killing all agent runs" % (len(watchers), CONFIG["MAX_AT_RUNS"]))
+            notify("at fan-out (%d runs): killed all agent runs" % len(watchers))
+            victims = set()
+            for w in watchers:
+                victims.update(tree(w, ch))
+                agent_pid = int(procs[w]["cmd"].split("run-watch.js")[1].split()[0]) if procs[w]["cmd"].split("run-watch.js")[1].split() else 0
+                if agent_pid in procs:
+                    victims.update(tree(agent_pid, ch))
+            if not DRY:
+                for sig in (signal.SIGTERM, signal.SIGKILL):
+                    for v in victims:
+                        try:
+                            os.kill(v, sig)
+                        except (ProcessLookupError, PermissionError):
+                            pass
+                    if sig == signal.SIGTERM:
+                        time.sleep(CONFIG["TERM_GRACE_S"])
+            continue
         # 1. system memory floor
         if avail < CONFIG["MIN_AVAIL_MB"] and stats:
             h = heaviest()

@@ -11,7 +11,7 @@ import { type Hub, type NotifyEvent, setupNotify, startHub, tailLogFile } from "
 import type { RunOptions } from "./resolver";
 import { addRun, loadRuns, UNNAMED_PLACEHOLDER, updateRun } from "./run-store";
 import { spawnRunWatch } from "./run-watch";
-import { assertSafeToStart, startRssWatchdog } from "./safety";
+import { assertSafeToStart, currentNestingDepth, startRssWatchdog } from "./safety";
 import { runSandboxTest } from "./sandbox";
 import { getStateFile, pickAgent } from "./scheduler";
 import { getStateFilePath } from "./state-dir";
@@ -226,6 +226,8 @@ export async function launchAgent(agent: AgentDef, options: RunOptions, extras?:
     string
   >;
   env.AT_RUN_NAME = extras?.name ?? UNNAMED_PLACEHOLDER;
+  // Recursion guard: agents started by `at` must not start more `at` runs (see src/safety.ts).
+  env.AT_DEPTH = String(currentNestingDepth() + 1);
 
   mkdirSync(options.logDir, { recursive: true });
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");

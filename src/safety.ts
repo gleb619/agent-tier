@@ -102,7 +102,25 @@ export function evaluatePreflight(s: SystemSample, l: SafetyLimits): string | nu
   return null;
 }
 
+/** How many `at` runs deep this process is (0 = started by a human/host tool). */
+export function currentNestingDepth(): number {
+  const d = Number(process.env.AT_DEPTH);
+  return Number.isInteger(d) && d > 0 ? d : 0;
+}
+
+/**
+ * An agent launched by `at` that itself runs `at` fans out recursively (each
+ * level delegates again, detached) and can freeze the machine. Refuse unless
+ * explicitly allowed with AT_ALLOW_NESTED=1.
+ */
+export function nestedRunRefusal(depth: number = currentNestingDepth()): string | null {
+  if (depth < 1 || process.env.AT_ALLOW_NESTED === "1") return null;
+  return "this process was started by an `at` agent (AT_DEPTH>=1); nested delegation is refused. Do the work directly instead of calling `at` (override: AT_ALLOW_NESTED=1)";
+}
+
 export function assertSafeToStart(stateDir: string): void {
+  const nested = nestedRunRefusal();
+  if (nested) throw new Error(`[at] refusing to start: ${nested}`);
   if (safetyDisabled()) return;
   const reason = evaluatePreflight(sampleSystem(stateDir), getSafetyLimits());
   if (reason) throw new Error(`[at] refusing to start: ${reason} (override: AT_SAFETY=off)`);

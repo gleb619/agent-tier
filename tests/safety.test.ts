@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { evaluatePreflight, getSafetyLimits, type SystemSample, startRssWatchdog } from "../src/safety";
+import {
+  evaluatePreflight,
+  getSafetyLimits,
+  nestedRunRefusal,
+  type SystemSample,
+  startRssWatchdog,
+} from "../src/safety";
 
 const limits = getSafetyLimits();
 const ok: SystemSample = { runningRuns: 0, availMb: 16000, tempC: 50, load1: 1, cpus: 8 };
@@ -40,5 +46,20 @@ describe("startRssWatchdog", () => {
     stop();
     expect(kill).not.toHaveBeenCalled();
     kill.mockRestore();
+  });
+});
+
+describe("nestedRunRefusal", () => {
+  it("allows depth 0 and refuses depth >= 1", () => {
+    expect(nestedRunRefusal(0)).toBeNull();
+    expect(nestedRunRefusal(1)).toMatch(/nested delegation/);
+  });
+  it("can be overridden", () => {
+    process.env.AT_ALLOW_NESTED = "1";
+    try {
+      expect(nestedRunRefusal(2)).toBeNull();
+    } finally {
+      delete process.env.AT_ALLOW_NESTED;
+    }
   });
 });
