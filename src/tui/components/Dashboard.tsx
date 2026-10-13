@@ -1,10 +1,11 @@
 import type { JSX } from "solid-js";
 import { createMemo, For, Show } from "solid-js";
 import type { RunRecord } from "../../run-store";
-import { diagramGroupLabel, resolveSchedulerDiagram, type DiagramGroup } from "../../scheduler-diagram";
+import { buildSchedulerMermaid, type DiagramGroup, resolveSchedulerDiagram } from "../../scheduler-diagram";
 import { resolveStatusDirs } from "../../state-dir";
 import { buildStateReportFor, type StateReport } from "../../status";
 import { durationMs, formatAgentRow, formatMs, formatRunRow, isToday, statusColor, TUI_COLORS } from "../format";
+import { renderMermaid } from "../mermaid-layout";
 import { filteredSessions2 } from "../store/filtered-sessions";
 import { autoRefresh } from "../store/log";
 import { agent, tier } from "../store/settings";
@@ -67,32 +68,33 @@ function EmptyState(props: { message: string }): JSX.Element {
   );
 }
 
-/** One scheduler queue drawn as agent boxes left-to-right, round-robin wrap included. */
-export function SchedulerGroupView(props: { group: DiagramGroup }): JSX.Element {
+/** Render scheduler queues as a terminal-native Mermaid flowchart. */
+function SchedulerPanel(props: { groups: DiagramGroup[] }): JSX.Element {
+  const mermaidSrc = createMemo(() => buildSchedulerMermaid(props.groups));
+  const rendered = createMemo(() => renderMermaid(mermaidSrc()));
+
   return (
-    <box flexDirection="column" marginBottom={1}>
-      <text fg={TUI_COLORS.muted} content={`  ${diagramGroupLabel(props.group)}`} />
-      <box flexDirection="row" gap={1} marginTop={1}>
-        <For each={props.group.agents}>
-          {(a, i) => (
-            <box flexDirection="row" gap={1}>
-              <text fg={TUI_COLORS.dim} content={i() > 0 ? "→" : " "} />
-              <box
-                border
-                borderStyle="rounded"
-                paddingX={1}
-                borderColor={a.current ? TUI_COLORS.accent : TUI_COLORS.dim}
-              >
-                <text fg={a.current ? TUI_COLORS.accent : TUI_COLORS.fg} content={a.name} />
-              </box>
-              <text
-                fg={TUI_COLORS.dimmer}
-                content={i() === props.group.agents.length - 1 && props.group.agents.length > 1 ? "↩" : " "}
-              />
-            </box>
-          )}
-        </For>
-      </box>
+    <box flexDirection="column">
+      <SectionHeader title="Scheduler" />
+      <Show
+        when={rendered().ok}
+        fallback={
+          <box
+            flexDirection="column"
+            borderColor={TUI_COLORS.dim}
+            borderStyle="round"
+            paddingX={1}
+            paddingY={1}
+            gap={0}
+          >
+            <For each={mermaidSrc().split("\n")}>{(row) => <text fg={TUI_COLORS.dimmer} content={row} />}</For>
+          </box>
+        }
+      >
+        <box flexDirection="column" gap={0}>
+          <For each={rendered().grid.rows}>{(row) => <text fg={TUI_COLORS.fg} content={row} />}</For>
+        </box>
+      </Show>
     </box>
   );
 }
@@ -185,12 +187,7 @@ export function Dashboard(): JSX.Element {
 
           {/* Scheduler round-robin queues (same model as the `at status` mermaid) */}
           <Show when={schedulerGroups().length > 0}>
-            <box>
-              <SectionHeader title="Scheduler" />
-              <box flexDirection="column">
-                <For each={schedulerGroups()}>{(group) => <SchedulerGroupView group={group} />}</For>
-              </box>
-            </box>
+            <SchedulerPanel groups={schedulerGroups()} />
           </Show>
         </box>
       </scrollbox>
