@@ -207,7 +207,7 @@ func PidAlive(pid int) bool {
 // and sort newest first — matching joinRuns in src/status.ts.
 func JoinRuns(dirs []string, runsPerDir [][]RunRecord) []ScopedRun {
 	if len(dirs) <= 1 {
-		var out []ScopedRun
+		out := make([]ScopedRun, 0, len(runsPerDir[0]))
 		for _, r := range runsPerDir[0] {
 			out = append(out, ScopedRun{RunRecord: r})
 		}

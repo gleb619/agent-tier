@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { registerComposeCommand } from "../compose/cli";
+import { registerAgentsCommand } from "./agents";
 import { registerCodegraphCommand } from "./codegraph";
 import { registerConfigCommand } from "./config";
 import { registerDefaultCommand } from "./default";
@@ -25,6 +26,7 @@ export function registerCommands(program: Command): void {
   registerKanbanCommand(program);
   registerStatusCommand(program);
   registerStopCommand(program);
+  registerAgentsCommand(program);
   registerHealthCommands(program);
   registerCodegraphCommand(program);
   registerComposeCommand(program);

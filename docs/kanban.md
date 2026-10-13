@@ -35,7 +35,7 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T14 | Done    | E2E + integration tests   | Playwright vs at web with mock agents                      | Medium   | loop  | -      | T13               | docs/plans/webui-11-e2e-tests.md             |
 | T15 | Done    | WebUI build, Docker, docs | build wiring, Dockerfile, docs/webui.md, ci:check          | Low      | loop  | -      | T14               | docs/plans/webui-12-build-docs.md            |
 | T16 | Done    | Go backend core           | web-server/ Go module: read-only API + static server       | High     | loop  | -      | T15               | docs/plans/webui-13-go-backend-core.md       |
-| T17 | Backlog | Go backend mutations      | POST/DELETE runs, agents, contract tests node+go           | High     | loop  | -      | T16               | docs/plans/webui-14-go-backend-mutations.md  |
+| T17 | Done    | Go backend mutations      | POST/DELETE runs, agents, contract tests node+go           | High     | loop  | -      | T16               | docs/plans/webui-14-go-backend-mutations.md  |
 | T18 | Backlog | Go SSE hub + discuss      | hub-compatible events/emit/discuss in Go                   | High     | loop  | -      | T17               | docs/plans/webui-15-go-sse-hub.md            |
 | T19 | Backlog | Wire Go backend           | at web launches at-web; build:go, Dockerfile, docs         | High     | loop  | -      | T18               | docs/plans/webui-16-go-integration-docker.md |
 | T20 | Backlog | Remove Node web server    | delete src/web/server.ts after Go e2e green                | Medium   | loop  | -      | T19               | docs/plans/webui-17-remove-node-server.md    |

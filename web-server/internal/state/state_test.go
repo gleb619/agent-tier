@@ -63,13 +63,14 @@ func TestResolveStatusDirsStateDirEnvCollapses(t *testing.T) {
 }
 
 func TestResolveStatusDirsProjectPlusHome(t *testing.T) {
+	// Clear leaked AT_STATE_DIR from environment
+	t.Setenv("AT_STATE_DIR", "")
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	cwd := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(cwd, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// Project .at holds state → joins first, then ~/.at/.
 	if err := os.MkdirAll(filepath.Join(cwd, ".at"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -89,6 +90,7 @@ func TestResolveStatusDirsProjectPlusHome(t *testing.T) {
 func TestResolveStatusDirsEmptyProjectSkipped(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("AT_STATE_DIR", "")
 	cwd := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(cwd, ".git"), 0o755); err != nil {
 		t.Fatal(err)

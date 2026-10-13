@@ -4,11 +4,14 @@ import http from "node:http";
 import path from "node:path";
 import { loadGenericAgents } from "../agents/generic-loader";
 import { AGENTS } from "../agents/registry";
+import { buildAgentsReport } from "../agents/report";
 import { writeFileAtomicSync } from "../atomic-write";
+import { setDeactivated } from "../health";
 import { withLock } from "../lock";
 import type { Hub } from "../notify/hub";
 import { isPidAlive } from "../process-utils";
 import { loadRuns, type RunRecord, refreshRuns, updateRun } from "../run-store";
+import { getStateFilePath } from "../state-dir";
 import { buildStateReport, joinRuns } from "../status";
 
 export interface WebServer {
@@ -438,26 +441,20 @@ export function startWebServer(options: WebServerOptions): Promise<WebServer> {
     }
 
     if (routePath === "/api/agents" && method === "GET") {
-      const allAgents = [...AGENTS, ...loadGenericAgents()];
-      const healthByName = new Map<string, ReturnType<typeof buildStateReport>["agents"][number]>();
-      for (const dir of stateDirs) {
-        for (const entry of buildStateReport(dir, { quiet: true }).agents) {
-          if (!healthByName.has(entry.name)) healthByName.set(entry.name, entry);
-        }
+      sendJson(res, 200, buildAgentsReport(stateDirs));
+      return;
+    }
+
+    const agentActionMatch = routePath.match(/^\/api\/agents\/([^/]+)\/(enable|disable)$/);
+    if (agentActionMatch && method === "PUT") {
+      const name = decodeURIComponent(agentActionMatch[1] ?? "");
+      const known = [...AGENTS, ...loadGenericAgents()].some((a) => a.name === name);
+      if (!known) {
+        sendError(res, 404, "unknown agent");
+        return;
       }
-      sendJson(
-        res,
-        200,
-        allAgents.map((a) => {
-          const health: {
-            deactivated: boolean;
-            failures: number;
-            lastFailure: string | null;
-            disabledTo: string | null;
-          } = healthByName.get(a.name) ?? { deactivated: false, failures: 0, lastFailure: null, disabledTo: null };
-          return { tier: a.tier, promptMode: a.promptMode, ...health, name: a.name };
-        }),
-      );
+      await setDeactivated(getStateFilePath(stateDirs[0]!), name, agentActionMatch[2] === "disable");
+      sendJson(res, 202, { ok: true });
       return;
     }
 

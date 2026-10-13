@@ -1,5 +1,6 @@
-// at-web is the Go replacement for `at web`: read-only WebUI backend serving
-// the runs API plus the built SPA. Flags mirror the Node CLI:
+// at-web is the Go replacement for `at web`: WebUI backend serving the runs
+// API (read + mutations delegated to the `at` CLI) plus the built SPA.
+// Flags mirror the Node CLI:
 //
 //	at-web --port 7800 --host 127.0.0.1 --static <dir> --state-dir <dir>
 //
@@ -13,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -48,20 +50,27 @@ func run() error {
 
 	addr := *host + ":" + *port
 	server := &http.Server{
-		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", addr, err)
+	}
+	defer listener.Close()
+
+	actualAddr := listener.Addr().String()
+	fmt.Fprintf(os.Stderr, "[at-web] serving on http://%s (state: %v)\n", actualAddr, stateDirs)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- server.ListenAndServe()
+		errCh <- server.Serve(listener)
 	}()
 
-	fmt.Fprintf(os.Stderr, "[at-web] serving on http://%s (state: %v)\n", addr, stateDirs)
 	select {
 	case err := <-errCh:
 		if !errors.Is(err, http.ErrServerClosed) {

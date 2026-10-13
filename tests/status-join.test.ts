@@ -8,19 +8,7 @@ import { buildStateReportFor, formatStateReports, formatStatusTable, runStatus }
 
 // --- Fixtures ---
 
-const baseRun: RunRecord = {
-  runId: "aaaa1111",
-  agent: "opencode",
-  tier: 2,
-  pid: 28451,
-  prompt: "fix the bug",
-  logFile: "/tmp/at-logs/at-test-opencode.log",
-  startedAt: new Date("2026-10-10T10:00:00.000Z").toISOString(),
-  finishedAt: null,
-  exitCode: null,
-  status: "running",
-  name: "unnamed",
-};
+let baseRun: RunRecord;
 
 const root = path.join(os.tmpdir(), "at-status-join-test-" + process.pid);
 const projectDir = path.join(root, "project", ".at");
@@ -31,10 +19,27 @@ function writeState(dir: string, state: unknown): void {
   writeFileSync(path.join(dir, "state.json"), JSON.stringify(state, null, 2));
 }
 
+function makeBaseRun(): RunRecord {
+  return {
+    runId: "aaaa1111",
+    agent: "opencode",
+    tier: 2,
+    pid: 28451,
+    prompt: "fix the bug",
+    logFile: "/tmp/at-logs/at-test-opencode.log",
+    startedAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+    finishedAt: null,
+    exitCode: null,
+    status: "running",
+    name: "unnamed",
+  };
+}
+
 beforeEach(() => {
   rmSync(root, { recursive: true, force: true });
   mkdirSync(projectDir, { recursive: true });
   mkdirSync(homeDir, { recursive: true });
+  baseRun = makeBaseRun();
   // Redirect homedir so 'global' scope resolves to our fixture dir
   vi.spyOn(os, "homedir").mockReturnValue(path.join(root, "home"));
 });
@@ -100,7 +105,7 @@ describe("runStatus with joined state dirs", () => {
       ...baseRun,
       runId: "bbbb2222",
       agent: "qwen",
-      startedAt: "2026-10-10T09:00:00.000Z",
+      startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
     };
     saveRuns(homeDir, [globalRun]);
     writeState(homeDir, {
@@ -122,7 +127,9 @@ describe("runStatus with joined state dirs", () => {
   it("json: merges runs (newest first, scoped) and state; single dir stays unscoped", async () => {
     saveRuns(projectDir, [baseRun]);
     writeState(projectDir, { scheduler: { "tier-2": { index: 0 } }, agents: {} });
-    saveRuns(homeDir, [{ ...baseRun, runId: "bbbb2222", startedAt: "2026-10-10T09:00:00.000Z" }]);
+    saveRuns(homeDir, [
+      { ...baseRun, runId: "bbbb2222", startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() },
+    ]);
     writeState(homeDir, { scheduler: { "tier-3": { index: 0 } }, agents: {} });
 
     await runStatus([projectDir, homeDir], { json: true });

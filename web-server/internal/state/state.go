@@ -40,6 +40,9 @@ func hasAtState(dir string) bool {
 }
 
 func homeAtDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return filepath.Join(home, atDir)
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return filepath.Join(string(filepath.Separator), ".at")
@@ -57,7 +60,7 @@ func ScopeOf(dir string) string {
 }
 
 // ResolveStatusDirs returns the state dirs to join, in precedence order.
-// An explicit dir (or AT_STATE_DIR) collapses to a single entry; otherwise
+// An explicit dir (or AT_STATE_DIR env) collapses to a single entry; otherwise
 // project-root `.at/` (when it holds state) and `~/.at/` are joined.
 func ResolveStatusDirs(explicit string, cwd string) []string {
 	if explicit != "" {
@@ -73,6 +76,10 @@ func ResolveStatusDirs(explicit string, cwd string) []string {
 		if hasAtState(projectAt) {
 			dirs = append(dirs, projectAt)
 		}
+	}
+	cwdAt := filepath.Join(cwd, atDir)
+	if !contains(dirs, cwdAt) && hasAtState(cwdAt) {
+		dirs = append(dirs, cwdAt)
 	}
 	home := homeAtDir()
 	if !contains(dirs, home) {

@@ -32,8 +32,11 @@ func runJSON(id, startedAt, status string, pid int) string {
 }
 
 func doneJSON(id, startedAt string) string {
-	return fmt.Sprintf(`{"runId":%q,"agent":"mock","tier":4,"pid":999999,"prompt":"hello world","logFile":"/tmp/at-test-missing.log","startedAt":%q,"finishedAt":"2026-10-11T09:05:00.000Z","exitCode":0,"status":"done","name":"unnamed"}`,
-		id, startedAt)
+	// Add 5 minutes to startedAt for finishedAt to make a realistic done run
+	startedTime, _ := time.Parse("2006-01-02T15:04:05.000Z07:00", startedAt)
+	finishedTime := startedTime.Add(5 * time.Minute)
+	return fmt.Sprintf(`{"runId":%q,"agent":"mock","tier":4,"pid":999999,"prompt":"hello world","logFile":"/tmp/at-test-missing.log","startedAt":%q,"finishedAt":%q,"exitCode":0,"status":"done","name":"unnamed"}`,
+		id, startedAt, finishedTime.Format("2006-01-02T15:04:05.000Z07:00"))
 }
 
 // iso builds a JS-style timestamp relative to now so fixtures never cross
@@ -311,10 +314,10 @@ func TestSettingsBodyCap(t *testing.T) {
 
 func TestUnknownAPIPath404(t *testing.T) {
 	h := New([]string{t.TempDir()}, "")
-	for _, target := range []string{"/api/nope", "/api/runs/x/retry", "/api/agents"} {
+	for _, target := range []string{"/api/nope", "/api/runs/x/discuss"} {
 		res, _ := get(t, h, target)
 		if res.StatusCode != 404 {
-			t.Fatalf("GET %s = %d, want 404 (not implemented in read-only core)", target, res.StatusCode)
+			t.Fatalf("GET %s = %d, want 404 (not implemented in Go backend)", target, res.StatusCode)
 		}
 	}
 }

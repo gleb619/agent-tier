@@ -1,11 +1,14 @@
-// Package api exposes the read-only WebUI HTTP surface, byte-compatible with
-// the Node server (src/web/server.ts): /api/runs, /api/runs/:id,
-// /api/runs/:id/log, /api/stats and GET/PUT /api/settings, plus static SPA
-// serving. Mutations (POST/DELETE/retry), /api/agents and the SSE/discuss
-// proxy land with the Go mutations task.
+// Package api exposes the WebUI HTTP surface, byte-compatible with the Node
+// server (src/web/server.ts): /api/runs (GET/POST), /api/runs/:id
+// (GET/DELETE), /api/runs/:id/retry, /api/runs/:id/log, /api/agents
+// (GET + PUT enable/disable), /api/stats, GET/PUT /api/settings, plus static
+// SPA serving. Mutations delegate to the `at` CLI (spawn for runs, `at
+// agents --json`, `at enable|disable`) or write runs.jsonl under the TS lock
+// protocol. The SSE/discuss proxy lands with the Go SSE task.
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -14,6 +17,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"web-server/internal/runs"
@@ -26,26 +30,50 @@ const (
 	maxBodyBytes        = 1 << 20 // 1MB request body cap
 )
 
-// Server is the read-only web backend. StateDirs are the joined state dirs
-// (project `.at/` first, then `~/.at/`); StaticDir may be empty (API-only).
+// Server is the web backend. StateDirs are the joined state dirs (project
+// `.at/` first, then `~/.at/`); StaticDir may be empty (API-only). AtBin is
+// the `at` CLI used for delegated mutations (AT_BIN env override, else
+// PATH). SpawnAt/RunAt are injectable seams for tests.
 type Server struct {
 	StateDirs []string
 	StaticDir string
+	AtBin     string
+	// SpawnAt launches a detached `at` run (fire-and-forget).
+	SpawnAt func(args ...string) error
+	// RunAt runs `at` synchronously and returns stdout.
+	RunAt func(ctx context.Context, args ...string) (string, error)
+
+	agentsMu       sync.Mutex
+	agentsCache    []agentEntry
+	agentsCachedAt time.Time
 }
 
-// New builds the full HTTP handler: /api/* routes + static SPA fallback.
-func New(stateDirs []string, staticDir string) http.Handler {
-	s := &Server{StateDirs: stateDirs, StaticDir: staticDir}
+func newServer(stateDirs []string, staticDir string) *Server {
+	atBin := os.Getenv("AT_BIN")
+	if atBin == "" {
+		atBin = "at"
+	}
+	return &Server{StateDirs: stateDirs, StaticDir: staticDir, AtBin: atBin}
+}
+
+// Handler builds the HTTP handler serving this server: /api/* routes plus
+// the static SPA fallback.
+func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.HandlerFunc(s.handleAPI))
-	if staticDir != "" {
-		mux.Handle("/", static.Handler(staticDir))
+	if s.StaticDir != "" {
+		mux.Handle("/", static.Handler(s.StaticDir))
 	} else {
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, http.StatusNotFound, "not found")
 		})
 	}
 	return mux
+}
+
+// New builds the full HTTP handler: /api/* routes + static SPA fallback.
+func New(stateDirs []string, staticDir string) http.Handler {
+	return newServer(stateDirs, staticDir).Handler()
 }
 
 func jsonError(w http.ResponseWriter, status int, message string) {
@@ -89,6 +117,10 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, s.joinedRuns())
 		return
 
+	case len(segments) == 1 && segments[0] == "runs" && r.Method == http.MethodPost:
+		s.handleCreateRun(w, r)
+		return
+
 	case len(segments) == 2 && segments[0] == "runs" && r.Method == http.MethodGet:
 		id, err := urlUnescape(segments[1])
 		if err != nil {
@@ -103,8 +135,25 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, run)
 		return
 
+	case len(segments) == 2 && segments[0] == "runs" && r.Method == http.MethodDelete:
+		s.handleDeleteRun(w, r, segments[1])
+		return
+
+	case len(segments) == 3 && segments[0] == "runs" && segments[2] == "retry" && r.Method == http.MethodPost:
+		s.handleRetry(w, r, segments[1])
+		return
+
 	case len(segments) == 3 && segments[0] == "runs" && segments[2] == "log" && r.Method == http.MethodGet:
 		s.handleLog(w, r, segments[1])
+		return
+
+	case len(segments) == 1 && segments[0] == "agents" && r.Method == http.MethodGet:
+		s.handleAgents(w, r)
+		return
+
+	case len(segments) == 3 && segments[0] == "agents" &&
+		(segments[2] == "enable" || segments[2] == "disable") && r.Method == http.MethodPut:
+		s.handleAgentAction(w, r, segments[1], segments[2])
 		return
 
 	case len(segments) == 1 && segments[0] == "stats" && r.Method == http.MethodGet:
@@ -190,7 +239,7 @@ func (s *Server) handleStats(w http.ResponseWriter) {
 		"failed":  0,
 		"stuck":   0,
 		"agents": map[string]any{
-			"total":       len(builtinAgents),
+			"total":       len(builtinAgents) + countGenericAgents(),
 			"deactivated": s.deactivatedAgents(),
 		},
 	}
