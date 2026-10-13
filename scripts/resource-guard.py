@@ -26,7 +26,7 @@ import time
 
 CONFIG = {
     "INTERVAL_S": 3.0,
-    "PROC_RSS_MAX_MB": 3072,      # one process tree
+    "PROC_RSS_MAX_MB": 6144,      # one process tree
     "TREE_CPU_MAX_PCT": 300.0,    # one tree, 100 = one core
     "CPU_SUSTAIN_S": 40,
     "AGG_CPU_MAX_PCT": 450.0,     # all targets together (of nproc*100)
