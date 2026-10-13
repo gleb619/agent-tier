@@ -22,5 +22,7 @@ afterAll(() => {
   delete process.env.AT_STATE_DIR;
 });
 
-// Tests may run inside an `at` agent (AT_DEPTH>=1); the nested-run guard must not leak into them.
-delete process.env.AT_DEPTH;
+// Unit tests must NEVER launch real AI agents: a test that spawns the real CLI without `-a mock`
+// would start detached kilo/codex/... runs that run the full suite again (recursive fan-out that
+// froze the laptop). `at` honours this flag and only schedules tier-4 mock agents.
+process.env.AT_FORBID_REAL_AGENTS = "1";

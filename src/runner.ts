@@ -3,7 +3,7 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, writeSync }
 import path from "node:path";
 import { AgentError } from "./agent-error";
 import { applyNormkaFlag } from "./agents/normka-flag";
-import type { AgentDef } from "./agents/registry";
+import { AGENTS, type AgentDef } from "./agents/registry";
 import { getLineAgents, loadConfig } from "./config";
 import { filterHealthy, isDeactivated, loadHealth, recordResult } from "./health";
 import { applyRunName, readLogTail } from "./naming";
@@ -11,7 +11,7 @@ import { type Hub, type NotifyEvent, setupNotify, startHub, tailLogFile } from "
 import type { RunOptions } from "./resolver";
 import { addRun, loadRuns, UNNAMED_PLACEHOLDER, updateRun } from "./run-store";
 import { spawnRunWatch } from "./run-watch";
-import { assertSafeToStart, currentNestingDepth, startRssWatchdog } from "./safety";
+import { assertRealAgentAllowed, assertSafeToStart, currentNestingDepth, startRssWatchdog } from "./safety";
 import { runSandboxTest } from "./sandbox";
 import { getStateFile, pickAgent } from "./scheduler";
 import { getStateFilePath } from "./state-dir";
@@ -207,6 +207,7 @@ export function writeHostChannelShim(opts: { cwd?: string; atBin: string; stateD
 }
 
 export async function launchAgent(agent: AgentDef, options: RunOptions, extras?: LaunchExtras): Promise<LaunchResult> {
+  assertRealAgentAllowed(agent, AGENTS.includes(agent));
   const runId = extras?.runId ?? generateRunId();
   const promptText = options.prompt + (extras?.extraPrompt ?? "");
   const baseArgs = applyNormkaFlag(agent, agent.buildArgs(promptText, options.model, options.cwd), promptText, {

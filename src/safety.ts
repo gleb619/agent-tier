@@ -154,3 +154,15 @@ export function startRssWatchdog(
   timer.unref();
   return () => clearInterval(timer);
 }
+
+/**
+ * With AT_FORBID_REAL_AGENTS=1 (set by tests/setup.ts and inherited by CLIs spawned from tests)
+ * only tier-4 mock agents (and test-injected fakes, isBuiltin=false) may actually be launched.
+ * Called right before a real child is spawned.
+ */
+export function assertRealAgentAllowed(agent: { name: string; tier: number }, isBuiltin = true): void {
+  if (process.env.AT_FORBID_REAL_AGENTS !== "1" || agent.tier === 4 || !isBuiltin) return;
+  throw new Error(
+    `[at] refusing to launch real agent "${agent.name}": AT_FORBID_REAL_AGENTS=1 (tests must use a tier-4 mock agent)`,
+  );
+}

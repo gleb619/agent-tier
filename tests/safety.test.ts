@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  assertRealAgentAllowed,
   evaluatePreflight,
   getSafetyLimits,
   nestedRunRefusal,
@@ -60,6 +61,29 @@ describe("nestedRunRefusal", () => {
       expect(nestedRunRefusal(2)).toBeNull();
     } finally {
       delete process.env.AT_ALLOW_NESTED;
+    }
+  });
+});
+
+describe("assertRealAgentAllowed", () => {
+  it("is a no-op when the flag is off", () => {
+    const prev = process.env.AT_FORBID_REAL_AGENTS;
+    delete process.env.AT_FORBID_REAL_AGENTS;
+    try {
+      expect(() => assertRealAgentAllowed({ name: "kilo", tier: 3 })).not.toThrow();
+    } finally {
+      if (prev !== undefined) process.env.AT_FORBID_REAL_AGENTS = prev;
+    }
+  });
+  it("refuses real agents but allows tier-4 mocks when the flag is on", () => {
+    const prev = process.env.AT_FORBID_REAL_AGENTS;
+    process.env.AT_FORBID_REAL_AGENTS = "1";
+    try {
+      expect(() => assertRealAgentAllowed({ name: "kilo", tier: 3 })).toThrow(/forbidden|refusing/);
+      expect(() => assertRealAgentAllowed({ name: "mock", tier: 4 })).not.toThrow();
+    } finally {
+      if (prev === undefined) delete process.env.AT_FORBID_REAL_AGENTS;
+      else process.env.AT_FORBID_REAL_AGENTS = prev;
     }
   });
 });
