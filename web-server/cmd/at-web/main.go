@@ -46,11 +46,11 @@ func run() error {
 	flag.Parse()
 
 	stateDirs := state.ResolveStatusDirs(*stateDir, resolvedCwd())
-	handler := api.New(stateDirs, *staticDir)
+	srv := api.NewServer(stateDirs, *staticDir)
 
 	addr := *host + ":" + *port
 	server := &http.Server{
-		Handler:           handler,
+		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -61,6 +61,8 @@ func run() error {
 	defer listener.Close()
 
 	actualAddr := listener.Addr().String()
+	baseURL := "http://" + actualAddr
+	srv.SetBaseURL(baseURL)
 	fmt.Fprintf(os.Stderr, "[at-web] serving on http://%s (state: %v)\n", actualAddr, stateDirs)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -62,7 +62,11 @@ func buildAtArgs(prompt string, agent *string, tier *int) []string {
 // ignored, matching the Node server's fire-and-forget spawnAt.
 func (s *Server) defaultSpawnAt(args ...string) error {
 	cmd := exec.Command(s.AtBin, args...)
-	cmd.Env = append(os.Environ(), "AT_STATE_DIR="+s.StateDirs[0])
+	env := append(os.Environ(), "AT_STATE_DIR="+s.StateDirs[0])
+	if s.BaseURL != "" {
+		env = append(env, "AT_SSE_URL="+s.BaseURL)
+	}
+	cmd.Env = env
 	devnull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
 	if err != nil {
 		return err

@@ -8,7 +8,7 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, describe, vi } from "vitest";
-import { type ContractTarget, describeWebApiContract } from "./web-contract";
+import { type ContractTarget, describeWebApiContract, describeWebApiSSEContract } from "./web-contract";
 
 const GO = process.env.AT_WEB_GO ?? "/usr/local/go/bin/go";
 
@@ -72,7 +72,7 @@ if (!built) {
     it.skip("skipped: Go toolchain or at-web build unavailable", () => {});
   });
 } else {
-  describeWebApiContract("web server contract (go)", {
+  const describeWebApiContractHooks = {
     async start(stateDir) {
       const fakeAt = path.join(stateDir, "fake-at.js");
       const captureFile = path.join(stateDir, "at-capture.jsonl");
@@ -128,6 +128,23 @@ if (!built) {
         .filter(Boolean)
         .map((line) => JSON.parse(line) as string[])
         .filter((args) => args[0] !== "agents" && args[0] !== "enable" && args[0] !== "disable");
+    },
+  };
+
+  describeWebApiContract("web server contract (go)", describeWebApiContractHooks);
+
+  describeWebApiSSEContract("web server sse contract (go)", {
+    async start(stateDir) {
+      const t = await describeWebApiContractHooks.start(stateDir);
+      return {
+        baseUrl: t.baseUrl,
+        async close() {
+          await t.close();
+        },
+      };
+    },
+    async spawnedArgs(target) {
+      return await describeWebApiContractHooks.spawnedArgs(target as GoTarget);
     },
   });
 }

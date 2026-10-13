@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"web-server/internal/events"
 	"web-server/internal/runs"
 	"web-server/internal/settings"
 	"web-server/internal/static"
@@ -38,6 +39,8 @@ type Server struct {
 	StateDirs []string
 	StaticDir string
 	AtBin     string
+	BaseURL   string
+	Hub       *events.Hub
 	// SpawnAt launches a detached `at` run (fire-and-forget).
 	SpawnAt func(args ...string) error
 	// RunAt runs `at` synchronously and returns stdout.
@@ -53,7 +56,23 @@ func newServer(stateDirs []string, staticDir string) *Server {
 	if atBin == "" {
 		atBin = "at"
 	}
-	return &Server{StateDirs: stateDirs, StaticDir: staticDir, AtBin: atBin}
+	var hub *events.Hub
+	if len(stateDirs) > 0 {
+		hub = events.NewHub(stateDirs[0])
+	}
+	return &Server{StateDirs: stateDirs, StaticDir: staticDir, AtBin: atBin, Hub: hub}
+}
+
+// SetBaseURL pins the public URL the server is reachable on (used for
+// AT_SSE_URL when spawning runs).
+func (s *Server) SetBaseURL(url string) {
+	s.BaseURL = url
+}
+
+// NewServer returns a mutable Server for advanced wiring (e.g. setting
+// BaseURL after the listener is known). New() is the simple handler wrapper.
+func NewServer(stateDirs []string, staticDir string) *Server {
+	return newServer(stateDirs, staticDir)
 }
 
 // Handler builds the HTTP handler serving this server: /api/* routes plus
@@ -61,6 +80,7 @@ func newServer(stateDirs []string, staticDir string) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.HandlerFunc(s.handleAPI))
+	s.mountHubRoutes(mux)
 	if s.StaticDir != "" {
 		mux.Handle("/", static.Handler(s.StaticDir))
 	} else {
@@ -69,6 +89,46 @@ func (s *Server) Handler() http.Handler {
 		})
 	}
 	return mux
+}
+
+func (s *Server) mountHubRoutes(mux *http.ServeMux) {
+	if s.Hub == nil {
+		return
+	}
+	mux.HandleFunc("/events", s.hubEventsRoute)
+	mux.HandleFunc("/events/", s.hubEventsRoute)
+	mux.HandleFunc("/emit/", func(w http.ResponseWriter, r *http.Request) {
+		s.Hub.HandleEmitRoute(w, r)
+	})
+	mux.HandleFunc("/discuss/", func(w http.ResponseWriter, r *http.Request) {
+		id, ok := extractDiscussID(r.URL.Path)
+		if !ok {
+			jsonError(w, http.StatusNotFound, "not found")
+			return
+		}
+		s.Hub.HandleDiscussRoute(w, r, id)
+	})
+}
+
+func (s *Server) hubEventsRoute(w http.ResponseWriter, r *http.Request) {
+	if s.Hub == nil {
+		jsonError(w, http.StatusNotFound, "not found")
+		return
+	}
+	s.Hub.HandleEventsRoute(w, r)
+}
+
+func extractDiscussID(path string) (string, bool) {
+	rest := strings.TrimPrefix(path, "/discuss")
+	rest = strings.TrimPrefix(rest, "/")
+	if rest == "" {
+		return "", false
+	}
+	id, err := url.PathUnescape(rest)
+	if err != nil {
+		return "", false
+	}
+	return id, true
 }
 
 // New builds the full HTTP handler: /api/* routes + static SPA fallback.
@@ -147,6 +207,16 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 		s.handleLog(w, r, segments[1])
 		return
 
+	// SSE proxy: /api/events (all runs) and /api/events/:runId (single run).
+	case len(segments) >= 1 && segments[0] == "events" && r.Method == http.MethodGet:
+		s.handleAPIEvents(w, r, segments)
+		return
+
+	// Discuss proxy: /api/runs/:id/discuss.
+	case len(segments) == 3 && segments[0] == "runs" && segments[2] == "discuss":
+		s.handleAPIDiscuss(w, r, segments[1])
+		return
+
 	case len(segments) == 1 && segments[0] == "agents" && r.Method == http.MethodGet:
 		s.handleAgents(w, r)
 		return
@@ -172,6 +242,44 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonError(w, http.StatusNotFound, "not found")
+}
+
+func (s *Server) handleAPIEvents(w http.ResponseWriter, r *http.Request, segments []string) {
+	if s.Hub == nil {
+		jsonError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if len(segments) == 1 {
+		s.Hub.ServeEvents(w, r, "")
+		return
+	}
+	if len(segments) == 2 {
+		runID, err := url.PathUnescape(segments[1])
+		if err != nil {
+			jsonError(w, http.StatusBadRequest, "bad run id")
+			return
+		}
+		s.Hub.ServeEvents(w, r, runID)
+		return
+	}
+	jsonError(w, http.StatusNotFound, "not found")
+}
+
+func (s *Server) handleAPIDiscuss(w http.ResponseWriter, r *http.Request, idSegment string) {
+	runID, err := urlUnescape(idSegment)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, "bad run id")
+		return
+	}
+	if _, _, ok := runs.FindRun(s.StateDirs, runID); !ok {
+		jsonError(w, http.StatusNotFound, "run not found")
+		return
+	}
+	if s.Hub == nil {
+		jsonError(w, http.StatusNotFound, "not found")
+		return
+	}
+	s.Hub.HandleDiscussRoute(w, r, runID)
 }
 
 func urlUnescape(s string) (string, error) {

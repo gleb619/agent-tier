@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"web-server/internal/events"
 )
 
 func writeRunsFile(t *testing.T, lines ...string) string {
@@ -356,5 +359,166 @@ func TestNoStaticDirAPIOnly(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != 404 {
 		t.Fatalf("GET / without static = %d, want 404", rec.Code)
+	}
+}
+
+func seedEventFile(t *testing.T, dir, runID string, events ...events.Event) {
+	t.Helper()
+	path := filepath.Join(dir, "events", runID+".jsonl")
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	for _, e := range events {
+		raw, _ := json.Marshal(e)
+		if _, err := f.Write(append(raw, '\n')); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func seedDiscussFile(t *testing.T, dir, runID string, entries ...events.DiscussEntry) {
+	t.Helper()
+	path := filepath.Join(dir, "events", runID+".discuss.jsonl")
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	for _, e := range entries {
+		raw, _ := json.Marshal(e)
+		if _, err := f.Write(append(raw, '\n')); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestAPIEventsReplay(t *testing.T) {
+	dir := writeRunsFile(t, doneJSON("ev", iso(-4*time.Hour)))
+	seedEventFile(t, dir, "ev",
+		events.Event{RunID: "ev", Agent: "mock", Type: events.TypeStart, Seq: 1, TS: time.Now().UTC().Format(time.RFC3339Nano)},
+		events.Event{RunID: "ev", Agent: "mock", Type: events.TypeMessage, Seq: 2, TS: time.Now().UTC().Format(time.RFC3339Nano), Text: "hi"},
+	)
+
+	srv := httptest.NewServer(New([]string{dir}, ""))
+	defer srv.Close()
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/events/ev", nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+	var buf strings.Builder
+	done := make(chan struct{})
+	go func() {
+		io.Copy(&buf, res.Body) //nolint:errcheck
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+	}
+	body := buf.String()
+	if !strings.Contains(body, `"seq":1`) || !strings.Contains(body, `"text":"hi"`) {
+		t.Fatalf("body = %s", body)
+	}
+}
+
+func TestAPIDiscussThreadAndPending(t *testing.T) {
+	dir := writeRunsFile(t, doneJSON("disc", iso(-4*time.Hour)))
+	seedDiscussFile(t, dir, "disc",
+		events.DiscussEntry{ID: "m1", From: events.FromAgent, Kind: events.KindQuestion, Text: "q1", TS: time.Now().UTC().Format(time.RFC3339Nano)},
+		events.DiscussEntry{ID: "m2", From: events.FromHost, Kind: events.KindAnswer, Text: "a1", ReplyTo: "m1", TS: time.Now().UTC().Format(time.RFC3339Nano)},
+		events.DiscussEntry{ID: "m3", From: events.FromAgent, Kind: events.KindQuestion, Text: "q2", TS: time.Now().UTC().Format(time.RFC3339Nano)},
+	)
+
+	h := New([]string{dir}, "")
+	rec := doJSON(t, h, http.MethodGet, "/api/runs/disc/discuss", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET = %d %s", rec.Code, rec.Body.String())
+	}
+	var full []events.DiscussEntry
+	if err := json.Unmarshal(rec.Body.Bytes(), &full); err != nil {
+		t.Fatal(err)
+	}
+	if len(full) != 3 {
+		t.Fatalf("full = %v", full)
+	}
+
+	rec2 := doJSON(t, h, http.MethodGet, "/api/runs/disc/discuss?pending=1", nil)
+	var pending []events.DiscussEntry
+	if err := json.Unmarshal(rec2.Body.Bytes(), &pending); err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 1 || pending[0].Text != "q2" {
+		t.Fatalf("pending = %v", pending)
+	}
+}
+
+func TestAPIDiscussPostAnswer(t *testing.T) {
+	dir := writeRunsFile(t, doneJSON("ans", iso(-4*time.Hour)))
+	seedDiscussFile(t, dir, "ans",
+		events.DiscussEntry{ID: "m1", From: events.FromAgent, Kind: events.KindQuestion, Text: "ok?", TS: time.Now().UTC().Format(time.RFC3339Nano)},
+	)
+
+	h := New([]string{dir}, "")
+	bad := doJSON(t, h, http.MethodPost, "/api/runs/ans/discuss", map[string]any{"kind": "answer", "text": ""})
+	if bad.Code != http.StatusBadRequest {
+		t.Fatalf("bad = %d", bad.Code)
+	}
+
+	rec := doJSON(t, h, http.MethodPost, "/api/runs/ans/discuss", map[string]any{"kind": "answer", "text": "yes", "replyTo": "m1"})
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("POST = %d %s", rec.Code, rec.Body.String())
+	}
+	var out map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["id"] != "m2" {
+		t.Fatalf("id = %v", out)
+	}
+
+	rec2 := doJSON(t, h, http.MethodGet, "/api/runs/ans/discuss?pending=1", nil)
+	var pending []events.DiscussEntry
+	if err := json.Unmarshal(rec2.Body.Bytes(), &pending); err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending = %v", pending)
+	}
+}
+
+func TestAPIEventsUnknownRunEmptyStream(t *testing.T) {
+	dir := writeRunsFile(t, doneJSON("x", iso(-4*time.Hour)))
+	srv := httptest.NewServer(New([]string{dir}, ""))
+	defer srv.Close()
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/api/events/unknown", nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", res.StatusCode)
+	}
+	var buf strings.Builder
+	done := make(chan struct{})
+	go func() {
+		io.Copy(&buf, res.Body) //nolint:errcheck
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+	}
+	if ct := res.Header.Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("content-type = %q, want text/event-stream", ct)
 	}
 }

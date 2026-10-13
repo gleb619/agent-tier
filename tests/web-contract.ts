@@ -4,7 +4,7 @@
 // (tests/web-server-go.test.ts). Each wrapper provides start()/spawnedArgs();
 // everything else (fixtures, requests, assertions) lives here.
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -311,6 +311,244 @@ export function describeWebApiContract(name: string, hooks: ContractHooks): void
 
       expect((await request("PUT", "/api/settings", [1, 2])).status).toBe(400);
       expect((await request("PUT", "/api/settings", "nope")).status).toBe(400);
+    });
+  });
+}
+
+/** Read SSE messages from an http response for `durationMs`, returning parsed data payloads. */
+function collectSSE(res: http.IncomingMessage, durationMs: number, abort: () => void): Promise<unknown[]> {
+  return new Promise((resolve) => {
+    const found: unknown[] = [];
+    let buffer = "";
+    let settled = false;
+    const finish = (value: unknown[]) => {
+      if (settled) return;
+      settled = true;
+      try {
+        abort();
+      } catch {
+        // ignore
+      }
+      try {
+        res.destroy();
+      } catch {
+        // ignore
+      }
+      resolve(value);
+    };
+    setTimeout(() => finish(found), durationMs);
+    res.on("data", (chunk: Buffer) => {
+      buffer += chunk.toString();
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+      for (const part of parts) {
+        const dataLine = part.split("\n").find((l) => l.startsWith("data:"));
+        if (dataLine) {
+          try {
+            found.push(JSON.parse(dataLine.slice(5)));
+          } catch {
+            // ignore malformed
+          }
+        }
+      }
+    });
+    res.on("close", () => finish(found));
+    res.on("error", () => finish(found));
+  });
+}
+
+function seedEventsFile(stateDir: string, runId: string, lines: string[]): void {
+  const dir = path.join(stateDir, "events");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, `${runId}.jsonl`), `${lines.join("\n")}\n`);
+}
+
+function seedDiscussFile(stateDir: string, runId: string, lines: string[]): void {
+  const dir = path.join(stateDir, "events");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, `${runId}.discuss.jsonl`), `${lines.join("\n")}\n`);
+}
+
+export function describeWebApiSSEContract(name: string, hooks: ContractHooks): void {
+  describe(name, () => {
+    let stateDir: string;
+    let target: ContractTarget | undefined;
+
+    beforeEach(() => {
+      stateDir = mkdtempSync(path.join(tmpdir(), "at-web-sse-"));
+    });
+
+    afterEach(async () => {
+      await target?.close();
+      target = undefined;
+      rmSync(stateDir, { recursive: true, force: true });
+    });
+
+    async function start(): Promise<ContractTarget> {
+      target = await hooks.start(stateDir);
+      return target;
+    }
+
+    function request(method: string, apiPath: string, body?: unknown): Promise<{ status: number; body: string }> {
+      return new Promise((resolve, reject) => {
+        const data = body === undefined ? undefined : JSON.stringify(body);
+        const req = http.request(
+          `${target!.baseUrl}${apiPath}`,
+          {
+            method,
+            headers:
+              data !== undefined
+                ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) }
+                : {},
+          },
+          (res) => {
+            let out = "";
+            res.on("data", (c: Buffer) => (out += c.toString()));
+            res.on("end", () => resolve({ status: res.statusCode ?? 0, body: out }));
+          },
+        );
+        req.on("error", reject);
+        if (data !== undefined) req.write(data);
+        req.end();
+      });
+    }
+
+    function sseRequest(
+      apiPath: string,
+      lastEventId?: string,
+    ): Promise<{ res: http.IncomingMessage; abort: () => void }> {
+      return new Promise((resolve, reject) => {
+        const controller = new AbortController();
+        const req = http.get(
+          `${target!.baseUrl}${apiPath}`,
+          { headers: lastEventId ? { "Last-Event-ID": lastEventId } : {}, signal: controller.signal as any },
+          (res) => {
+            resolve({ res, abort: () => controller.abort() });
+          },
+        );
+        req.on("error", reject);
+      });
+    }
+
+    it("GET /api/events/:runId replays stored events", async () => {
+      await start();
+      const run = makeRun({ runId: "sse-replay-1" });
+      saveRuns(stateDir, [run]);
+      seedEventsFile(stateDir, run.runId, [
+        `{"runId":"${run.runId}","agent":"mock","ts":"2026-10-13T09:00:00.000Z","seq":1,"type":"start"}`,
+        `{"runId":"${run.runId}","agent":"mock","ts":"2026-10-13T09:00:01.000Z","seq":2,"type":"message","text":"hello"}`,
+      ]);
+
+      const { res, abort } = await sseRequest(`/api/events/${run.runId}`);
+      const events = await collectSSE(res, 150, abort);
+      expect(events).toHaveLength(2);
+      expect((events[0] as { type: string }).type).toBe("start");
+      expect((events[1] as { text: string }).text).toBe("hello");
+    });
+
+    it("GET /api/events/:runId honors Last-Event-ID", async () => {
+      await start();
+      const run = makeRun({ runId: "sse-resume-1" });
+      saveRuns(stateDir, [run]);
+      seedEventsFile(stateDir, run.runId, [
+        `{"runId":"${run.runId}","agent":"mock","ts":"2026-10-13T09:00:00.000Z","seq":1,"type":"start"}`,
+        `{"runId":"${run.runId}","agent":"mock","ts":"2026-10-13T09:00:01.000Z","seq":2,"type":"message","text":"a"}`,
+        `{"runId":"${run.runId}","agent":"mock","ts":"2026-10-13T09:00:02.000Z","seq":3,"type":"message","text":"b"}`,
+      ]);
+
+      const { res, abort } = await sseRequest(`/api/events/${run.runId}`, "1");
+      const events = await collectSSE(res, 150, abort);
+      expect(events).toHaveLength(2);
+      expect((events[0] as { seq: number }).seq).toBe(2);
+      expect((events[1] as { seq: number }).seq).toBe(3);
+    });
+
+    it("GET /api/events replays events across all runs sorted by seq", async () => {
+      await start();
+      const a = makeRun({ runId: "all-a" });
+      const b = makeRun({ runId: "all-b" });
+      saveRuns(stateDir, [a, b]);
+      seedEventsFile(stateDir, "all-a", [
+        `{"runId":"all-a","agent":"mock","ts":"2026-10-13T09:00:00.000Z","seq":5,"type":"message","text":"a"}`,
+      ]);
+      seedEventsFile(stateDir, "all-b", [
+        `{"runId":"all-b","agent":"mock","ts":"2026-10-13T09:00:00.000Z","seq":2,"type":"message","text":"b"}`,
+      ]);
+
+      const { res, abort } = await sseRequest("/api/events");
+      const events = await collectSSE(res, 150, abort);
+      expect(events).toHaveLength(2);
+      expect((events[0] as { seq: number }).seq).toBe(2);
+      expect((events[1] as { seq: number }).seq).toBe(5);
+    });
+
+    it("GET /api/runs/:id/discuss returns thread; ?pending=1 returns unanswered questions", async () => {
+      await start();
+      const run = makeRun({ runId: "discuss-1" });
+      saveRuns(stateDir, [run]);
+      seedDiscussFile(stateDir, run.runId, [
+        `{"id":"m1","from":"agent","kind":"question","text":"which port?","ts":"2026-10-13T09:00:00.000Z"}`,
+        `{"id":"m2","from":"host","kind":"answer","text":"7800","replyTo":"m1","ts":"2026-10-13T09:00:01.000Z"}`,
+        `{"id":"m3","from":"agent","kind":"question","text":"which dir?","ts":"2026-10-13T09:00:02.000Z"}`,
+      ]);
+
+      const thread = await request("GET", `/api/runs/${run.runId}/discuss`);
+      expect(thread.status).toBe(200);
+      const entries = JSON.parse(thread.body) as { text: string }[];
+      expect(entries.map((e) => e.text)).toEqual(["which port?", "7800", "which dir?"]);
+
+      const pending = await request("GET", `/api/runs/${run.runId}/discuss?pending=1`);
+      expect(pending.status).toBe(200);
+      const pendingEntries = JSON.parse(pending.body) as { text: string }[];
+      expect(pendingEntries.map((e) => e.text)).toEqual(["which dir?"]);
+    });
+
+    it("POST /api/runs/:id/discuss appends a host answer and empties pending", async () => {
+      await start();
+      const run = makeRun({ runId: "discuss-2" });
+      saveRuns(stateDir, [run]);
+      seedDiscussFile(stateDir, run.runId, [
+        `{"id":"m1","from":"agent","kind":"question","text":"continue?","ts":"2026-10-13T09:00:00.000Z"}`,
+      ]);
+
+      const bad = await request("POST", `/api/runs/${run.runId}/discuss`, { kind: "answer", text: "" });
+      expect(bad.status).toBe(400);
+
+      const res = await request("POST", `/api/runs/${run.runId}/discuss`, {
+        kind: "answer",
+        text: "yes",
+        replyTo: "m1",
+      });
+      expect(res.status).toBe(202);
+      expect(JSON.parse(res.body)).toEqual({ id: "m2" });
+
+      const pending = await request("GET", `/api/runs/${run.runId}/discuss?pending=1`);
+      expect(JSON.parse(pending.body)).toEqual([]);
+    });
+
+    it("POST /api/runs/:id/discuss mirrors the entry as an SSE event", async () => {
+      await start();
+      const run = makeRun({ runId: "discuss-3" });
+      saveRuns(stateDir, [run]);
+
+      const { res, abort } = await sseRequest(`/api/events/${run.runId}`);
+      await new Promise((r) => setTimeout(r, 30));
+      const post = await request("POST", `/api/runs/${run.runId}/discuss`, { kind: "say", text: "now bump" });
+      expect(post.status).toBe(202);
+      const events = await collectSSE(res, 150, abort);
+      expect(events).toHaveLength(1);
+      const ev = events[0] as { type: string; text: string; data: { kind: string } };
+      expect(ev.type).toBe("message");
+      expect(ev.text).toBe("now bump");
+      expect(ev.data.kind).toBe("say");
+    });
+
+    it("discuss routes 404 on unknown run id", async () => {
+      await start();
+      saveRuns(stateDir, [makeRun({ runId: "abcdef123456" })]);
+      expect((await request("GET", "/api/runs/abc/discuss")).status).toBe(200);
+      expect((await request("GET", "/api/runs/nope/discuss")).status).toBe(404);
+      expect((await request("POST", "/api/runs/nope/discuss", { kind: "say", text: "hi" })).status).toBe(404);
     });
   });
 }

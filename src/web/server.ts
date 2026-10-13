@@ -201,6 +201,7 @@ function proxyEvents(hubPort: number, hubPath: string, req: http.IncomingMessage
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
     });
+    res.flushHeaders();
     upstreamRes.pipe(res);
   });
   upstream.on("error", () => {

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { startHub } from "../src/notify/hub";
 import { saveRuns } from "../src/run-store";
 import { resolveWebUiStaticDir, startWebServer, type WebServer } from "../src/web/server";
-import { type ContractTarget, describeWebApiContract, makeRun } from "./web-contract";
+import { type ContractTarget, describeWebApiContract, describeWebApiSSEContract, makeRun } from "./web-contract";
 
 // Node backend wrapper for the shared REST contract: boots the in-process
 // server (src/web/server.ts) with a mocked detached `at` spawn.
@@ -312,4 +312,21 @@ describe("web server discuss proxy", () => {
     expect((await request("GET", "/api/runs/nope/discuss")).status).toBe(404);
     expect((await request("POST", "/api/runs/nope/discuss", { kind: "say", text: "hi" })).status).toBe(404);
   });
+});
+
+describeWebApiSSEContract("web server sse contract (node)", {
+  async start(stateDir) {
+    const hub = await startHub({ stateDir, port: 0 });
+    const server = await startWebServer({ stateDirs: [stateDir], hub, port: 0 });
+    return {
+      baseUrl: `http://127.0.0.1:${server.port}`,
+      async close() {
+        await server.close();
+        await hub.close();
+      },
+    };
+  },
+  async spawnedArgs() {
+    return [];
+  },
 });
