@@ -153,3 +153,14 @@ func TestCacheControl(t *testing.T) {
 		}
 	}
 }
+
+func TestSPAFallbackForRoutePaths(t *testing.T) {
+	dir := makeStaticDir(t)
+	cases := []string{"/", "/new", "/settings", "/runs/some-id", "/deeply/nested/path"}
+	for _, target := range cases {
+		rec := serve(t, dir, target)
+		if rec.Code != 200 || rec.Body.String() != "<html>webui</html>" {
+			t.Fatalf("SPA fallback for %s = %d %q", target, rec.Code, rec.Body.String())
+		}
+	}
+}

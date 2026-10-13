@@ -17,33 +17,33 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 
 ## Task Board
 
-| ID  | Status  | Title                     | Description                                                | Priority | Owner | Blocks | Blocked By        | Plan File                                    |
-| :-- | :------ | :------------------------ | :--------------------------------------------------------- | :------- | :---- | :----- | :---------------- | :------------------------------------------- |
-| T1  | Done    | kanban core module        | src/kanban: mdast mutator, selection, lint, guard          | Medium   | loop  | T2     | -                 | -                                            |
-| T2  | Done    | at kanban CLI             | src/commands/kanban.ts subcommands wired into root program | Medium   | loop  | T3     | T1                | -                                            |
-| T3  | Done    | kanban test suite         | tests/kanban: parse, select, board, ops, lint, guard, cli  | Medium   | loop  | -      | T2                | -                                            |
-| T4  | Done    | WebUI API server          | at web: REST+static+SSE over run-store/health/settings     | High     | loop  | -      | -                 | docs/plans/webui-01-api-server.md            |
-| T5  | Done    | WebUI scaffold            | Vite+Svelte+Tailwind at src/webui, types, build scripts    | High     | loop  | -      | -                 | docs/plans/webui-02-scaffold.md              |
-| T6  | Done    | API client + SSE + stores | fetch client, SSE reconnect manager, svelte stores         | High     | loop  | -      | T4,T5             | docs/plans/webui-03-api-sse-stores.md        |
-| T7  | Done    | Layout + nav + common UI  | shell, sidebar nav, common components, badges              | Medium   | loop  | -      | T5                | docs/plans/webui-04-layout-nav.md            |
-| T8  | Done    | Sidebar run list + filter | RunList/RunItem/FilterInput, date groups, virtual list     | Medium   | loop  | -      | T6,T7             | docs/plans/webui-05-run-list.md              |
-| T9  | Done    | Dashboard view            | QuickStats, ActiveRuns, Recent, AgentsPanel                | Medium   | loop  | -      | T6,T7             | docs/plans/webui-06-dashboard.md             |
-| T10 | Done    | New Task view             | prompt form, tier/agent/mode/retries, submit               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-07-new-task.md              |
-| T11 | Done    | Run Details + LogViewer   | RunMeta, live log viewer, retry/kill/discuss               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-08-run-details.md           |
-| T12 | Done    | Settings view             | defaults form persisted to backend state                   | Low      | loop  | -      | T6,T7             | docs/plans/webui-09-settings.md              |
-| T13 | Done    | Keyboard shortcuts + a11y | TUI-mirroring keys, ARIA, contrast                         | Low      | loop  | -      | T8,T9,T10,T11,T12 | docs/plans/webui-10-keyboard.md              |
-| T14 | Done    | E2E + integration tests   | Playwright vs at web with mock agents                      | Medium   | loop  | -      | T13               | docs/plans/webui-11-e2e-tests.md             |
-| T15 | Done    | WebUI build, Docker, docs | build wiring, Dockerfile, docs/webui.md, ci:check          | Low      | loop  | -      | T14               | docs/plans/webui-12-build-docs.md            |
-| T16 | Done    | Go backend core           | web-server/ Go module: read-only API + static server       | High     | loop  | -      | T15               | docs/plans/webui-13-go-backend-core.md       |
-| T17 | Done    | Go backend mutations      | POST/DELETE runs, agents, contract tests node+go           | High     | loop  | -      | T16               | docs/plans/webui-14-go-backend-mutations.md  |
-| T18 | Done    | Go SSE hub + discuss      | hub-compatible events/emit/discuss in Go                   | High     | loop  | -      | T17               | docs/plans/webui-15-go-sse-hub.md            |
-| T19 | Done    | Wire Go backend           | at web launches at-web; build:go, Dockerfile, docs         | High     | loop  | -      | T18               | docs/plans/webui-16-go-integration-docker.md |
-| T20 | Done    | Remove Node web server    | delete src/web/server.ts after Go e2e green                | Medium   | loop  | -      | T19               | docs/plans/webui-17-remove-node-server.md    |
-| T21 | Backlog | SPA routing + lazy views  | history router, deep links, code-split views               | Medium   | loop  | -      | T15               | docs/plans/webui-18-spa-routing.md           |
-| T22 | Backlog | PWA manifest              | manifest, icons, install prompt                            | Medium   | loop  | -      | T21               | docs/plans/webui-19-pwa-manifest.md          |
-| T23 | Backlog | Service worker            | precache, SWR api cache, offline queue, SW messaging       | High     | loop  | -      | T22               | docs/plans/webui-20-service-worker.md        |
-| T24 | Backlog | WebUI performance         | preload/prefetch, brotli, budgets                          | Medium   | loop  | -      | T21               | docs/plans/webui-21-performance.md           |
-| T25 | Backlog | PWA/perf E2E + Lighthouse | offline e2e, lighthouse gate                               | Medium   | loop  | -      | T23,T24,T19       | docs/plans/webui-22-pwa-perf-e2e.md          |
+| ID  | Status      | Title                     | Description                                                | Priority | Owner | Blocks | Blocked By        | Plan File                                    |
+| :-- | :---------- | :------------------------ | :--------------------------------------------------------- | :------- | :---- | :----- | :---------------- | :------------------------------------------- |
+| T1  | Done        | kanban core module        | src/kanban: mdast mutator, selection, lint, guard          | Medium   | loop  | T2     | -                 | -                                            |
+| T2  | Done        | at kanban CLI             | src/commands/kanban.ts subcommands wired into root program | Medium   | loop  | T3     | T1                | -                                            |
+| T3  | Done        | kanban test suite         | tests/kanban: parse, select, board, ops, lint, guard, cli  | Medium   | loop  | -      | T2                | -                                            |
+| T4  | Done        | WebUI API server          | at web: REST+static+SSE over run-store/health/settings     | High     | loop  | -      | -                 | docs/plans/webui-01-api-server.md            |
+| T5  | Done        | WebUI scaffold            | Vite+Svelte+Tailwind at src/webui, types, build scripts    | High     | loop  | -      | -                 | docs/plans/webui-02-scaffold.md              |
+| T6  | Done        | API client + SSE + stores | fetch client, SSE reconnect manager, svelte stores         | High     | loop  | -      | T4,T5             | docs/plans/webui-03-api-sse-stores.md        |
+| T7  | Done        | Layout + nav + common UI  | shell, sidebar nav, common components, badges              | Medium   | loop  | -      | T5                | docs/plans/webui-04-layout-nav.md            |
+| T8  | Done        | Sidebar run list + filter | RunList/RunItem/FilterInput, date groups, virtual list     | Medium   | loop  | -      | T6,T7             | docs/plans/webui-05-run-list.md              |
+| T9  | Done        | Dashboard view            | QuickStats, ActiveRuns, Recent, AgentsPanel                | Medium   | loop  | -      | T6,T7             | docs/plans/webui-06-dashboard.md             |
+| T10 | Done        | New Task view             | prompt form, tier/agent/mode/retries, submit               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-07-new-task.md              |
+| T11 | Done        | Run Details + LogViewer   | RunMeta, live log viewer, retry/kill/discuss               | Medium   | loop  | -      | T6,T7             | docs/plans/webui-08-run-details.md           |
+| T12 | Done        | Settings view             | defaults form persisted to backend state                   | Low      | loop  | -      | T6,T7             | docs/plans/webui-09-settings.md              |
+| T13 | Done        | Keyboard shortcuts + a11y | TUI-mirroring keys, ARIA, contrast                         | Low      | loop  | -      | T8,T9,T10,T11,T12 | docs/plans/webui-10-keyboard.md              |
+| T14 | Done        | E2E + integration tests   | Playwright vs at web with mock agents                      | Medium   | loop  | -      | T13               | docs/plans/webui-11-e2e-tests.md             |
+| T15 | Done        | WebUI build, Docker, docs | build wiring, Dockerfile, docs/webui.md, ci:check          | Low      | loop  | -      | T14               | docs/plans/webui-12-build-docs.md            |
+| T16 | Done        | Go backend core           | web-server/ Go module: read-only API + static server       | High     | loop  | -      | T15               | docs/plans/webui-13-go-backend-core.md       |
+| T17 | Done        | Go backend mutations      | POST/DELETE runs, agents, contract tests node+go           | High     | loop  | -      | T16               | docs/plans/webui-14-go-backend-mutations.md  |
+| T18 | Done        | Go SSE hub + discuss      | hub-compatible events/emit/discuss in Go                   | High     | loop  | -      | T17               | docs/plans/webui-15-go-sse-hub.md            |
+| T19 | Done        | Wire Go backend           | at web launches at-web; build:go, Dockerfile, docs         | High     | loop  | -      | T18               | docs/plans/webui-16-go-integration-docker.md |
+| T20 | Done        | Remove Node web server    | delete src/web/server.ts after Go e2e green                | Medium   | loop  | -      | T19               | docs/plans/webui-17-remove-node-server.md    |
+| T21 | Done        | SPA routing + lazy views  | history router, deep links, code-split views               | Medium   | loop  | -      | T15               | docs/plans/webui-18-spa-routing.md           |
+| T22 | Backlog     | PWA manifest              | manifest, icons, install prompt                            | Medium   | loop  | -      | T21               | docs/plans/webui-19-pwa-manifest.md          |
+| T23 | Backlog     | Service worker            | precache, SWR api cache, offline queue, SW messaging       | High     | loop  | -      | T22               | docs/plans/webui-20-service-worker.md        |
+| T24 | Backlog     | WebUI performance         | preload/prefetch, brotli, budgets                          | Medium   | loop  | -      | T21               | docs/plans/webui-21-performance.md           |
+| T25 | Backlog     | PWA/perf E2E + Lighthouse | offline e2e, lighthouse gate                               | Medium   | loop  | -      | T23,T24,T19       | docs/plans/webui-22-pwa-perf-e2e.md          |
 
 ## Compose + Kanban
 

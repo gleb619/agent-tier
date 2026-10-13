@@ -1,9 +1,9 @@
 import { writable } from "svelte/store";
-import type { ViewType } from "$types/index";
+import type { RouteView, ViewType } from "$types/index";
 
 const VIEWS: ViewType[] = ["dashboard", "new-task", "run-details", "settings"];
 
-export const currentView = writable<ViewType>(readPref<ViewType>("webui.currentView", "dashboard", isView));
+export const currentView = writable<RouteView>(readPref<RouteView>("webui.currentView", "dashboard", isViewOrNotFound));
 export const sidebarOpen = writable(readPref("webui.sidebarOpen", true, isBoolean));
 export const focusMode = writable(readPref("webui.focusMode", false, isBoolean));
 
@@ -16,8 +16,8 @@ currentView.subscribe((view) => writePref("webui.currentView", view));
 sidebarOpen.subscribe((open) => writePref("webui.sidebarOpen", open));
 focusMode.subscribe((focus) => writePref("webui.focusMode", focus));
 
-function isView(v: unknown): v is ViewType {
-  return typeof v === "string" && (VIEWS as string[]).includes(v);
+function isViewOrNotFound(v: unknown): v is RouteView {
+  return typeof v === "string" && ([...VIEWS, "not-found"] as string[]).includes(v);
 }
 
 function isBoolean(v: unknown): v is boolean {

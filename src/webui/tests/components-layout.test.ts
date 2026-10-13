@@ -6,16 +6,21 @@ import MainLayout from "../components/layout/MainLayout.svelte";
 import AgentBadge from "../components/run/AgentBadge.svelte";
 import StatusBadge from "../components/run/StatusBadge.svelte";
 import TierBadge from "../components/run/TierBadge.svelte";
+import { selectedRunId, selectRun, setRuns } from "../stores/runs";
 import { connectionError, sseConnected } from "../stores/sse";
 import { currentView, setCurrentView, sidebarOpen } from "../stores/ui";
+import type { ApiRun } from "../types/api";
 
 describe("MainLayout shell", () => {
   beforeEach(() => {
+    window.history.pushState({}, "", "/");
+    setRuns([]);
+    selectRun(null);
     setCurrentView("dashboard");
     sidebarOpen.set(true);
   });
 
-  it("renders the four placeholder views and switches via navigation", async () => {
+  it("renders the dashboard view and switches via navigation", async () => {
     render(MainLayout);
     expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Settings" })).not.toBeInTheDocument();
@@ -66,7 +71,33 @@ describe("MainLayout shell", () => {
     expect(screen.getByText("hub down")).toBeInTheDocument();
     connectionError.set(null);
   });
+
+  it("keeps the selected run in sync with the run-details URL", async () => {
+    setRuns([makeRun({ runId: "abc" })]);
+    render(MainLayout);
+    selectRun("abc");
+    setCurrentView("run-details");
+    expect(get(selectedRunId)).toBe("abc");
+    expect(window.location.pathname).toBe("/runs/abc");
+  });
 });
+
+function makeRun(partial: Partial<ApiRun> = {}): ApiRun {
+  return {
+    runId: "r1",
+    agent: "mm-code",
+    tier: 2,
+    pid: 1,
+    prompt: "p",
+    logFile: "/tmp/r1.log",
+    startedAt: "2026-10-11T10:00:00.000Z",
+    finishedAt: null,
+    exitCode: null,
+    status: "running",
+    name: "UNNAMED",
+    ...partial,
+  };
+}
 
 describe("run badges", () => {
   it("StatusBadge maps run statuses to labels", () => {

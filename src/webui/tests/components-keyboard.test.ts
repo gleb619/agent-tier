@@ -36,6 +36,7 @@ beforeEach(() => {
   listRunsMock.mockResolvedValue([run("a"), run("b"), run("c")]);
   setRuns([run("a"), run("b"), run("c")]);
   selectRun(null);
+  window.history.pushState({}, "", "/");
   setCurrentView("dashboard");
 });
 
@@ -120,9 +121,11 @@ describe("MainLayout keyboard shortcuts", () => {
         return new Response(JSON.stringify({ error: "unexpected" }), { status: 404 });
       }),
     );
+    // Deep-link to run details so the router boots into the details view.
     selectRun("a");
-    setCurrentView("run-details");
+    window.history.pushState({}, "", "/runs/a");
     render(MainLayout);
+    await vi.waitFor(() => expect(screen.queryByTestId("run-details-view")).toBeInTheDocument());
     await fireEvent.keyDown(window, { key: "p" });
     expect(screen.getByTestId("run-prompt")).toHaveTextContent("prompt a");
     vi.unstubAllGlobals();
