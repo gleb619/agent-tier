@@ -21,3 +21,4 @@ env.local.sh
 
 # Built Go WebUI backend (built on demand by pnpm run build:go)
 bin/at-web
+/.gradle/*

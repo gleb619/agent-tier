@@ -68,6 +68,11 @@ function EmptyState(props: { message: string }): JSX.Element {
   );
 }
 
+// TODO EXPERIMENTAL: SchedulerPanel uses a naive Unicode DAG layout engine that
+// frequently produces overlapping nodes and broken edge routing in real queues.
+// This whole component, plus src/tui/mermaid-layout.ts, is a deletion candidate.
+// See feedback 4dfd4e06. Revert to a simple text queue or integrate a real
+// layout library (dagre/elk) before keeping long-term.
 /** Render scheduler queues as a terminal-native Mermaid flowchart. */
 function SchedulerPanel(props: { groups: DiagramGroup[] }): JSX.Element {
   const mermaidSrc = createMemo(() => buildSchedulerMermaid(props.groups));

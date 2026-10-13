@@ -27,7 +27,7 @@ scan_orphans() {
   for dir in /proc/[0-9]*; do
     pid="${dir#/proc/}"
     [ "$pid" = "$$" ] && continue
-    cmd="$(tr '\0' ' ' < "$dir/cmdline" 2>/dev/null)" || continue
+    cmd="$(cat "$dir/cmdline" 2>/dev/null | tr '\0' ' ')" || continue
     case "$cmd" in
       *"$root/dist/cli.js"*" -s -a "*) printf '%s %s\n' "$pid" "$cmd" ;;
     esac

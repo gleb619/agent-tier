@@ -1,3 +1,8 @@
+// TODO EXPERIMENTAL: this entire file is experimental and scheduled for deletion.
+// It implements a naive DAG layout engine that does not reliably prevent overlaps
+// or route edges cleanly in real-world scheduler queues. Keep only until feedback
+// 4dfd4e06 is resolved: either replace with a proven layout library (dagre/elk) or
+// remove the SchedulerPanel Mermaid diagram and fall back to a simpler text view.
 export type MermaidShape = "rect" | "round" | "diamond";
 
 export interface MermaidNode {
