@@ -307,4 +307,4 @@ submission goes through `src/tui/launch.ts`. The TUI entry module is `src/tui-en
 | `AT_MAX_RUN_MS` | 3600000 | max runtime for detached runs (blocking runs use `--timeout`, default 30m) |
 | `AT_SAFETY=off` | | disable all of the above (not advised) |
 
-Outside `at`: `scripts/resource-guard.py` (systemd user service, `scripts/install-guard.sh`) pauses/kills any agent-tier process tree on high CPU/RAM/temperature, and `scripts/at-safe.sh <cmd>` runs a command under hard cgroup limits (memory, CPU, tasks, wall-clock).
+Outside `at`: `scripts/resource-guard.py` (systemd user service, `scripts/install-guard.sh`) pauses/kills any agent-tier process tree on high CPU/RAM/temperature, and `scripts/at-safe.sh <cmd>` runs a command with CPU affinity (4 of 8 cores), nice+ionice, task cap and wall-clock timeout (this host is cgroup v1: RAM is enforced by the guard + `AT_MAX_RSS_MB`, not cgroups).
