@@ -14,6 +14,11 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm run build
 
+FROM golang:1.21-bookworm AS go-builder
+WORKDIR /build
+COPY web-server/ .
+RUN go build -trimpath -ldflags "-s -w" -o /build/at-web ./cmd/at-web
+
 FROM node:22-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
@@ -22,6 +27,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 # `at web` serves the built WebUI from <pkg>/src/webui/dist by default.
 COPY --from=build /app/src/webui/dist ./src/webui/dist
+COPY --from=go-builder /build/at-web ./bin/at-web
 EXPOSE 7800
 ENTRYPOINT ["node", "dist/cli.js"]
 CMD ["web", "--port", "7800", "--host", "0.0.0.0"]

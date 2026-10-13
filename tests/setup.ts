@@ -21,3 +21,6 @@ afterAll(() => {
   rmSync(atDir, { recursive: true, force: true });
   delete process.env.AT_STATE_DIR;
 });
+
+// Tests may run inside an `at` agent (AT_DEPTH>=1); the nested-run guard must not leak into them.
+delete process.env.AT_DEPTH;
