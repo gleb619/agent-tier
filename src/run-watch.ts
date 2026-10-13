@@ -33,6 +33,7 @@ import { recordResult } from "./health";
 import { applyRunName, drainNamingQueue, readLogTail } from "./naming";
 import { isPidAlive } from "./process-utils";
 import { UNNAMED_PLACEHOLDER, updateRun } from "./run-store";
+import { getSafetyLimits, safetyDisabled, startRssWatchdog } from "./safety";
 import { getStateFilePath } from "./state-dir";
 
 export const POLL_INTERVAL_MS = 2000;
@@ -199,7 +200,36 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   try {
     const startedAt = Date.now();
     let lastHeartbeat = startedAt;
+    // Detached runs have no blocking parent to enforce --timeout, so the
+    // supervisor caps runtime and memory itself (laptop-safety, src/safety.ts).
+    const maxRunMs = getSafetyLimits().maxRunMs;
+    const stopRssWatchdog = startRssWatchdog(pid, (rss) => {
+      try {
+        appendFileSync(logFile, `[at] safety: killed ${agent}, process tree RSS ${Math.round(rss)}MB over limit\n`);
+      } catch {
+        // log file may be gone
+      }
+    });
     while (isPidAlive(pid)) {
+      if (!safetyDisabled() && Date.now() - startedAt > maxRunMs) {
+        try {
+          appendFileSync(
+            logFile,
+            `[at] safety: ${agent} exceeded max runtime ${maxRunMs}ms (AT_MAX_RUN_MS), killing\n`,
+          );
+        } catch {
+          // log file may be gone
+        }
+        for (const target of [-pid, pid]) {
+          try {
+            process.kill(target, "SIGKILL");
+          } catch {
+            // already gone / not a group leader
+          }
+        }
+        await sleep(POLL_INTERVAL_MS);
+        break;
+      }
       if (Date.now() - lastHeartbeat >= HEARTBEAT_INTERVAL_MS) {
         lastHeartbeat = Date.now();
         const elapsedMin = Math.round((lastHeartbeat - startedAt) / 60000);
@@ -211,6 +241,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       }
       await sleep(POLL_INTERVAL_MS);
     }
+    stopRssWatchdog();
 
     try {
       // Quota/rate-limit detection: agents killed by provider 429s (mm-code,

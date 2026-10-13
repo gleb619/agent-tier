@@ -45,7 +45,7 @@ describe("resolveFromArgs", () => {
     expect(opts.retries).toBe(0);
     expect(opts.logDir).toBe("/tmp/at-logs");
     expect(opts.noChop).toBe(false);
-    expect(opts.timeout).toBe(3600000);
+    expect(opts.timeout).toBe(1800000);
   });
 
   it("accepts tier as numeric string", () => {

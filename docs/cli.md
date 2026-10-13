@@ -45,7 +45,7 @@ When an agent exits non-zero, `at` automatically picks the next agent in the sam
 |------|----------|
 | `-f, --prompt-file <path>` | Read the prompt from a file — `.md` raw text, `.json` uses its `prompt` field |
 | `-m, --model <name>` | Pass a model name to the agent (agent-specific: arg and/or env) |
-| `--timeout <ms>` | Force-kill the agent after N ms (default: 3600000 = 1h) |
+| `--timeout <ms>` | Force-kill the agent after N ms (default: 1800000 = 30m) |
 | `--no-chop` | Disable chop output-log compression in stream mode (default: enabled when chop is available) |
 | `--state-dir <path>` | Override the state directory (default: `.at/` in CWD if it exists, else `~/.at/`) |
 | `--sse [port]` | Live-progress SSE hub, default port 7777, `0` = random (see [progress.md](progress.md)) |
@@ -292,3 +292,19 @@ viewer, submitted-prompt toggle), **Settings** (default tier/agent/mode/retries,
 Stores (`src/tui/store/`) own the run list, log, settings, sidebar filter and focus zone; prompt
 submission goes through `src/tui/launch.ts`. The TUI entry module is `src/tui-entry.ts`.
 
+
+## Safety limits (laptop protection)
+
+`at` refuses to start a run, and kills runaway ones, so a bad agent can't freeze the machine (`src/safety.ts`):
+
+| Env | Default | Effect |
+| :-- | :------ | :----- |
+| `AT_MAX_CONCURRENT` | 3 | refuse to start when this many runs are already running |
+| `AT_MIN_AVAIL_MB` | 3072 | refuse to start below this much available RAM |
+| `AT_MAX_START_TEMP_C` | 80 | refuse to start when any thermal zone is this hot |
+| `AT_MAX_LOAD_PER_CPU` | 1.5 | refuse to start when 1-min load > cpus × this |
+| `AT_MAX_RSS_MB` | 6144 | SIGKILL an agent's process group above this RSS (tree total) |
+| `AT_MAX_RUN_MS` | 3600000 | max runtime for detached runs (blocking runs use `--timeout`, default 30m) |
+| `AT_SAFETY=off` | | disable all of the above (not advised) |
+
+Outside `at`: `scripts/resource-guard.py` (systemd user service, `scripts/install-guard.sh`) pauses/kills any agent-tier process tree on high CPU/RAM/temperature, and `scripts/at-safe.sh <cmd>` runs a command under hard cgroup limits (memory, CPU, tasks, wall-clock).

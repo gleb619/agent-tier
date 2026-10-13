@@ -11,6 +11,7 @@ import { type Hub, type NotifyEvent, setupNotify, startHub, tailLogFile } from "
 import type { RunOptions } from "./resolver";
 import { addRun, loadRuns, UNNAMED_PLACEHOLDER, updateRun } from "./run-store";
 import { spawnRunWatch } from "./run-watch";
+import { assertSafeToStart, startRssWatchdog } from "./safety";
 import { runSandboxTest } from "./sandbox";
 import { getStateFile, pickAgent } from "./scheduler";
 import { getStateFilePath } from "./state-dir";
@@ -361,7 +362,13 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
     console.error(`[at] log stream error (logs at ${logFile}): ${err.message}`);
   });
 
+  const stopRssWatchdog = startRssWatchdog(child.pid!, (rss) => {
+    try {
+      appendFileSync(logFile, `[at] safety: killed ${agent.name}, process tree RSS ${Math.round(rss)}MB over limit\n`);
+    } catch {}
+  });
   const { code, signal } = await Promise.race([agentExit, timeoutP]);
+  stopRssWatchdog();
   clearTimeout(timeoutHandle!);
 
   if (streamPid !== undefined) {
@@ -451,6 +458,7 @@ export async function run(options: RunOptions, agents: AgentDef[], spawner: Spaw
   process.once("SIGINT", cleanup);
 
   try {
+    assertSafeToStart(options.stateDir);
     const runId = generateRunId();
     const stateFilePath = getStateFilePath(options.stateDir);
     const healthState = loadHealth(stateFilePath);

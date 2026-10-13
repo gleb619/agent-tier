@@ -62,7 +62,7 @@ function readProcStat(pid: number): ProcStat | null {
  * Walks /proc and builds a child map by parsing ppid from each /proc/<pid>/stat,
  * then BFS-down from root. Returns null if root itself is unreadable.
  */
-function collectProcessTree(rootPid: number): number[] | null {
+export function collectProcessTree(rootPid: number): number[] | null {
   const root = readProcStat(rootPid);
   if (!root) return null;
   const childrenByPpid = new Map<number, number[]>();
@@ -115,4 +115,20 @@ export function getProcessTicks(pid: number): number | null {
     total += (stat.utime + stat.stime) * tickMs;
   }
   return total;
+}
+
+/** Resident set size (MB) of `pid` plus all descendants; null if root is gone. */
+export function getProcessTreeRssMb(pid: number): number | null {
+  const pids = collectProcessTree(pid);
+  if (!pids) return null;
+  let kb = 0;
+  for (const p of pids) {
+    try {
+      const m = /VmRSS:\s+(\d+)\s+kB/.exec(readFileSync(`/proc/${p}/status`, "utf8"));
+      if (m) kb += Number(m[1]);
+    } catch {
+      // process exited mid-scan
+    }
+  }
+  return kb / 1024;
 }
