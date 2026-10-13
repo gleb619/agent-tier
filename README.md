@@ -76,6 +76,7 @@ Long-form docs live in [`docs/`](docs/):
 - [docs/cli.md](docs/cli.md) — sending prompts, output modes, retry, `--verify` hook, JSON mode, [`at compose`](docs/cli.md#compose-plan--implement--check)
 - [docs/progress.md](docs/progress.md) — live progress (SSE), event schema, adapters, discuss channel
 - [docs/kanban.md](docs/kanban.md) — Markdown task board schema, compose + kanban orchestration
+- [docs/layout.md](docs/layout.md) — canonical ASCII layout shared by TUI + WebUI
 - [docs/agents.md](docs/agents.md) — tiers, agent tables, binary resolution, plugins, configuration
 - [docs/architecture.md](docs/architecture.md) — source map, design points, state locking, adding agents
 - [docs/webui.md](docs/webui.md) — WebUI: `at web` server, API endpoints, dev + Docker

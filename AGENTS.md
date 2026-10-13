@@ -133,6 +133,7 @@ Line order is stored in `~/.at/config.json` (`"line": ["agent", ...]`, HMAC-sign
 - [docs/progress.md](docs/progress.md) — SSE events, adapters, discuss channel
 - [docs/kanban.md](docs/kanban.md) — task board schema, compose + kanban orchestration
 - [docs/agents.md](docs/agents.md) — agent tables, binary resolution, plugins, configuration
+- [docs/layout.md](docs/layout.md) — canonical ASCII layout shared by TUI + WebUI
 
 ## Formatting & lint
 

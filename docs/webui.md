@@ -4,6 +4,8 @@ Browser UI for `at`, served by `at web`. Svelte 4 + Vite + Tailwind, source in
 [`src/webui`](../src/webui) (a pnpm workspace member with its own
 `package.json`; deps install via the root `pnpm install`).
 
+> Layout (shared with the TUI): see [layout.md](layout.md).
+
 ## Run
 
 ```bash
