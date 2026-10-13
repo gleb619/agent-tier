@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { Command } from "commander";
-import { resolveWebUiStaticDir } from "../web/server";
+import { resolveWebUiStaticDir } from "../static-dir";
 
 const DEFAULT_PORT = "7800";
 const DEFAULT_HOST = "127.0.0.1";

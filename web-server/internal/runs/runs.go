@@ -239,7 +239,7 @@ func ScopeOf(dir string) string {
 }
 
 // FindRun locates a run by full or prefix id across the joined dirs
-// (dir order = precedence), like findRun in src/web/server.ts. Returns the
+// (dir order = precedence), like findRun in web-server/internal/api. Returns the
 // raw stored record — no status annotation.
 func FindRun(dirs []string, id string) (RunRecord, string, bool) {
 	if id == "" {

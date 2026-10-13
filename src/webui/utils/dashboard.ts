@@ -2,7 +2,7 @@ import type { ApiStats } from "$types/api";
 import type { DashboardStat } from "$types/dashboard";
 
 /**
- * Derive the QuickStats tiles from `GET /api/stats` (src/web/server.ts).
+ * Derive the QuickStats tiles from `GET /api/stats` (web-server/internal/api).
  * Pure view-model mapping — no extra fetching.
  */
 export function deriveDashboardStats(stats: ApiStats): DashboardStat[] {

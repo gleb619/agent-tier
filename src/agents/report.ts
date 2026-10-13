@@ -18,7 +18,7 @@ export interface AgentReportEntry {
 const HEALTH_DEFAULTS = { deactivated: false, failures: 0, lastFailure: null, disabledTo: null };
 
 /** Merge the agent registry with per-dir health state (earlier dir wins per
- *  name), exactly like the /api/agents handler in src/web/server.ts. */
+ *  name), exactly like the /api/agents handler in web-server/internal/api. */
 export function buildAgentsReport(stateDirs: string[]): AgentReportEntry[] {
   const healthByName = new Map(buildStateReportFor(stateDirs).agents.map((a) => [a.name, a]));
   return [...AGENTS, ...loadGenericAgents()].map((a) => ({

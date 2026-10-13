@@ -30,8 +30,7 @@ If no binary is found, the command prints a build hint and exits.
 
 ## API
 
-Implemented by the Go server `web-server/internal/api` (byte-compatible with
-the original Node server in `src/web/server.ts`):
+Implemented by the Go server `web-server/internal/api`:
 
 | Endpoint | Description |
 | :------- | :---------- |

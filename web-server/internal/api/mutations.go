@@ -43,7 +43,7 @@ type agentEntry struct {
 	DisabledTo  *string `json:"disabledTo"`
 }
 
-// buildAtArgs mirrors buildAtArgs in src/web/server.ts: -p prompt, plus
+// buildAtArgs mirrors buildAtArgs in web-server/internal/api: -p prompt, plus
 // -a agent / -t tier when present.
 func buildAtArgs(prompt string, agent *string, tier *int) []string {
 	args := []string{"-p", prompt}
@@ -57,9 +57,9 @@ func buildAtArgs(prompt string, agent *string, tier *int) []string {
 }
 
 // defaultSpawnAt launches the `at` CLI detached in its own session (like the
-// Node runner), with AT_STATE_DIR pinned to the primary state dir so the
+// at runner), with AT_STATE_DIR pinned to the primary state dir so the
 // child lands its run record where this server reads. Spawn errors are
-// ignored, matching the Node server's fire-and-forget spawnAt.
+// ignored, matching the original server's fire-and-forget spawnAt.
 func (s *Server) defaultSpawnAt(args ...string) error {
 	cmd := exec.Command(s.AtBin, args...)
 	env := append(os.Environ(), "AT_STATE_DIR="+s.StateDirs[0])
@@ -77,7 +77,7 @@ func (s *Server) defaultSpawnAt(args ...string) error {
 	cmd.Stderr = devnull
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
-		return nil //nolint:nilerr // fire-and-forget, same as the Node server
+		return nil //nolint:nilerr // fire-and-forget, same as the original server
 	}
 	return cmd.Process.Release()
 }
@@ -314,7 +314,7 @@ func isGenericAgent(agent string) bool {
 // handleAgentAction implements PUT /api/agents/:name/enable|disable by
 // delegating to `at enable|disable` (the CLI owns state.json and its lock).
 // An agent is known if it is a builtin or a generic agent, mirroring
-// [...AGENTS, ...loadGenericAgents()] in src/web/server.ts.
+// [...AGENTS, ...loadGenericAgents()] in web-server/internal/api.
 func (s *Server) handleAgentAction(w http.ResponseWriter, r *http.Request, nameSegment, action string) {
 	name, err := urlUnescape(nameSegment)
 	if err != nil || name == "" {

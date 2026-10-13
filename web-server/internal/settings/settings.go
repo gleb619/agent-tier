@@ -1,6 +1,6 @@
 // Package settings loads and persists `<stateDir>/web-settings.json` — the
 // WebUI defaults store served by GET/PUT /api/settings. Writes are atomic
-// (temp file + rename) and formatted like the Node server: 2-space indent,
+// (temp file + rename) and formatted like the original server: 2-space indent,
 // trailing newline.
 package settings
 

@@ -1,5 +1,5 @@
 // Shared WebUI REST contract: the same cases run against ANY backend that
-// claims Node-server parity (src/web/server.ts) — the in-process Node server
+// claims backend parity (web-server/internal/api) — the Go at-web server
 // (tests/web-server.test.ts) and the Go at-web binary
 // (tests/web-server-go.test.ts). Each wrapper provides start()/spawnedArgs();
 // everything else (fixtures, requests, assertions) lives here.

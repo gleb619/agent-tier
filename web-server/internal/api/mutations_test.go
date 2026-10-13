@@ -36,7 +36,7 @@ func seedRunFile(t *testing.T, dir, content string) {
 	}
 }
 
-// TestPostRunsValidation mirrors the Node server's POST /api/runs checks.
+// TestPostRunsValidation mirrors the original server's POST /api/runs checks.
 func TestPostRunsValidation(t *testing.T) {
 	dir := t.TempDir()
 	s := newServer([]string{dir}, "")
@@ -66,7 +66,7 @@ func TestPostRunsValidation(t *testing.T) {
 }
 
 // TestPostRunsSpawnArgs verifies the exact argv passed to the detached at
-// CLI, mirroring buildAtArgs in src/web/server.ts.
+// CLI, mirroring buildAtArgs in web-server/internal/api.
 func TestPostRunsSpawnArgs(t *testing.T) {
 	dir := t.TempDir()
 	s := newServer([]string{dir}, "")

@@ -12,7 +12,7 @@ vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
 }));
 
-vi.mock("../../src/web/server", () => ({
+vi.mock("../../src/static-dir", () => ({
   resolveWebUiStaticDir: vi.fn().mockImplementation((explicit?: string) => explicit ?? "/mock/static"),
 }));
 
@@ -36,7 +36,7 @@ function createFakeChild(servingLine = "[at-web] serving on http://127.0.0.1:876
     child.emit("exit", 0, signal);
   });
   setImmediate(() => {
-    stderr.emit("data", Buffer.from(servingLine + "\n"));
+    stderr.emit("data", Buffer.from(`${servingLine}\n`));
   });
   return child;
 }

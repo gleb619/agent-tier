@@ -1,5 +1,5 @@
 /**
- * DTOs matching what `at web` (src/web/server.ts) actually returns.
+ * DTOs matching what `at web` (web-server/internal/api) actually returns.
  * These are the wire shapes — keep in sync with src/run-store.ts (RunRecord),
  * src/notify/types.ts (NotifyEvent) and the server handlers.
  */

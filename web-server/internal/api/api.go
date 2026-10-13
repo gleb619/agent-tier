@@ -1,5 +1,5 @@
 // Package api exposes the WebUI HTTP surface, byte-compatible with the Node
-// server (src/web/server.ts): /api/runs (GET/POST), /api/runs/:id
+// server (web-server/internal/api): /api/runs (GET/POST), /api/runs/:id
 // (GET/DELETE), /api/runs/:id/retry, /api/runs/:id/log, /api/agents
 // (GET + PUT enable/disable), /api/stats, GET/PUT /api/settings, plus static
 // SPA serving. Mutations delegate to the `at` CLI (spawn for runs, `at

@@ -20,7 +20,7 @@ export class ApiError extends Error {
   }
 }
 
-/** Typed fetch client for the `at web` REST API (src/web/server.ts). */
+/** Typed fetch client for the `at web` REST API (web-server/internal/api). */
 export class ApiClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
