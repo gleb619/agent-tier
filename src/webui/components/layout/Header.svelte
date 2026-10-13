@@ -1,5 +1,6 @@
 <script lang="ts">
 import { PanelLeft } from "lucide-svelte";
+import InstallButton from "$components/common/InstallButton.svelte";
 import { sidebarOpen } from "$stores/ui";
 import StatusBar from "./StatusBar.svelte";
 </script>
@@ -15,7 +16,8 @@ import StatusBar from "./StatusBar.svelte";
     <PanelLeft size={18} aria-hidden="true" />
   </button>
   <h1 class="text-base font-semibold text-primary-700">at — WebUI</h1>
-  <div class="ml-auto">
+  <div class="ml-auto flex items-center gap-2">
+    <InstallButton variant="secondary" size="sm" />
     <StatusBar />
   </div>
 </header>

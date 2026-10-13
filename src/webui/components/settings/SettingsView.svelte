@@ -2,9 +2,11 @@
 import Button from "$components/common/Button.svelte";
 import Card from "$components/common/Card.svelte";
 import Input from "$components/common/Input.svelte";
+import InstallButton from "$components/common/InstallButton.svelte";
 import Select from "$components/common/Select.svelte";
 import Toggle from "$components/common/Toggle.svelte";
 import { agents, refreshDashboard } from "$stores/dashboard";
+import { pwaInstall } from "$stores/pwa";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings, settings } from "$stores/settings";
 import { showToast } from "$stores/toast";
 import { MAX_RETRIES, RUN_MODES } from "$utils/newtask";
@@ -108,6 +110,20 @@ async function save(): Promise<void> {
         </div>
       </div>
       <p class="text-xs text-gray-500">SSE port: 1-{MAX_SSE_PORT}. Empty advanced fields clear the stored value.</p>
+    </div>
+  </Card>
+
+  <Card>
+    <div class="flex flex-col gap-3" data-testid="install-card">
+      <h3 class="text-sm font-semibold text-gray-900">App install</h3>
+      <p class="text-xs text-gray-500">Install at as a standalone app for quicker access.</p>
+      {#if $pwaInstall.canInstall}
+        <InstallButton variant="primary" size="md" />
+      {:else if $pwaInstall.isInstalled}
+        <p class="text-sm text-success-dark">Installed</p>
+      {:else}
+        <p class="text-sm text-gray-600">Install prompt not available in this browser.</p>
+      {/if}
     </div>
   </Card>
 

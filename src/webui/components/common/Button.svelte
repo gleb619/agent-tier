@@ -23,5 +23,6 @@ const sizes: Record<string, string> = {
 </script>
 
 <button {type} {disabled} class={clsx(base, variants[variant], sizes[size])} on:click={onClick}>
+  <slot name="icon" />
   {label}
 </button>

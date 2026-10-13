@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-label="at logo maskable">
+  <rect width="512" height="512" fill="#2563eb"/>
+  <g fill="none" stroke="#ffffff" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"
+     transform="translate(46,46) scale(0.82)">
+    <polyline points="96 176 256 256 96 336"/>
+    <line x1="320" y1="336" x2="416" y2="336"/>
+  </g>
+</svg>

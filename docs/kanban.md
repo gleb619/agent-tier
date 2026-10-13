@@ -40,7 +40,7 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T19 | Done        | Wire Go backend           | at web launches at-web; build:go, Dockerfile, docs         | High     | loop  | -      | T18               | docs/plans/webui-16-go-integration-docker.md |
 | T20 | Done        | Remove Node web server    | delete src/web/server.ts after Go e2e green                | Medium   | loop  | -      | T19               | docs/plans/webui-17-remove-node-server.md    |
 | T21 | Done        | SPA routing + lazy views  | history router, deep links, code-split views               | Medium   | loop  | -      | T15               | docs/plans/webui-18-spa-routing.md           |
-| T22 | Backlog     | PWA manifest              | manifest, icons, install prompt                            | Medium   | loop  | -      | T21               | docs/plans/webui-19-pwa-manifest.md          |
+| T22 | Done        | PWA manifest              | manifest, icons, install prompt                            | Medium   | loop  | -      | T21               | docs/plans/webui-19-pwa-manifest.md          |
 | T23 | Backlog     | Service worker            | precache, SWR api cache, offline queue, SW messaging       | High     | loop  | -      | T22               | docs/plans/webui-20-service-worker.md        |
 | T24 | Backlog     | WebUI performance         | preload/prefetch, brotli, budgets                          | Medium   | loop  | -      | T21               | docs/plans/webui-21-performance.md           |
 | T25 | Backlog     | PWA/perf E2E + Lighthouse | offline e2e, lighthouse gate                               | Medium   | loop  | -      | T23,T24,T19       | docs/plans/webui-22-pwa-perf-e2e.md          |
