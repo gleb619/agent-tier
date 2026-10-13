@@ -55,7 +55,7 @@ Options:
   --wait                   Block until the agent exits (enables timeout, retry, real exit code)
   --no-chop                Disable chop output-log compression in stream mode (default: enabled when chop is available)
   -r, --retries <number>   Max extra retry attempts with next agent in tier (default: 0). Named agents never retry
-  --timeout <ms>           Force-kill agent after N milliseconds (default: 1800000 = 30m)
+  --timeout <ms>           Force-kill agent after N milliseconds (default: 3600000 = 1h)
   --state-dir <path>       State directory (default: .at/ in CWD if it exists, else ~/.at/)
   --log-dir <path>         Log file directory for detached mode (default: /tmp/at-logs)
   --callback <command>     Shell command to run after the agent job finishes (AT_* env vars)

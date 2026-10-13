@@ -46,7 +46,7 @@ export function registerDefaultCommand(program: Command): void {
     )
     .option("--state-dir <path>", "State directory (default: .at/ in CWD if exists, else ~/.at/)")
     .option("--log-dir <path>", "Log file directory for detached mode", "/tmp/at-logs")
-    .option("--timeout <ms>", "Force-kill agent after N milliseconds (default: 1800000 = 30m)", "1800000")
+    .option("--timeout <ms>", "Force-kill agent after N milliseconds (default: 3600000 = 1h)", "3600000")
     .option("-m, --model <name>", "Model name to pass to the agent")
     .option(
       "--callback <command>",

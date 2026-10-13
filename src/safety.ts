@@ -27,12 +27,12 @@ function num(name: string, fallback: number): number {
 
 export function getSafetyLimits(): SafetyLimits {
   return {
-    maxConcurrent: num("AT_MAX_CONCURRENT", 3),
-    minAvailMb: num("AT_MIN_AVAIL_MB", 3072),
-    maxStartTempC: num("AT_MAX_START_TEMP_C", 80),
-    maxLoadPerCpu: num("AT_MAX_LOAD_PER_CPU", 1.5),
-    maxRssMb: num("AT_MAX_RSS_MB", 6144),
-    maxRunMs: num("AT_MAX_RUN_MS", 3_600_000),
+    maxConcurrent: num("AT_MAX_CONCURRENT", 4),
+    minAvailMb: num("AT_MIN_AVAIL_MB", 2048),
+    maxStartTempC: num("AT_MAX_START_TEMP_C", 85),
+    maxLoadPerCpu: num("AT_MAX_LOAD_PER_CPU", 2.5),
+    maxRssMb: num("AT_MAX_RSS_MB", 10240),
+    maxRunMs: num("AT_MAX_RUN_MS", 7_200_000),
   };
 }
 

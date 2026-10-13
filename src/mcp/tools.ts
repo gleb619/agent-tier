@@ -26,7 +26,7 @@ export const AT_TOOLS: Tool[] = [
         agent: { type: "string", description: "Specific agent name, or omit for auto routing" },
         model: { type: "string", description: "Model name to pass to agent" },
         retries: { type: "number", description: "Max extra retry attempts (default: 0)" },
-        timeout: { type: "number", description: "Timeout ms (default: 1800000)" },
+        timeout: { type: "number", description: "Timeout ms (default: 3600000)" },
         callback: { type: "string", description: "Shell command to run after the agent job finishes" },
         sse: { type: "boolean", description: "Enable SSE live-progress hub" },
         ssePort: { type: "number", description: "SSE hub port (0=random)" },

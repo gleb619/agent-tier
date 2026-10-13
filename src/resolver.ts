@@ -106,7 +106,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
   // No implicit default — absent tier means line mode.
   const tier = argv.tier !== undefined ? parseTier(argv.tier, "argv") : undefined;
 
-  const timeoutMs = Number(argv.timeout ?? 1800000);
+  const timeoutMs = Number(argv.timeout ?? 3600000);
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("timeout must be a positive number (ms)");
 
   const retriesNum = Number(argv.retries ?? 0);

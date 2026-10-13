@@ -26,20 +26,20 @@ import time
 
 CONFIG = {
     "INTERVAL_S": 3.0,
-    "PROC_RSS_MAX_MB": 6144,      # one process tree
-    "TREE_CPU_MAX_PCT": 300.0,    # one tree, 100 = one core
-    "CPU_SUSTAIN_S": 40,
-    "AGG_CPU_MAX_PCT": 450.0,     # all targets together (of nproc*100)
-    "AGG_CPU_SUSTAIN_S": 60,
-    "AGG_RSS_MAX_MB": 10240,
-    "MIN_AVAIL_MB": 3072,         # system MemAvailable floor
-    "PAUSE_C": 82.0,
-    "RESUME_C": 72.0,
-    "KILL_C": 92.0,
+    "PROC_RSS_MAX_MB": 12288,      # one process tree
+    "TREE_CPU_MAX_PCT": 600.0,    # one tree, 100 = one core
+    "CPU_SUSTAIN_S": 120,
+    "AGG_CPU_MAX_PCT": 700.0,     # all targets together (of nproc*100)
+    "AGG_CPU_SUSTAIN_S": 180,
+    "AGG_RSS_MAX_MB": 18432,
+    "MIN_AVAIL_MB": 2048,         # system MemAvailable floor
+    "PAUSE_C": 87.0,
+    "RESUME_C": 77.0,
+    "KILL_C": 95.0,
     "TEMP_SUSTAIN_S": 9,
-    "PAUSE_MAX_S": 600,
+    "PAUSE_MAX_S": 1200,
     "TERM_GRACE_S": 5,
-    "MAX_AT_RUNS": 6,             # fan-out breaker: concurrent `at` supervisors (run-watch.js)
+    "MAX_AT_RUNS": 8,             # fan-out breaker: concurrent `at` supervisors (run-watch.js)
 }
 for _k, _v in list(CONFIG.items()):
     _e = os.environ.get("AT_GUARD_" + _k)
