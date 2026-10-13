@@ -1,0 +1,15 @@
+[Unit]
+Description=agent-tier resource guard (kills/pauses runaway at/build/test work)
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -I %h/WORKSPACE/agent-tier/scripts/resource-guard.py
+Restart=always
+RestartSec=2
+CPUQuota=15%
+MemoryMax=128M
+OOMScoreAdjust=-500
+
+[Install]
+WantedBy=default.target
