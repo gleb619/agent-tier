@@ -165,6 +165,117 @@ func TestSPAFallbackForRoutePaths(t *testing.T) {
 	}
 }
 
+// makeCompressedDir is makeStaticDir plus .br/.gz siblings for app.js.
+func makeCompressedDir(t *testing.T) string {
+	t.Helper()
+	dir := makeStaticDir(t)
+	js := []byte("console.log(1)")
+	for _, suffix := range []string{".br", ".gz"} {
+		if err := os.WriteFile(filepath.Join(dir, "app.js"+suffix), append([]byte(suffix+":"), js...), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func serveEncoded(t *testing.T, dir, target, acceptEncoding string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, target, nil)
+	if acceptEncoding != "" {
+		req.Header.Set("Accept-Encoding", acceptEncoding)
+	}
+	rec := httptest.NewRecorder()
+	Handler(dir).ServeHTTP(rec, req)
+	return rec
+}
+
+func TestServesPrecompressedBrotli(t *testing.T) {
+	dir := makeCompressedDir(t)
+	rec := serveEncoded(t, dir, "/app.js", "gzip, deflate, br")
+	if rec.Code != 200 {
+		t.Fatalf("GET /app.js = %d", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "br" {
+		t.Fatalf("Content-Encoding = %q, want br", got)
+	}
+	if got := rec.Header().Get("Vary"); !strings.Contains(got, "Accept-Encoding") {
+		t.Fatalf("Vary = %q, want Accept-Encoding", got)
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.Contains(got, "javascript") {
+		t.Fatalf("Content-Type = %q, want javascript", got)
+	}
+	if rec.Body.String() != ".br:console.log(1)" {
+		t.Fatalf("body = %q, want precompressed br bytes", rec.Body.String())
+	}
+}
+
+func TestServesPrecompressedGzipWhenNoBrotli(t *testing.T) {
+	dir := makeCompressedDir(t)
+	rec := serveEncoded(t, dir, "/app.js", "gzip, deflate")
+	if got := rec.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("Content-Encoding = %q, want gzip", got)
+	}
+	if rec.Body.String() != ".gz:console.log(1)" {
+		t.Fatalf("body = %q, want precompressed gzip bytes", rec.Body.String())
+	}
+}
+
+func TestServesIdentityWithoutAcceptEncoding(t *testing.T) {
+	dir := makeCompressedDir(t)
+	rec := serveEncoded(t, dir, "/app.js", "")
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, want none", got)
+	}
+	if rec.Body.String() != "console.log(1)" {
+		t.Fatalf("body = %q, want original bytes", rec.Body.String())
+	}
+}
+
+func TestSkipsEncodingRejectedWithQ0(t *testing.T) {
+	dir := makeCompressedDir(t)
+	rec := serveEncoded(t, dir, "/app.js", "br;q=0, gzip;q=0")
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, want none when q=0", got)
+	}
+	// Unlisted codings are not acceptable (RFC 9110 §12.5.3): br rejected
+	// alone leaves only the identity representation.
+	rec = serveEncoded(t, dir, "/app.js", "br;q=0")
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, want none when only br is listed and rejected", got)
+	}
+	if rec.Body.String() != "console.log(1)" {
+		t.Fatalf("body = %q, want original bytes", rec.Body.String())
+	}
+}
+
+func TestNoVariantsMeansNoContentEncodingOrVary(t *testing.T) {
+	dir := makeStaticDir(t)
+	rec := serveEncoded(t, dir, "/styles.css", "br, gzip")
+	if got := rec.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("Content-Encoding = %q, want none (no variants on disk)", got)
+	}
+	if got := rec.Header().Get("Vary"); strings.Contains(got, "Accept-Encoding") {
+		t.Fatalf("Vary = %q, want no Accept-Encoding without variants", got)
+	}
+}
+
+func TestPrecompressedETagAnd304(t *testing.T) {
+	dir := makeCompressedDir(t)
+	first := serveEncoded(t, dir, "/app.js", "br")
+	etag := first.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("no ETag header")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/app.js", nil)
+	req.Header.Set("Accept-Encoding", "br")
+	req.Header.Set("If-None-Match", etag)
+	rec := httptest.NewRecorder()
+	Handler(dir).ServeHTTP(rec, req)
+	if rec.Code != 304 {
+		t.Fatalf("If-None-Match = %d, want 304", rec.Code)
+	}
+}
+
 func TestServesSwWithServiceWorkerAllowedHeader(t *testing.T) {
 	dir := makeStaticDir(t)
 	rec := serve(t, dir, "/sw.js")

@@ -4,6 +4,7 @@ import { Activity, LayoutDashboard, PlusSquare, Settings } from "lucide-svelte";
 import Tooltip from "$components/common/Tooltip.svelte";
 import { currentView, setCurrentView, sidebarOpen } from "$stores/ui";
 import type { ViewType } from "$types/index";
+import { prefetchView } from "$utils/prefetch";
 
 const items: { id: ViewType; label: string; shortcut: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", shortcut: "1", icon: LayoutDashboard },
@@ -28,6 +29,8 @@ const items: { id: ViewType; label: string; shortcut: string; icon: typeof Layou
           !$sidebarOpen && "max-md:justify-start md:justify-center md:px-0",
         )}
         on:click={() => setCurrentView(item.id)}
+        on:mouseenter={() => prefetchView(item.id)}
+        on:focus={() => prefetchView(item.id)}
       >
         <Icon size={16} aria-hidden="true" />
         {#if $sidebarOpen}

@@ -2,12 +2,15 @@ import { resolve } from "node:path";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import preprocess from "svelte-preprocess";
 import { defineConfig } from "vitest/config";
+import { perf } from "./plugins/perf";
 import { swManifest } from "./plugins/sw-manifest";
 
 // WebUI lives in src/webui of the at repo; this config is the Vite root.
 // Dev server proxies /api to the `at web` API server (default port 7800).
 export default defineConfig({
-  plugins: [svelte({ preprocess: preprocess() }), swManifest()],
+  // Order matters: sw-manifest finalizes sw.js before perf injects resource
+  // hints into index.html and writes precompressed .br/.gz siblings.
+  plugins: [svelte({ preprocess: preprocess() }), swManifest(), perf()],
   resolve: {
     alias: {
       $: resolve(__dirname, "."),

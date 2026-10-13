@@ -281,72 +281,82 @@ describe("sse stores + glue", () => {
 
   it("startGlobalEvents refetches on status-bearing events only and folds events into the runs store", async () => {
     stubLocalStorage();
-    const { SSE_CLOSED } = await import("../api/sse");
-    const { startGlobalEvents } = await import("../stores/sse");
-    const { runs } = await import("../stores/runs");
+    vi.useFakeTimers();
+    try {
+      const { SSE_CLOSED } = await import("../api/sse");
+      const { startGlobalEvents } = await import("../stores/sse");
+      const { runs } = await import("../stores/runs");
 
-    const listeners = new Map<string, ((ev: { data: string; lastEventId: string }) => void)[]>();
-    let refetches = 0;
-    const conn = startGlobalEvents(
-      () => {
-        refetches += 1;
-      },
-      {
-        createSource: () => {
-          const src = {
-            listeners,
-            onopen: null as (() => void) | null,
-            onerror: null as (() => void) | null,
-            readyState: 1,
-            addEventListener: (t: string, cb: (ev: { data: string; lastEventId: string }) => void) => {
-              listeners.set(t, [...(listeners.get(t) ?? []), cb]);
-            },
-            close: () => {
-              src.readyState = SSE_CLOSED;
-            },
-          };
-          return src as unknown as import("../api/sse").SseSource;
+      const listeners = new Map<string, ((ev: { data: string; lastEventId: string }) => void)[]>();
+      let refetches = 0;
+      const conn = startGlobalEvents(
+        () => {
+          refetches += 1;
         },
-      },
-    );
-    conn.connect();
+        {
+          createSource: () => {
+            const src = {
+              listeners,
+              onopen: null as (() => void) | null,
+              onerror: null as (() => void) | null,
+              readyState: 1,
+              addEventListener: (t: string, cb: (ev: { data: string; lastEventId: string }) => void) => {
+                listeners.set(t, [...(listeners.get(t) ?? []), cb]);
+              },
+              close: () => {
+                src.readyState = SSE_CLOSED;
+              },
+            };
+            return src as unknown as import("../api/sse").SseSource;
+          },
+        },
+      );
+      conn.connect();
 
-    const dispatch = (type: string, data: unknown) => {
-      for (const cb of listeners.get(type) ?? []) cb({ data: JSON.stringify(data), lastEventId: "" });
-    };
-    const event = (type: string) => ({ runId: "r1", agent: "mock", ts: "t", seq: 1, type }) as const;
+      const dispatch = (type: string, data: unknown) => {
+        for (const cb of listeners.get(type) ?? []) cb({ data: JSON.stringify(data), lastEventId: "" });
+      };
+      const event = (type: string) => ({ runId: "r1", agent: "mock", ts: "t", seq: 1, type }) as const;
 
-    dispatch("message", event("message"));
-    expect(refetches).toBe(0);
+      dispatch("message", event("message"));
+      vi.advanceTimersByTime(200);
+      expect(refetches).toBe(0);
 
-    dispatch("start", event("start"));
-    expect(refetches).toBe(1);
+      // Refetches are debounced (100ms trailing): advance past the window.
+      dispatch("start", event("start"));
+      vi.advanceTimersByTime(200);
+      expect(refetches).toBe(1);
 
-    dispatch("done", event("done"));
-    expect(refetches).toBe(2);
+      dispatch("done", event("done"));
+      vi.advanceTimersByTime(200);
+      expect(refetches).toBe(2);
 
-    dispatch("rename", event("rename"));
-    expect(refetches).toBe(3);
+      dispatch("rename", event("rename"));
+      vi.advanceTimersByTime(200);
+      expect(refetches).toBe(3);
 
-    // Status folding still applies (base glue runs before the refetch hook).
-    runs.set([
-      {
-        runId: "r1",
-        agent: "mock",
-        tier: 4,
-        pid: 1,
-        prompt: "p",
-        logFile: "/tmp/r1.log",
-        startedAt: "2026-10-11T10:00:00.000Z",
-        finishedAt: null,
-        exitCode: null,
-        status: "running",
-        name: "UNNAMED",
-      },
-    ]);
-    dispatch("done", { runId: "r1", agent: "mock", ts: "t", seq: 2, type: "done" });
-    expect(get(runs)[0]?.status).toBe("done");
+      // Status folding still applies (base glue runs before the refetch hook).
+      runs.set([
+        {
+          runId: "r1",
+          agent: "mock",
+          tier: 4,
+          pid: 1,
+          prompt: "p",
+          logFile: "/tmp/r1.log",
+          startedAt: "2026-10-11T10:00:00.000Z",
+          finishedAt: null,
+          exitCode: null,
+          status: "running",
+          name: "UNNAMED",
+        },
+      ]);
+      dispatch("done", { runId: "r1", agent: "mock", ts: "t", seq: 2, type: "done" });
+      expect(get(runs)[0]?.status).toBe("done");
 
-    conn.close();
+      conn.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

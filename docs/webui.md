@@ -52,11 +52,47 @@ Any non-`/api` path falls back to the SPA shell (`index.html`).
 pnpm run build:go     # build the Go backend into bin/at-web (skips if go is missing)
 pnpm run web:dev      # vite dev server on :3000, proxies /api → at web :7800
 pnpm run web:build    # production build into src/webui/dist
+pnpm run web:analyze  # build + per-chunk size report vs budgets (exit 1 over budget)
 pnpm run web:check    # svelte-check against tsconfig.webui.json
 ```
 
 Start the API alongside (`at web`) for a live backend; without it the dev
 server only serves the frontend.
+
+## Performance
+
+Build-time (`src/webui/plugins/perf.ts`, runs at the end of `vite build`):
+
+- Injects resource hints into `index.html`: `modulepreload` for the entry
+  chunk and its static imports, `prefetch` for the lazy view chunks.
+- Writes precompressed `.br` (brotli q11) / `.gz` siblings for every text
+  asset (html/js/css/svg/manifest/maps), so the server never compresses.
+- The SW precache manifest excludes the `.br`/`.gz` siblings.
+
+Runtime (`src/webui/utils/prefetch.ts`):
+
+- Nav buttons prefetch their view chunk on hover/focus; all lazy views are
+  prefetched at low priority via `requestIdleCallback` after boot.
+- SSE refetches are debounced 100ms trailing (`src/webui/utils/debounce.ts`),
+  so a burst of start/done events collapses into one `GET /api/runs`.
+
+Server (`web-server/internal/static`):
+
+- Content negotiation: serves `.br`/`.gz` variants by `Accept-Encoding`
+  q-value (br preferred on ties), with `Vary: Accept-Encoding`, `ETag` and
+  304 revalidation on the served representation. `at-web` itself speaks
+  HTTP/1.1; run it behind a TLS-terminating proxy to get HTTP/2 — the
+  precompressed variants keep paying off either way.
+
+Budgets (enforced by `tests/webui-budget.test.ts` against the built dist):
+
+| Metric (gzip)                    | Budget  | Measured |
+| :------------------------------- | :------ | :------- |
+| Initial load (shell + entry graph) | < 100kB | ~27kB    |
+| Total JS incl. lazy views (§13.2)  | < 200kB | ~46kB    |
+
+`pnpm run web:analyze` prints the same numbers per chunk. Fonts: the UI uses
+a system font stack — no webfonts to subset or self-host.
 
 ## Docker
 

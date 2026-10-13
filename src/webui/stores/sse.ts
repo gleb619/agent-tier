@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { debounce } from "$utils/debounce";
 import { SseManager, type SseManagerOptions } from "../api/sse";
 import { applySseEvent } from "./runs";
 
@@ -51,18 +52,32 @@ export function createSseConnection(url: string, options: Partial<SseManagerOpti
 const REFRESH_EVENT_TYPES = new Set(["start", "done", "error", "rename"]);
 
 /**
+ * Debounce window for refetch coalescing: a burst of start/done events (e.g.
+ * a compose pipeline firing several runs at once) collapses into one
+ * `GET /api/runs` instead of one per event.
+ */
+const REFETCH_DEBOUNCE_MS = 100;
+
+/**
  * Wire the app-wide `/api/events` stream: status folding (createSseConnection
- * glue) plus a refetch for events that introduce or relabel runs — a run
- * started elsewhere (CLI, API POST) is not yet in the store, and folding only
- * updates existing entries.
+ * glue) plus a debounced refetch for events that introduce or relabel runs —
+ * a run started elsewhere (CLI, API POST) is not yet in the store, and folding
+ * only updates existing entries.
  */
 export function startGlobalEvents(refetch: () => void, options: Partial<SseManagerOptions> = {}): SseConnection {
-  return createSseConnection("/api/events", {
+  const debouncedRefetch = debounce(refetch, REFETCH_DEBOUNCE_MS);
+  const conn = createSseConnection("/api/events", {
     onEvent: (event) => {
       lastEventTime.set(new Date());
       applySseEvent(event);
-      if (REFRESH_EVENT_TYPES.has(event.type)) refetch();
+      if (REFRESH_EVENT_TYPES.has(event.type)) debouncedRefetch();
     },
     ...options,
   });
+  const close = conn.close;
+  conn.close = () => {
+    debouncedRefetch.cancel();
+    close();
+  };
+  return conn;
 }

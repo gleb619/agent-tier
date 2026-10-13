@@ -2,7 +2,8 @@
 // unknown, extensionless or directory paths render index.html. Path
 // traversal outside the static dir is rejected; responses carry ETag,
 // Last-Modified and Cache-Control (immutable for hashed assets, no-cache for
-// index.html/sw.js).
+// index.html/sw.js). Text assets are served precompressed (.br/.gz siblings
+// generated at build time) when the client advertises support.
 package static
 
 import (
@@ -77,7 +78,13 @@ func Handler(dir string) http.Handler {
 			}
 		}
 
-		data, err := os.ReadFile(filePath)
+		hasBrotli := fileExists(filePath + ".br")
+		hasGzip := fileExists(filePath + ".gz")
+		encoding := negotiateEncoding(r.Header.Get("Accept-Encoding"), hasBrotli, hasGzip)
+		suffix := map[string]string{"br": ".br", "gzip": ".gz"}[encoding]
+		servePath := filePath + suffix
+
+		data, err := os.ReadFile(servePath)
 		if err != nil {
 			jsonError(w, http.StatusNotFound, "not found")
 			return
@@ -87,6 +94,11 @@ func Handler(dir string) http.Handler {
 		etag := `"` + hex.EncodeToString(sum[:]) + `"`
 		w.Header().Set("ETag", etag)
 		w.Header().Set("Cache-Control", cacheControl(rel, filePath))
+		if encoding != "" || hasBrotli || hasGzip {
+			// Proxies must not cache the encoded variant under a key that
+			// ignores Accept-Encoding.
+			w.Header().Set("Vary", "Accept-Encoding")
+		}
 		if path.Base(rel) == "sw.js" {
 			w.Header().Set("Service-Worker-Allowed", "/")
 		}
@@ -104,6 +116,9 @@ func Handler(dir string) http.Handler {
 			ct = "application/octet-stream"
 		}
 		w.Header().Set("Content-Type", ct)
+		if encoding != "" {
+			w.Header().Set("Content-Encoding", encoding)
+		}
 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 		if r.Method == http.MethodHead {
 			w.WriteHeader(http.StatusOK)
@@ -111,6 +126,59 @@ func Handler(dir string) http.Handler {
 		}
 		w.Write(data) //nolint:errcheck // client gone mid-write is not actionable
 	})
+}
+
+func fileExists(file string) bool {
+	info, err := os.Stat(file)
+	return err == nil && !info.IsDir()
+}
+
+// negotiateEncoding picks the content encoding with the highest q-value the
+// client accepts among the variants present on disk; br wins ties. Empty
+// string means the identity (uncompressed) representation.
+func negotiateEncoding(header string, hasBrotli, hasGzip bool) string {
+	best := ""
+	bestQ := 0.0
+	for _, part := range strings.Split(header, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		name, q, ok := parseEncodingPart(part)
+		if !ok || q <= 0 {
+			continue
+		}
+		avail := (name == "br" && hasBrotli) || (name == "gzip" && hasGzip)
+		if !avail {
+			continue
+		}
+		if q > bestQ || (q == bestQ && best == "gzip" && name == "br") {
+			best, bestQ = name, q
+		}
+	}
+	return best
+}
+
+// parseEncodingPart splits "gzip;q=0.5" into ("gzip", 0.5); q defaults to 1.
+func parseEncodingPart(part string) (string, float64, bool) {
+	pieces := strings.Split(part, ";")
+	name := strings.TrimSpace(pieces[0])
+	if name != "br" && name != "gzip" {
+		return "", 0, false
+	}
+	q := 1.0
+	for _, param := range pieces[1:] {
+		param = strings.TrimSpace(param)
+		if !strings.HasPrefix(param, "q=") {
+			continue
+		}
+		parsed, err := strconv.ParseFloat(strings.TrimPrefix(param, "q="), 64)
+		if err != nil {
+			return "", 0, false
+		}
+		q = parsed
+	}
+	return name, q, true
 }
 
 func matchEtag(header, etag string) bool {

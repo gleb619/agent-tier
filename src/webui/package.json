@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "analyze": "node scripts/analyze-dist.mjs",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ../../tsconfig.webui.json",
     "test": "vitest run --passWithNoTests"

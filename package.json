@@ -28,6 +28,7 @@
     "format:check": "biome format .",
     "ci:check": "bash scripts/ci-check.sh",
     "web:dev": "pnpm -C src/webui dev",
+    "web:analyze": "npm --prefix src/webui run build && npm --prefix src/webui run analyze",
     "web:build": "npm --prefix src/webui run build",
     "web:check": "pnpm -C src/webui check"
   },

@@ -51,6 +51,8 @@ async function collectManifest(base: string, dir: string, exclude: Set<string>):
     }
     const rel = `/${relative(base, full).replace(/\\/g, "/")}`;
     if (exclude.has(rel.replace(/^\/+/, ""))) continue;
+    // Precompressed siblings written by the perf plugin are not precached.
+    if (rel.endsWith(".br") || rel.endsWith(".gz")) continue;
     files.push(rel);
   }
   return files;
