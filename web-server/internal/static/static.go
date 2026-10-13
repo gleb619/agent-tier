@@ -87,6 +87,9 @@ func Handler(dir string) http.Handler {
 		etag := `"` + hex.EncodeToString(sum[:]) + `"`
 		w.Header().Set("ETag", etag)
 		w.Header().Set("Cache-Control", cacheControl(rel, filePath))
+		if path.Base(rel) == "sw.js" {
+			w.Header().Set("Service-Worker-Allowed", "/")
+		}
 		if info, err := os.Stat(filePath); err == nil {
 			w.Header().Set("Last-Modified", info.ModTime().UTC().Format(http.TimeFormat))
 		}

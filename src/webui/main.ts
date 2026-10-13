@@ -1,6 +1,7 @@
+import { pwaInstall } from "$stores/pwa";
 import App from "./App.svelte";
 import "$/styles/tailwind.css";
-import { pwaInstall } from "$stores/pwa";
+import { registerServiceWorker } from "$utils/register-sw";
 import { startRouter } from "$utils/router";
 
 const app = new App({
@@ -9,5 +10,6 @@ const app = new App({
 
 pwaInstall.attach();
 startRouter();
+registerServiceWorker();
 
 export default app;

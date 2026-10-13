@@ -164,3 +164,17 @@ func TestSPAFallbackForRoutePaths(t *testing.T) {
 		}
 	}
 }
+
+func TestServesSwWithServiceWorkerAllowedHeader(t *testing.T) {
+	dir := makeStaticDir(t)
+	rec := serve(t, dir, "/sw.js")
+	if rec.Code != 200 {
+		t.Fatalf("GET /sw.js = %d, want 200", rec.Code)
+	}
+	if got := rec.Header().Get("Service-Worker-Allowed"); got != "/" {
+		t.Fatalf("Service-Worker-Allowed = %q, want /", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); !strings.Contains(got, "no-cache") {
+		t.Fatalf("GET /sw.js cache-control = %q, want no-cache", got)
+	}
+}

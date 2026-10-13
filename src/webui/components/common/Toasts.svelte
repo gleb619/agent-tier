@@ -7,6 +7,11 @@ const kinds: Record<string, string> = {
   success: "border-green-300 bg-green-50 text-green-800",
   error: "border-red-300 bg-red-50 text-red-800",
 };
+
+function runAction(toast: ReturnType<typeof $toasts.valueOf>[number]): void {
+  toast.action?.onClick();
+  dismissToast(toast.id);
+}
 </script>
 
 {#if $toasts.length > 0}
@@ -14,10 +19,24 @@ const kinds: Record<string, string> = {
     {#each $toasts as toast (toast.id)}
       <div
         role="status"
-        class={clsx("flex max-w-xs items-start justify-between gap-3 rounded-md border px-3 py-2 text-sm shadow-lg", kinds[toast.kind])}
+        class={clsx(
+          "flex max-w-xs items-start justify-between gap-3 rounded-md border px-3 py-2 text-sm shadow-lg",
+          kinds[toast.kind],
+        )}
         data-testid="toast"
       >
-        <span>{toast.message}</span>
+        <span class="flex-1">
+          {toast.message}
+          {#if toast.action}
+            <button
+              type="button"
+              class="ml-1 font-medium underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              on:click={() => runAction(toast)}
+            >
+              {toast.action.label}
+            </button>
+          {/if}
+        </span>
         <button
           type="button"
           aria-label="Dismiss"

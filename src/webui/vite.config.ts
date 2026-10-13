@@ -2,11 +2,12 @@ import { resolve } from "node:path";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import preprocess from "svelte-preprocess";
 import { defineConfig } from "vitest/config";
+import { swManifest } from "./plugins/sw-manifest";
 
 // WebUI lives in src/webui of the at repo; this config is the Vite root.
 // Dev server proxies /api to the `at web` API server (default port 7800).
 export default defineConfig({
-  plugins: [svelte({ preprocess: preprocess() })],
+  plugins: [svelte({ preprocess: preprocess() }), swManifest()],
   resolve: {
     alias: {
       $: resolve(__dirname, "."),
@@ -35,11 +36,16 @@ export default defineConfig({
     outDir: "dist",
     sourcemap: true,
     rollupOptions: {
+      input: {
+        index: resolve(__dirname, "index.html"),
+        sw: resolve(__dirname, "sw.ts"),
+      },
       output: {
-        manualChunks: {
-          vendor: ["svelte"],
-          ui: ["lucide-svelte"],
+        entryFileNames: (chunkInfo) => {
+          return chunkInfo.name === "sw" ? "sw.js" : "assets/[name]-[hash].js";
         },
+        chunkFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash][extname]",
       },
     },
   },
