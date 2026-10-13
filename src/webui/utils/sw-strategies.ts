@@ -3,7 +3,13 @@ const CACHE_PREFIX = "at";
 /** Surface version for cache purging on activate(). */
 export const CACHE_VERSION = "v1";
 
-export const SWR_API_PATHS = ["/api/runs", "/api/agents", "/api/stats", "/api/settings"];
+/**
+ * GET paths safe to serve stale-while-revalidate. `/api/settings` is NOT
+ * listed on purpose: the Settings view writes it (PUT) and re-reads after
+ * reload — an SWR-cached GET would serve the pre-PUT snapshot. It falls
+ * through to the network-only strategy.
+ */
+export const SWR_API_PATHS = ["/api/runs", "/api/agents", "/api/stats"];
 
 /** Return a scoped cache name (e.g. `at-precache-v1`). */
 export function cacheName(base: string): string {

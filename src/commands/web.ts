@@ -1,5 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { Command } from "commander";
 import { resolveWebUiStaticDir } from "../static-dir";
@@ -9,6 +10,22 @@ const DEFAULT_HOST = "127.0.0.1";
 const BOOT_TIMEOUT_MS = 30_000;
 
 export class WebBinError extends Error {}
+
+/**
+ * The Go backend delegates mutations to the `at` CLI and needs ONE executable
+ * path (AT_BIN). Write a tiny shim that re-runs this very CLI with the same
+ * node, so it works for dev checkouts (dist/cli.js is not executable), global
+ * installs and containers alike.
+ */
+export function ensureAtShim(nodeBin: string = process.execPath, script: string = process.argv[1] ?? ""): string {
+  const dir = path.join(os.tmpdir(), `at-web-bin-${process.getuid?.() ?? 0}`);
+  mkdirSync(dir, { recursive: true });
+  const shim = path.join(dir, "at");
+  const q = (v: string) => `'${v.replace(/'/g, "'\\''")}'`;
+  writeFileSync(shim, `#!/bin/sh\nexec ${q(nodeBin)} ${q(script)} "$@"\n`);
+  chmodSync(shim, 0o755);
+  return shim;
+}
 
 function packageRoot(): string {
   return path.resolve(__dirname, "..", "..");
@@ -71,7 +88,10 @@ async function bootWebServer(opts: {
     args.push("--state-dir", opts.stateDir);
   }
 
-  const child = spawn(opts.bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(opts.bin, args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, AT_BIN: process.env.AT_BIN ?? ensureAtShim() },
+  });
 
   const { baseUrl, stateDirs } = await new Promise<{ baseUrl: string; stateDirs: string[] }>((resolve, reject) => {
     let buffer = "";

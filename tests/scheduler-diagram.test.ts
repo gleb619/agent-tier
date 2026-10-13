@@ -6,10 +6,10 @@ import { getAgentsByTier } from "../src/agents/registry";
 import * as configModule from "../src/config";
 import {
   buildSchedulerMermaid,
+  type DiagramGroup,
   diagramGroupLabel,
   resolveSchedulerDiagram,
   scopeOfStateDir,
-  type DiagramGroup,
 } from "../src/scheduler-diagram";
 
 const tmpDir = path.join(os.tmpdir(), `at-sched-diagram-test-${process.pid}`);

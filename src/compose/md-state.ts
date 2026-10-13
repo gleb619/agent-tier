@@ -24,22 +24,22 @@ function buildStringifier() {
 /** Full text of inline content: text, inlineCode, emphasis, strong, links, ... */
 function inlineText(nodes: PhrasingContent[]): string {
   return nodes
-    .map(node => {
+    .map((node) => {
       switch (node.type) {
-        case 'text':
-        case 'inlineCode':
-          return node.value
-        case 'break':
-          return ' '
-        case 'image':
-          return node.alt ?? ''
-        case 'html':
-          return ''
+        case "text":
+        case "inlineCode":
+          return node.value;
+        case "break":
+          return " ";
+        case "image":
+          return node.alt ?? "";
+        case "html":
+          return "";
         default:
-          return 'children' in node && Array.isArray(node.children) ? inlineText(node.children) : ''
+          return "children" in node && Array.isArray(node.children) ? inlineText(node.children) : "";
       }
     })
-    .join('')
+    .join("");
 }
 
 export function parseChecklist(markdown: string): ChecklistItem[] {

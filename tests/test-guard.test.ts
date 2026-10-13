@@ -27,10 +27,7 @@ function makeTempRepo(configInclude: string, testScript = "vitest run"): string 
   cpSync(SCRIPT, join(dir, "scripts", "test-guard.sh"));
   chmodSync(join(dir, "scripts", "test-guard.sh"), 0o755);
   writeFileSync(join(dir, "package.json"), JSON.stringify({ scripts: { test: testScript } }));
-  writeFileSync(
-    join(dir, "vitest.config.ts"),
-    `export default { test: { include: [${configInclude}] } };\n`,
-  );
+  writeFileSync(join(dir, "vitest.config.ts"), `export default { test: { include: [${configInclude}] } };\n`);
   return dir;
 }
 

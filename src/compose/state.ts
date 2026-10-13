@@ -89,7 +89,5 @@ export async function loadState(ws: ComposeWorkspace): Promise<ComposeState | nu
 }
 
 export async function saveState(ws: ComposeWorkspace, state: ComposeState): Promise<void> {
-  await withLock(ws.filePath(STATE_FILE), () =>
-    ws.write(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`),
-  );
+  await withLock(ws.filePath(STATE_FILE), () => ws.write(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`));
 }

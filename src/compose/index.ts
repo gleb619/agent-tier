@@ -1,13 +1,13 @@
-export type { ComposeCliDeps, ComposeCliOptions, BoardTasksOptions } from "./cli";
+export type { BoardTasksOptions, ComposeCliDeps, ComposeCliOptions } from "./cli";
 export { createComposeDeps, registerComposeCommand, runBoardTasks } from "./cli";
-export { createKanbanSource } from "./kanban-source";
 export type { KanbanSource, KanbanSourceOptions, KanbanStatusMap } from "./kanban-source";
+export { createKanbanSource } from "./kanban-source";
+export type { CommandResult, ComposeDeps, ComposeOptions, ComposeResult } from "./machine";
+export { ComposeError, runCompose } from "./machine";
 export { allDone, parseChecklist, parseVerdict, pendingItems, setChecked } from "./md-state";
 export { buildCheckPrompt, buildImplementPrompt, buildPlanPrompt } from "./prompts";
-export { ComposeError, runCompose } from "./machine";
-export type { CommandResult, ComposeDeps, ComposeOptions, ComposeResult } from "./machine";
 export type { ComposePhase, ComposeState } from "./state";
 export { createState, loadState, STATE_FILE, saveState } from "./state";
-export { taskGoal } from "./task-source";
 export type { ComposeTask, TaskFinishInfo, TaskSource } from "./task-source";
+export { taskGoal } from "./task-source";
 export { CONTEXT_FILE, ComposeWorkspace, PLAN_FILE, VERDICT_FILE } from "./workspace";

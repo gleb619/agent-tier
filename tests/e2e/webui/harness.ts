@@ -30,31 +30,39 @@ export interface WebE2E {
 /**
  * Boot `at web` on a random port with a temp AT_STATE_DIR, serving the built
  * WebUI. Mirrors `at web --port 0 --state-dir <tmp> --static src/webui/dist`.
+ * Pass `staticDir` to serve a different build dir (e.g. a writable copy used
+ * to simulate a service-worker update).
  */
-export async function startWeb(): Promise<WebE2E> {
+export async function startWeb(options: { staticDir?: string } = {}): Promise<WebE2E> {
+  const staticDir = options.staticDir ?? webuiDist;
   if (!existsSync(cliEntry)) throw new Error(`CLI not built: ${cliEntry} (pnpm run build)`);
-  if (!existsSync(path.join(webuiDist, "index.html"))) {
-    throw new Error(`WebUI not built: ${webuiDist} (pnpm run web:build)`);
+  if (!existsSync(path.join(staticDir, "index.html"))) {
+    throw new Error(`WebUI not built: ${staticDir} (pnpm run web:build)`);
   }
   const stateDir = mkdtempSync(path.join(os.tmpdir(), "at-webui-e2e-"));
   // Isolate HOME so the server and every run it spawns ignore the user's real
   // ~/.at (config globalPrompt, health, namer config) — tests must be hermetic.
   const homeDir = mkdtempSync(path.join(os.tmpdir(), "at-webui-e2e-home-"));
+  const env = {
+    ...process.env,
+    AT_STATE_DIR: stateDir,
+    HOME: homeDir,
+    MOCK_BIN: path.join(repoRoot, "bin", "mock-agent"),
+    MOCK_LONG_BIN: path.join(repoRoot, "bin", "mock-long-agent"),
+  };
+  // Hermetic: when the suite itself runs inside an `at` agent session, AT_DEPTH
+  // leaks in and the nested-delegation guard refuses every run the server
+  // spawns. The web server spawning `at` is a first-class flow, not nesting.
+  delete env.AT_DEPTH;
   const child = spawn(
     process.execPath,
-    [cliEntry, "web", "--port", "0", "--state-dir", stateDir, "--static", webuiDist],
+    [cliEntry, "web", "--port", "0", "--state-dir", stateDir, "--static", staticDir],
     {
       // stdin must not leak into spawned runs (mock merges stdin into prompt).
       // MOCK_BIN / MOCK_LONG_BIN: the registry resolves tier-4 mocks against
       // $HOME/.local/bin, which is empty in the isolated HOME — point them at
       // the repo-built mock binaries instead.
-      env: {
-        ...process.env,
-        AT_STATE_DIR: stateDir,
-        HOME: homeDir,
-        MOCK_BIN: path.join(repoRoot, "bin", "mock-agent"),
-        MOCK_LONG_BIN: path.join(repoRoot, "bin", "mock-long-agent"),
-      },
+      env,
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -147,11 +155,23 @@ export async function launchBrowser(): Promise<Browser> {
   }
 }
 
-/** Fresh browser context + page (isolated storage per test). */
+/**
+ * Wait until the service worker controls the page and the reload it triggers
+ * on controllerchange (src/webui/utils/register-sw.ts) has settled. The prod
+ * build registers a SW that claims the first load and reloads it — tests must
+ * ride that navigation instead of racing it with their own reloads.
+ */
+export async function waitForSwControl(page: Page): Promise<void> {
+  await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null && document.readyState !== "loading");
+}
+
+/** Fresh browser context + page (isolated storage per test), SW-settled. */
 export async function newPage(browser: Browser, baseUrl: string): Promise<Page> {
   const context: BrowserContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await waitForSwControl(page);
   return page;
 }
 

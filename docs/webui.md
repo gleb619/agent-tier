@@ -94,6 +94,34 @@ Budgets (enforced by `tests/webui-budget.test.ts` against the built dist):
 `pnpm run web:analyze` prints the same numbers per chunk. Fonts: the UI uses
 a system font stack — no webfonts to subset or self-host.
 
+## PWA E2E + Lighthouse gate
+
+`tests/e2e/webui/pwa.test.ts` (runs under `pnpm run test:e2e`, one worker)
+proves the PWA behaviors against a real `at web` server + headless chromium:
+
+- service worker registers, activates, and controls the page; manifest is
+  linked and installable (name, `display: standalone`, 192/512px icons)
+- offline reload serves the app shell from the precache (`index.html` fallback)
+- run creation while offline is queued by the SW (202 + `queued: true`) and
+  replayed to `POST /api/runs` when back online
+- deep links (`/settings`, …) render their view directly — server-side SPA
+  fallback online, precached shell + router offline
+- SW update flow: a bumped `sw.js` triggers the "Update available" toast;
+  the Reload action posts `SKIP_WAITING` and the new worker takes control
+
+`pnpm run web:lighthouse` boots the prod build on a random port and runs the
+gate defined in `scripts/lighthouse.config.json`:
+
+- Lighthouse (desktop preset, Playwright chromium via `CHROME_PATH`):
+  **performance >= 0.90**
+- PWA installability asserted by `scripts/pwa-installable.ts` (Lighthouse 13
+  dropped its PWA category): manifest link, installable fields, real icon
+  responses, and a caching service worker at `/sw.js`
+
+Thresholds live in `scripts/lighthouse.config.json`; the full LHR JSON is
+written to `$TMPDIR/at-webui-lighthouse-report.json`. The gate is kept out of
+`pnpm run test:e2e` (it is slower and needs Chrome) — run it on demand.
+
 ## Docker
 
 ```bash

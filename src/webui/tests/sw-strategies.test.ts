@@ -49,7 +49,7 @@ describe("sw strategies", () => {
     expect(isSwrApiPath(new URL("https://x.com/api/runs"))).toBe(true);
     expect(isSwrApiPath(new URL("https://x.com/api/agents"))).toBe(true);
     expect(isSwrApiPath(new URL("https://x.com/api/stats"))).toBe(true);
-    expect(isSwrApiPath(new URL("https://x.com/api/settings"))).toBe(true);
+    expect(isSwrApiPath(new URL("https://x.com/api/settings"))).toBe(false);
     expect(isSwrApiPath(new URL("https://x.com/api/runs/r1/log"))).toBe(true);
     expect(isSwrApiPath(new URL("https://x.com/api/events"))).toBe(false);
     expect(isSwrApiPath(new URL("https://x.com/api/runs/r1/discuss"))).toBe(true);

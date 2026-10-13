@@ -27,7 +27,13 @@ self.addEventListener("install", (event) => {
     caches
       .open(PRECACHE)
       .then((cache) => cache.addAll(precacheAssets))
-      .then(() => self.skipWaiting()),
+      .then(() => {
+        // First install only: take control immediately so the very first
+        // load becomes controlled. On an UPDATE the new worker must WAIT —
+        // register-sw.ts shows "Update available" and posts SKIP_WAITING on
+        // Reload; skipping here would swap before the user confirms.
+        if (!self.registration.active) return self.skipWaiting();
+      }),
   );
 });
 
@@ -150,8 +156,15 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") {
-    self.skipWaiting();
+  switch (event.data?.type) {
+    case "SKIP_WAITING":
+      self.skipWaiting();
+      break;
+    // Posted by register-sw.ts when the page comes back online (SW `online`
+    // events are unreliable): drain the offline run queue now.
+    case "DRAIN_QUEUE":
+      event.waitUntil(replayQueue());
+      break;
   }
 });
 

@@ -1,20 +1,14 @@
-import { readFileSync } from 'fs'
-import { mkdir, writeFile } from 'fs/promises'
-import path from 'path'
-import { acquireLock, getLockDir, pathToLockName, releaseLock, type LockInfo } from '../lock'
-import { isPidAlive } from '../process-utils'
-import {
-  findRowById,
-  headerIndex,
-  mutateBoard,
-  toTasks,
-  type BoardDoc,
-} from '../kanban/board'
-import { resolvePlanPath, type OpResult } from '../kanban/ops'
-import { setCellText } from '../kanban/parse'
-import { backlogCandidates } from '../kanban/select'
-import { IN_PROGRESS, blank, type Task } from '../kanban/types'
-import type { ComposeTask, TaskFinishInfo, TaskSource } from './task-source'
+import { readFileSync } from "fs";
+import { mkdir, writeFile } from "fs/promises";
+import path from "path";
+import { type BoardDoc, findRowById, headerIndex, mutateBoard, toTasks } from "../kanban/board";
+import { type OpResult, resolvePlanPath } from "../kanban/ops";
+import { setCellText } from "../kanban/parse";
+import { backlogCandidates } from "../kanban/select";
+import { blank, IN_PROGRESS, type Task } from "../kanban/types";
+import { acquireLock, getLockDir, type LockInfo, pathToLockName, releaseLock } from "../lock";
+import { isPidAlive } from "../process-utils";
+import type { ComposeTask, TaskFinishInfo, TaskSource } from "./task-source";
 
 /**
  * The only compose module that imports kanban. The board is human-edited, so
@@ -23,32 +17,32 @@ import type { ComposeTask, TaskFinishInfo, TaskSource } from './task-source'
  */
 
 export interface KanbanStatusMap {
-  claim: string
-  DONE: string
-  FAILED: string
+  claim: string;
+  DONE: string;
+  FAILED: string;
 }
 
 export interface KanbanSourceOptions {
-  boardFile: string
-  statusMap?: Partial<KanbanStatusMap>
+  boardFile: string;
+  statusMap?: Partial<KanbanStatusMap>;
   /** Sink for warnings (e.g. a mapped status missing from the board legend). */
-  log?: (msg: string) => void
+  log?: (msg: string) => void;
 }
 
 export interface KanbanSource extends TaskSource {
-  readonly boardFile: string
+  readonly boardFile: string;
   /** Claim one specific task by id (used by `--task`). */
-  claimId(id: string): Promise<ComposeTask | null>
+  claimId(id: string): Promise<ComposeTask | null>;
 }
 
-const DEFAULT_MAP: KanbanStatusMap = { claim: IN_PROGRESS, DONE: 'Done', FAILED: 'Blocked' }
+const DEFAULT_MAP: KanbanStatusMap = { claim: IN_PROGRESS, DONE: "Done", FAILED: "Blocked" };
 
 /**
  * Lease wait bound: the lease is probed before it is taken and claims serialize on the
  * board lock, so this only covers the microsecond race where two claimers probe the same
  * free task at once. Long enough to lose cleanly, short enough to never stall a loop.
  */
-const LEASE_TIMEOUT_MS = 250
+const LEASE_TIMEOUT_MS = 250;
 
 /**
  * Per-task claim lease on lock.ts's own naming scheme: the lease "state file" is
@@ -63,21 +57,21 @@ const LEASE_TIMEOUT_MS = 250
  * dead, lock.ts's stale-lock steal frees it, and the next claim resumes the task.
  */
 function leaseFile(boardFile: string, id: string): string {
-  return path.join(getLockDir(boardFile), pathToLockName(`${boardFile}.claim-${id}`))
+  return path.join(getLockDir(boardFile), pathToLockName(`${boardFile}.claim-${id}`));
 }
 
 /** Live pid owning the lease, or null when free (absent, dead pid or unreadable). */
 function leaseHolder(lease: string): number | null {
   try {
-    const info = JSON.parse(readFileSync(lease, 'utf8')) as LockInfo
-    return typeof info?.pid === 'number' && isPidAlive(info.pid) ? info.pid : null
+    const info = JSON.parse(readFileSync(lease, "utf8")) as LockInfo;
+    return typeof info?.pid === "number" && isPidAlive(info.pid) ? info.pid : null;
   } catch {
-    return null
+    return null;
   }
 }
 
 function leaseFree(boardFile: string, id: string): boolean {
-  return leaseHolder(leaseFile(boardFile, id)) === null
+  return leaseHolder(leaseFile(boardFile, id)) === null;
 }
 
 /**
@@ -85,40 +79,40 @@ function leaseFree(boardFile: string, id: string): boolean {
  * (0 when the acquire timed out on a live lock we could not read a pid from).
  */
 async function takeLease(boardFile: string, id: string): Promise<number | null> {
-  const lease = leaseFile(boardFile, id)
-  const holder = leaseHolder(lease)
-  if (holder !== null) return holder
+  const lease = leaseFile(boardFile, id);
+  const holder = leaseHolder(lease);
+  if (holder !== null) return holder;
   try {
-    await acquireLock(`${boardFile}.claim-${id}`, LEASE_TIMEOUT_MS)
-    return null
+    await acquireLock(`${boardFile}.claim-${id}`, LEASE_TIMEOUT_MS);
+    return null;
   } catch {
-    return leaseHolder(lease) ?? 0
+    return leaseHolder(lease) ?? 0;
   }
 }
 
 /** Drop the lease, but only when this process owns it — never free another claimer's task. */
 function releaseLease(boardFile: string, id: string): void {
-  const lease = leaseFile(boardFile, id)
+  const lease = leaseFile(boardFile, id);
   try {
-    if ((JSON.parse(readFileSync(lease, 'utf8')) as LockInfo).pid !== process.pid) return
+    if ((JSON.parse(readFileSync(lease, "utf8")) as LockInfo).pid !== process.pid) return;
   } catch {
-    return
+    return;
   }
-  releaseLock(lease)
+  releaseLock(lease);
 }
 
 function noopResult(data: unknown = null): OpResult {
-  return { messages: [], warnings: [], changed: false, data }
+  return { messages: [], warnings: [], changed: false, data };
 }
 
 function toComposeTask(doc: BoardDoc, task: Task): ComposeTask {
-  const planRaw = (task['Plan File'] ?? '').replace(/`/g, '').trim()
+  const planRaw = (task["Plan File"] ?? "").replace(/`/g, "").trim();
   return {
     id: task.ID,
-    title: task.Title ?? '',
-    description: blank(task.Description) ? '' : task.Description,
+    title: task.Title ?? "",
+    description: blank(task.Description) ? "" : task.Description,
     planFile: blank(planRaw) ? undefined : resolvePlanPath(doc.file, planRaw),
-  }
+  };
 }
 
 /**
@@ -133,48 +127,48 @@ async function opClaim(doc: BoardDoc, claimStatus: string, wantId?: string): Pro
     return {
       ...noopResult(),
       warnings: [`[kanban-source] status "${claimStatus}" not in board legend; claim skipped`],
-    }
+    };
   }
-  const statusIdx = headerIndex(doc, 'Status')
+  const statusIdx = headerIndex(doc, "Status");
   if (statusIdx === -1) {
-    return { ...noopResult(), warnings: ['[kanban-source] board has no Status column; claim skipped'] }
+    return { ...noopResult(), warnings: ["[kanban-source] board has no Status column; claim skipped"] };
   }
 
-  const tasks = toTasks(doc)
-  let task: Task | undefined
-  let mark = false
+  const tasks = toTasks(doc);
+  let task: Task | undefined;
+  let mark = false;
   if (wantId) {
-    const wanted = tasks.find(t => t.ID === wantId)
-    if (!wanted) return { ...noopResult(), warnings: [`[kanban-source] task ${wantId} not found`] }
-    const holder = await takeLease(doc.file, wantId)
+    const wanted = tasks.find((t) => t.ID === wantId);
+    if (!wanted) return { ...noopResult(), warnings: [`[kanban-source] task ${wantId} not found`] };
+    const holder = await takeLease(doc.file, wantId);
     if (holder !== null) {
-      return { ...noopResult(), warnings: [`[kanban-source] task ${wantId} is claimed by pid ${holder}`] }
+      return { ...noopResult(), warnings: [`[kanban-source] task ${wantId} is claimed by pid ${holder}`] };
     }
-    task = wanted
-    mark = task.Status !== claimStatus
+    task = wanted;
+    mark = task.Status !== claimStatus;
   } else {
     // (a) resume an unleased task in the claim status, (b) else the best unblocked Backlog
     // task — both skip any row a live process has leased. Row order keeps (a) deterministic.
-    task = tasks.find(t => t.Status === claimStatus && leaseFree(doc.file, t.ID))
+    task = tasks.find((t) => t.Status === claimStatus && leaseFree(doc.file, t.ID));
     if (!task) {
-      task = backlogCandidates(tasks).find(t => leaseFree(doc.file, t.ID))
-      mark = task !== undefined
+      task = backlogCandidates(tasks).find((t) => leaseFree(doc.file, t.ID));
+      mark = task !== undefined;
     }
-    if (!task) return noopResult()
+    if (!task) return noopResult();
     // Only reachable if another process leased it between the probe and here: lose cleanly.
-    if ((await takeLease(doc.file, task.ID)) !== null) return noopResult()
+    if ((await takeLease(doc.file, task.ID)) !== null) return noopResult();
   }
 
   if (mark) {
-    const rowIdx = findRowById(doc, task.ID)
+    const rowIdx = findRowById(doc, task.ID);
     if (rowIdx === -1) {
-      releaseLease(doc.file, task.ID)
-      return { ...noopResult(), warnings: [`[kanban-source] task ${task.ID} row not found`] }
+      releaseLease(doc.file, task.ID);
+      return { ...noopResult(), warnings: [`[kanban-source] task ${task.ID} row not found`] };
     }
-    setCellText(doc.table.children[rowIdx].children[statusIdx], claimStatus)
-    task = { ...task, Status: claimStatus }
+    setCellText(doc.table.children[rowIdx].children[statusIdx], claimStatus);
+    task = { ...task, Status: claimStatus };
   }
-  return { messages: [], warnings: [], changed: mark, data: { task: toComposeTask(doc, task) } }
+  return { messages: [], warnings: [], changed: mark, data: { task: toComposeTask(doc, task) } };
 }
 
 function opFinish(doc: BoardDoc, taskId: string, status: string, goalDir: string): OpResult {
@@ -182,52 +176,56 @@ function opFinish(doc: BoardDoc, taskId: string, status: string, goalDir: string
     return {
       ...noopResult(),
       warnings: [`[kanban-source] status "${status}" not in board legend; ${taskId} left unchanged`],
-    }
+    };
   }
-  const rowIdx = findRowById(doc, taskId)
-  if (rowIdx === -1) return { ...noopResult(), warnings: [`[kanban-source] task ${taskId} not found`] }
-  const row = doc.table.children[rowIdx]
-  setCellText(row.children[headerIndex(doc, 'Status')], status)
+  const rowIdx = findRowById(doc, taskId);
+  if (rowIdx === -1) return { ...noopResult(), warnings: [`[kanban-source] task ${taskId} not found`] };
+  const row = doc.table.children[rowIdx];
+  setCellText(row.children[headerIndex(doc, "Status")], status);
 
-  const planIdx = headerIndex(doc, 'Plan File')
-  if (status === DEFAULT_MAP.FAILED && planIdx >= 0 && blank(toTasks(doc).find(t => t.ID === taskId)?.['Plan File'])) {
-    setCellText(row.children[planIdx], path.join(goalDir, 'plan.md'))
+  const planIdx = headerIndex(doc, "Plan File");
+  if (
+    status === DEFAULT_MAP.FAILED &&
+    planIdx >= 0 &&
+    blank(toTasks(doc).find((t) => t.ID === taskId)?.["Plan File"])
+  ) {
+    setCellText(row.children[planIdx], path.join(goalDir, "plan.md"));
   }
-  return { messages: [], warnings: [], changed: true, data: null }
+  return { messages: [], warnings: [], changed: true, data: null };
 }
 
 export function createKanbanSource(opts: KanbanSourceOptions): KanbanSource {
-  const boardFile = path.resolve(opts.boardFile)
-  const map: KanbanStatusMap = { ...DEFAULT_MAP, ...opts.statusMap }
-  const log = opts.log ?? ((msg: string) => console.warn(msg))
+  const boardFile = path.resolve(opts.boardFile);
+  const map: KanbanStatusMap = { ...DEFAULT_MAP, ...opts.statusMap };
+  const log = opts.log ?? ((msg: string) => console.warn(msg));
 
   const claimWith = async (wantId?: string): Promise<ComposeTask | null> => {
-    const r = await mutateBoard(boardFile, doc => opClaim(doc, map.claim, wantId))
-    for (const w of r.warnings) log(w)
-    const data = r.data as { task?: ComposeTask } | null
-    return data?.task ?? null
-  }
+    const r = await mutateBoard(boardFile, (doc) => opClaim(doc, map.claim, wantId));
+    for (const w of r.warnings) log(w);
+    const data = r.data as { task?: ComposeTask } | null;
+    return data?.task ?? null;
+  };
 
   return {
     boardFile,
     claim: () => claimWith(),
-    claimId: id => claimWith(id),
+    claimId: (id) => claimWith(id),
     async onFinish(task, outcome, info) {
       // Release even when the artifact write or the board op throws: the run is over, and a
       // leased row nobody is working would block the next claim's resume path forever.
       try {
-        if (outcome === 'FAILED') {
-          await mkdir(info.goalDir, { recursive: true })
+        if (outcome === "FAILED") {
+          await mkdir(info.goalDir, { recursive: true });
           await writeFile(
-            path.join(info.goalDir, 'outcome.md'),
+            path.join(info.goalDir, "outcome.md"),
             `# ${task.id} — FAILED\n\nCompose run failed after round ${info.round}. See plan.md / verdict.md in this directory.\n`,
-          )
+          );
         }
-        const r = await mutateBoard(boardFile, doc => opFinish(doc, task.id, map[outcome], info.goalDir))
-        for (const w of r.warnings) log(w)
+        const r = await mutateBoard(boardFile, (doc) => opFinish(doc, task.id, map[outcome], info.goalDir));
+        for (const w of r.warnings) log(w);
       } finally {
-        releaseLease(boardFile, task.id)
+        releaseLease(boardFile, task.id);
       }
     },
-  }
+  };
 }

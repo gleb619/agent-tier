@@ -6,7 +6,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..", "..");
 
 function run(cmd: string, args: string[], cwd: string): void {
-  const r = spawnSync(cmd, args, { cwd, stdio: "inherit" });
+  // vitest sets NODE_ENV=test; a Vite build under that env sets import.meta.env.DEV=true,
+  // which silently strips service-worker registration from the bundle. Always build for production.
+  const r = spawnSync(cmd, args, { cwd, stdio: "inherit", env: { ...process.env, NODE_ENV: "production" } });
   if (r.status !== 0) throw new Error(`${cmd} ${args.join(" ")} failed in ${cwd}`);
 }
 

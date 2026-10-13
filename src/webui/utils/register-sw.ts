@@ -8,7 +8,12 @@ export async function registerServiceWorker(): Promise<void> {
     const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
     isOnline.set(navigator.onLine);
 
-    window.addEventListener("online", () => isOnline.set(true));
+    window.addEventListener("online", () => {
+      isOnline.set(true);
+      // Headless/background SWs don't reliably get `online` events — tell the
+      // SW to drain its offline run queue instead of relying on its listener.
+      navigator.serviceWorker.controller?.postMessage({ type: "DRAIN_QUEUE" });
+    });
     window.addEventListener("offline", () => isOnline.set(false));
 
     registration.addEventListener("updatefound", () => {

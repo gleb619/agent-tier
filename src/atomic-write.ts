@@ -1,5 +1,4 @@
-import { renameSync, unlinkSync, writeFileSync } from 'fs';
-import { promises as fs } from 'fs';
+import { promises as fs, renameSync, unlinkSync, writeFileSync } from "fs";
 
 function tmpPathFor(file: string): string {
   return `${file}.tmp-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -13,7 +12,7 @@ function tmpPathFor(file: string): string {
  */
 export function writeFileAtomicSync(file: string, content: string | Buffer): void {
   const tmp = tmpPathFor(file);
-  writeFileSync(tmp, content, 'utf8');
+  writeFileSync(tmp, content, "utf8");
   try {
     renameSync(tmp, file);
   } catch (err) {
@@ -29,7 +28,7 @@ export function writeFileAtomicSync(file: string, content: string | Buffer): voi
 /** Async variant of {@link writeFileAtomicSync}. */
 export async function writeFileAtomic(file: string, content: string | Buffer): Promise<void> {
   const tmp = tmpPathFor(file);
-  await fs.writeFile(tmp, content, 'utf8');
+  await fs.writeFile(tmp, content, "utf8");
   try {
     await fs.rename(tmp, file);
   } catch (err) {

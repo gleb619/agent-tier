@@ -30,7 +30,8 @@
     "web:dev": "pnpm -C src/webui dev",
     "web:analyze": "npm --prefix src/webui run build && npm --prefix src/webui run analyze",
     "web:build": "npm --prefix src/webui run build",
-    "web:check": "pnpm -C src/webui check"
+    "web:check": "pnpm -C src/webui check",
+    "web:lighthouse": "PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-$PWD/.pw-browsers} vite-node scripts/web-lighthouse.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.78.1",
@@ -53,9 +54,12 @@
     "@types/node": "^22.0.0",
     "@types/unist": "^3.0.3",
     "@vitest/coverage-v8": "^3.2.4",
+    "chrome-launcher": "1.2.2",
+    "lighthouse": "^13.5.0",
     "playwright": "1.60.0",
     "ts-node": "^10.0.0",
     "typescript": "^5.0.0",
+    "vite-node": "3.2.4",
     "vitest": "^3.0.0"
   },
   "publishConfig": {

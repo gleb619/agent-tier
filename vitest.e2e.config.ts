@@ -12,6 +12,9 @@ export default defineConfig({
     hookTimeout: 300_000,
     globals: true,
     environment: "node",
+    // Each spec boots its own `at web` server + chromium — run sequentially
+    // so browser/server count stays at one worker.
+    maxWorkers: 1,
     globalSetup: ["tests/e2e/webui/global-setup.ts"],
   },
 });

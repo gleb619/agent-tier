@@ -5,8 +5,8 @@ import { writeFileAtomicSync } from "../atomic-write";
 import { withLock } from "../lock";
 import { findProjectRoot } from "../state-dir";
 import { parseLegend } from "./legend";
-import { cellText, parseBoardText, stringifyBoard, type Processor } from "./parse";
 import type { OpResult } from "./ops";
+import { cellText, type Processor, parseBoardText, stringifyBoard } from "./parse";
 import { DEFAULT_BOARD_REL, FALLBACK_STATUSES, type Task } from "./types";
 
 export interface BoardDoc {

@@ -1,0 +1,8 @@
+{
+  "preset": "desktop",
+  "chromeFlags": ["--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+  "onlyCategories": ["performance"],
+  "categories": {
+    "performance": 0.9
+  }
+}

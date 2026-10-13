@@ -25,7 +25,9 @@ describe("webui e2e: dashboard", () => {
     const page: Page = await newPage(browser, web.baseUrl);
     await page.waitForSelector('[data-testid="dashboard-view"]');
 
-    // QuickStats tiles reflect the (empty) run store.
+    // QuickStats tiles reflect the (empty) run store. They render only after
+    // the /api/stats fetch resolves — wait for one before counting.
+    await page.waitForSelector('[data-testid="stat-tile"]');
     const tiles = await page.locator('[data-testid="stat-tile"]').count();
     expect(tiles).toBeGreaterThanOrEqual(4);
 

@@ -213,3 +213,15 @@ describe("web command", () => {
     expect(fakeChild.kill).toHaveBeenCalledWith("SIGTERM");
   });
 });
+
+describe("ensureAtShim", () => {
+  it("writes an executable shim that re-runs the given node + script", async () => {
+    const { ensureAtShim } = await import("../../src/commands/web");
+    const { accessSync, constants, readFileSync } = await import("node:fs");
+    const shim = ensureAtShim("/usr/bin/node", "/opt/at it/cli.js");
+    accessSync(shim, constants.X_OK);
+    const body = readFileSync(shim, "utf8");
+    expect(body).toContain("#!/bin/sh");
+    expect(body).toContain("exec '/usr/bin/node' '/opt/at it/cli.js' \"$@\"");
+  });
+});

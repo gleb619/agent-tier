@@ -1,7 +1,7 @@
 import os from "os";
 import path from "path";
-import { AGENTS, getAgentsByTier, type AgentDef } from "./agents/registry";
 import { loadGenericAgents } from "./agents/generic-loader";
+import { AGENTS, type AgentDef, getAgentsByTier } from "./agents/registry";
 import { getLineAgents, loadConfig } from "./config";
 import { loadStateFile } from "./scheduler";
 import { getStateFilePath } from "./state-dir";

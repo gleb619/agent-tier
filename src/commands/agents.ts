@@ -7,12 +7,12 @@ export function registerAgentsCommand(program: Command): void {
     .command("agents")
     .description("List registered agents with health state (--json for machine output)")
     .option("--json", "Output as JSON without text trimming", false)
-    .action(async (_opts: Record<string, unknown>, cmd: Command) => {
+    .action(async (localOpts: Record<string, unknown>, cmd: Command) => {
       try {
         // Same global-option dance as `at status --json`: the default command
         // also defines `--json` at the program root.
         const opts = cmd.optsWithGlobals();
-        const json = (opts.json as boolean | undefined) ?? false;
+        const json = (localOpts.json as boolean | undefined) || ((opts.json as boolean | undefined) ?? false);
         const report = buildAgentsReport(resolveStatusDirs());
         if (json) {
           console.log(JSON.stringify(report));

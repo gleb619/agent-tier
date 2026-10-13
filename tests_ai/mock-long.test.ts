@@ -1,7 +1,7 @@
-import { describeLive } from "./live";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describeLive } from "./live";
 import { agentBinExists, cleanupSandbox, createSandbox, getCliPath, type Sandbox } from "./setup";
 
 describeLive("mock-long agent", () => {
