@@ -1,11 +1,9 @@
 import type { JSX } from "solid-js";
 import { createMemo, For, Show } from "solid-js";
 import type { RunRecord } from "../../run-store";
-import { buildSchedulerMermaid, type DiagramGroup, resolveSchedulerDiagram } from "../../scheduler-diagram";
 import { resolveStatusDirs } from "../../state-dir";
 import { buildStateReportFor, type StateReport } from "../../status";
 import { durationMs, formatAgentRow, formatMs, formatRunRow, isToday, statusColor, TUI_COLORS } from "../format";
-import { renderMermaid } from "../mermaid-layout";
 import { filteredSessions2 } from "../store/filtered-sessions";
 import { autoRefresh } from "../store/log";
 import { agent, tier } from "../store/settings";
@@ -68,42 +66,6 @@ function EmptyState(props: { message: string }): JSX.Element {
   );
 }
 
-// TODO EXPERIMENTAL: SchedulerPanel uses a naive Unicode DAG layout engine that
-// frequently produces overlapping nodes and broken edge routing in real queues.
-// This whole component, plus src/tui/mermaid-layout.ts, is a deletion candidate.
-// See feedback 4dfd4e06. Revert to a simple text queue or integrate a real
-// layout library (dagre/elk) before keeping long-term.
-/** Render scheduler queues as a terminal-native Mermaid flowchart. */
-function SchedulerPanel(props: { groups: DiagramGroup[] }): JSX.Element {
-  const mermaidSrc = createMemo(() => buildSchedulerMermaid(props.groups));
-  const rendered = createMemo(() => renderMermaid(mermaidSrc()));
-
-  return (
-    <box flexDirection="column">
-      <SectionHeader title="Scheduler" />
-      <Show
-        when={rendered().ok}
-        fallback={
-          <box
-            flexDirection="column"
-            borderColor={TUI_COLORS.dim}
-            borderStyle="round"
-            paddingX={1}
-            paddingY={1}
-            gap={0}
-          >
-            <For each={mermaidSrc().split("\n")}>{(row) => <text fg={TUI_COLORS.dimmer} content={row} />}</For>
-          </box>
-        }
-      >
-        <box flexDirection="column" gap={0}>
-          <For each={rendered().grid.rows}>{(row) => <text fg={TUI_COLORS.fg} content={row} />}</For>
-        </box>
-      </Show>
-    </box>
-  );
-}
-
 export function Dashboard(): JSX.Element {
   const stats = createMemo(() => computeStats(filteredSessions2()));
   const successText = createMemo(() => {
@@ -113,8 +75,6 @@ export function Dashboard(): JSX.Element {
   // Same reports `at status` prints — joined across project `.at/` + `~/.at/`
   // when the project has its own scope, so agent health matches the run list.
   const health = createMemo((): StateReport => buildStateReportFor(stateDirs));
-  // Scheduler round-robin queues, same data `at status` draws as mermaid.
-  const schedulerGroups = createMemo((): DiagramGroup[] => resolveSchedulerDiagram(stateDirs));
 
   return (
     <box
@@ -189,11 +149,6 @@ export function Dashboard(): JSX.Element {
               </box>
             </Show>
           </box>
-
-          {/* Scheduler round-robin queues (same model as the `at status` mermaid) */}
-          <Show when={schedulerGroups().length > 0}>
-            <SchedulerPanel groups={schedulerGroups()} />
-          </Show>
         </box>
       </scrollbox>
     </box>
