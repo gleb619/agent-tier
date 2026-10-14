@@ -18,6 +18,7 @@ All implementation work happens in an isolated worktree + branch. No edits on `m
 # 1. Create worktree off main + branch
 git worktree add ../agent-tier-<short-name> -b feat/<short-name> main
 cd ../agent-tier-<short-name>
+# or: bash scripts/worktree-new.sh <short-name>
 
 # 2. Implement the task (write tests first per TDD, then code)
 #    ...
