@@ -276,6 +276,71 @@ type resp struct {
 	body string
 }
 
+func TestCallStubBinaryViaPathAssertsArgsStdinAndEnvelope(t *testing.T) {
+	dir := t.TempDir()
+	stub := filepath.Join(dir, "at")
+	recordFile := filepath.Join(dir, "record.json")
+	body := `#!/bin/sh
+set -eu
+echo "ARGS:$@" > ` + recordFile + `
+echo "STDIN:$(cat)" >> ` + recordFile + `
+printf '{"ok":true,"data":{"recorded":"yes"}}'
+`
+	if err := os.WriteFile(stub, []byte(body), 0o755); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	res := Call(context.Background(), "at", "events", "tail", "run-1", map[string]any{"since": 1, "limit": 10})
+	if res.Err != nil {
+		t.Fatalf("Call error with stub binary: %v (raw: %s, stderr: %s)", res.Err, res.Data, res.Message)
+	}
+	if res.Code != "" {
+		t.Fatalf("expected no error code, got %q", res.Code)
+	}
+	if string(res.Data) != `{"recorded":"yes"}` {
+		t.Fatalf("unexpected data: %s", string(res.Data))
+	}
+	recordRaw, err := os.ReadFile(recordFile)
+	if err != nil {
+		t.Fatalf("read record file: %v", err)
+	}
+	recordStr := string(recordRaw)
+	if !strings.Contains(recordStr, "ARGS:bridge events tail") {
+		t.Fatalf("stub args missing expected argv: %s", recordStr)
+	}
+	if !strings.Contains(recordStr, `"since":1`) {
+		t.Fatalf("stub stdin missing params: %s", recordStr)
+	}
+}
+
+func TestCallStubBinaryErrorEnvelopeMapsToCodeAndStatus(t *testing.T) {
+	dir := t.TempDir()
+	stub := filepath.Join(dir, "at")
+	body := `#!/bin/sh
+printf '{"error":{"code":"USAGE","message":"bad args"}}'
+exit 2
+`
+	if err := os.WriteFile(stub, []byte(body), 0o755); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+
+	res := Call(context.Background(), "at", "bad", "verb", "", nil)
+	if res.Err == nil {
+		t.Fatalf("expected error envelope from stub")
+	}
+	if res.Code != "USAGE" {
+		t.Fatalf("code = %q, want USAGE", res.Code)
+	}
+	if res.Message != "bad args" {
+		t.Fatalf("message = %q, want 'bad args'", res.Message)
+	}
+	if HTTPStatus(res.Code) != 400 {
+		t.Fatalf("HTTPStatus(USAGE) = %d, want 400", HTTPStatus(res.Code))
+	}
+}
+
 func doGET(srv *Server, path string) resp {
 	req := httptest.NewRequest(http.MethodGet, path, nil)
 	rec := httptest.NewRecorder()

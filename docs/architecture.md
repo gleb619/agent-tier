@@ -82,6 +82,12 @@ in — a reader never sees a half-written file, and a crash mid-write leaves onl
 
 **Module:** `src/lock.ts` — exports `acquireLock` `releaseLock` `withLock`
 
+## Bridge + proxy (`docs/bridge.md`, `web-server/`)
+
+`at bridge <resource> <verb> [id]` is the JSON-in/JSON-out RPC surface (docs/bridge.md). Every resource (`ping`, `agents`, `runs`, `status`, `feedback`, `kanban`, `config`, `line`, `events`, `discuss`, `health`) exposes thin handlers (`src/bridge/*.ts`) over existing stores. Success: `{"ok":true,"data":...}`; error: `{"error":{"code":"USAGE|NOT_FOUND|...","message":"..."}}` with exit codes `0` (ok), `2` (usage), `3` (application).
+
+The Go server (`web-server/internal/proxy`) is a thin HTTP+static+SSE proxy: it translates REST requests into `at bridge` executions (`Call` in `bridge.go`), maps envelope machine codes to HTTP status (`HTTPStatus`), and falls back to direct `at` shims for endpoints with no bridge verb yet (`run` spawn, settings). The binary is resolved via `AT_BIN` (defaults to `at`). The proxy never reads or writes state files directly; the CLI bridge remains the source of truth.
+
 ## Adding an agent
 
 Add new `AgentDef` entry to `AGENTS` in `src/agents/registry.ts`. Implement `bin()` `buildArgs()`and optionally `buildEnv()`  `promptMode`. No other files need changing.

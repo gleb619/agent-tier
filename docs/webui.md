@@ -30,6 +30,8 @@ If no binary is found, the command prints a build hint and exits.
 - `--static <dir>` — serve a different WebUI build dir
 - `--state-dir <dir>` — state dirs, same resolution as `at status` by default
 
+Endpoint contract tests (`tests/bridge-schema.test.ts`) and Go stub tests (`web-server/internal/proxy/proxy_test.go`) assert envelope shapes and error mapping. See `docs/bridge.md`.
+
 ## API
 
 The Go server `web-server/internal/proxy` is a thin HTTP+static+SSE proxy:

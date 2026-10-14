@@ -28,6 +28,9 @@ COPY --from=build /app/node_modules ./node_modules
 # `at web` serves the built WebUI from <pkg>/src/webui/dist by default.
 COPY --from=build /app/src/webui/dist ./src/webui/dist
 COPY --from=go-builder /build/at-web ./bin/at-web
+# Ship node runtime + `at` CLI symlink so `at` commands work in container.
+RUN ln -sf /app/dist/cli.js /usr/local/bin/at && chmod +x /app/dist/cli.js
+ENV PATH="/usr/local/bin:${PATH}"
 EXPOSE 7800
 ENTRYPOINT ["node", "dist/cli.js"]
 CMD ["web", "--port", "7800", "--host", "0.0.0.0"]
