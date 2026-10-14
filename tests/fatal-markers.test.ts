@@ -33,6 +33,16 @@ describe("scanForFatalMarkers", () => {
     expect(scanForFatalMarkers(content)).toBe("[claude-code:unrecognized_model]");
   });
 
+  it("returns the marker string for a leaked raw tool-call channel", () => {
+    const content = "planning...\nreading src/foo.ts\n<|channel|>commentary<|message|>\n";
+    expect(scanForFatalMarkers(content)).toBe("<|channel|>commentary<|message|>");
+  });
+
+  it("returns null when only partial tool-call channel text is present", () => {
+    const content = "output mentioning <|channel|> and commentary but no leak\n";
+    expect(scanForFatalMarkers(content)).toBeNull();
+  });
+
   it("scans only the last 200 lines", () => {
     const manyLines = Array.from({ length: 300 }, (_, i) => `line-${i}`).join("\n");
     const content = `${manyLines}\n[claude-code:unrecognized_model]\n`;

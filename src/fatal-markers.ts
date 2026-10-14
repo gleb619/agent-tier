@@ -2,6 +2,8 @@ export const FATAL_MARKERS: ReadonlyArray<{ name: string; pattern: RegExp }> = [
   { name: "unrecognized_model", pattern: /\[claude-code:unrecognized_model\]/ },
   { name: "quota_429", pattern: /API Error: Request rejected \(429\)/ },
   { name: "usage_limit", pattern: /usage limit has been reached/i },
+  // agy (tier-3) can exit 0 after leaking its raw tool-call channel as final output.
+  { name: "leaked_tool_call", pattern: /<\|channel\|>commentary<\|message\|>/ },
 ];
 
 const FATAL_SCAN_LINES = 200;
