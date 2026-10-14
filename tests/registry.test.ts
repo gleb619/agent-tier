@@ -9,12 +9,12 @@ describe("AgentRegistry", () => {
     expect(getAgentsByTier(1)).toHaveLength(3);
   });
 
-  it("has 5 tier-2 agents", () => {
-    expect(getAgentsByTier(2)).toHaveLength(5);
+  it("has 4 tier-2 agents", () => {
+    expect(getAgentsByTier(2)).toHaveLength(4);
   });
 
-  it("has 4 tier-3 agents", () => {
-    expect(getAgentsByTier(3)).toHaveLength(4);
+  it("has 5 tier-3 agents", () => {
+    expect(getAgentsByTier(3)).toHaveLength(5);
   });
 
   it("has 2 tier-4 agents", () => {
@@ -134,6 +134,10 @@ describe("AgentRegistry", () => {
     expect(getAgentByName("devin")?.name).toBe("devin");
   });
 
+  it("pi agent is tier 3", () => {
+    expect(getAgentByName("pi")?.tier).toBe(3);
+  });
+
   it("devin agent is tier 3", () => {
     expect(getAgentByName("devin")?.tier).toBe(3);
   });
@@ -168,10 +172,10 @@ describe("getAgentsByTier", () => {
     expect(tier1.map((a) => a.name)).toEqual(expect.arrayContaining(["glm-code", "codex", "kimi"]));
   });
 
-  it("returns tier 2 agents: mm-code, opencode, qwen, pi, cline", () => {
+  it("returns tier 2 agents: mm-code, opencode, qwen, cline", () => {
     const tier2 = getAgentsByTier(2);
-    expect(tier2).toHaveLength(5);
-    expect(tier2.map((a) => a.name)).toEqual(expect.arrayContaining(["mm-code", "opencode", "qwen", "pi", "cline"]));
+    expect(tier2).toHaveLength(4);
+    expect(tier2.map((a) => a.name)).toEqual(expect.arrayContaining(["mm-code", "opencode", "qwen", "cline"]));
   });
 
   it("returns tier 3 agents", () => {
@@ -182,6 +186,7 @@ describe("getAgentsByTier", () => {
     expect(names).toContain("agy");
     expect(names).toContain("kiro");
     expect(names).toContain("devin");
+    expect(names).toContain("pi");
   });
 
   it("returns tier 4 agents: mock, mock-long", () => {

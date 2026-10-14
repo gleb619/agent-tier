@@ -7,8 +7,8 @@ Detail doc for [README.md](../README.md).
 | Tier          | Agents                         | Role                       |
 |---------------|--------------------------------|----------------------------|
 | 1             | glm-code, codex, kimi          | Architect / review         |
-| 2 *(default)* | mm-code, opencode, qwen, pi, cline | Dev / QA                   |
-| 3             | kilo, agy, kiro, devin | Experimental / boilerplate |
+| 2 *(default)* | mm-code, opencode, qwen, cline | Dev / QA                   |
+| 3             | kilo, agy, kiro, devin, pi | Experimental / boilerplate |
 | 4             | mock, mock-long   | Dry-run / test agents      |
 
 Round-robin state is stored per tier in the `scheduler` section of `<stateDir>/state.json`
@@ -39,10 +39,9 @@ Everyday feature work, bug fixes, tests, and refactors.
 | `mm-code`  | `MM_CODE_BIN` → `~/.local/bin/mm-code`     | `mm-code -p "prompt" --dangerously-skip-permissions`   |
 | `opencode` | `OPENCODE_BIN` → `~/.nvm/.../bin/opencode` | `opencode run --dangerously-skip-permissions "prompt"` |
 | `qwen`     | `QWEN_BIN` → `~/.nvm/.../bin/qwen`         | `qwen -y "prompt"`                                     |
-| `pi`       | `PI_BIN` → `~/.nvm/.../bin/pi`             | `pi -p --model openrouter/free "prompt"` (auth from pi's own `auth.json`; `-m` or `PI_MODEL` overrides) |
 | `cline`    | `CLINE_BIN` → `~/.nvm/.../bin/cline`       | `cline --auto-approve true --json --cwd <cwd> --timeout 600 "prompt"` |
 
-Round-robin order: mm-code → opencode → qwen → pi → cline → mm-code → …
+Round-robin order: mm-code → opencode → qwen → cline → mm-code → …
 
 ### Tier 3 — Experimental / Boilerplate
 
@@ -54,8 +53,9 @@ Scaffolding, simple scripts, and throwaway generation.
 | `agy`    | Cloud  | `AGY_BIN` → `findBin('agy')`           | `agy --dangerously-skip-permissions -p "prompt"`                            |
 | `kiro`   | Cloud  | `KIRO_BIN` → `findBin('kiro-cli')`     | `kiro-cli chat --no-interactive --trust-all-tools "prompt"`                 |
 | `devin`  | Cloud  | `DEVIN_BIN` → `~/.local/bin/devin` → devin-desktop path | `devin --permission-mode bypass --respect-workspace-trust false -p "prompt"` |
+| `pi`     | Cloud  | `PI_BIN` → `~/.nvm/.../bin/pi`             | `pi -p --model openrouter/free "prompt"` (auth from pi's own `auth.json`; `-m` or `PI_MODEL` overrides) |
 
-Round-robin order: kilo → agy → kiro → devin → kilo → …
+Round-robin order: kilo → agy → kiro → devin → pi → kilo → …
 
 ### Tier 4 — Dry-run / Test
 

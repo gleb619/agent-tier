@@ -124,7 +124,7 @@ export const AGENTS: AgentDef[] = [
   },
   {
     name: "pi",
-    tier: 2,
+    tier: 3,
     bin: () => process.env.PI_BIN ?? `${NODE_BIN}/pi`,
     buildArgs: (prompt, model) => ["-p", "--model", model ?? process.env.PI_MODEL ?? PI_OPENROUTER_MODEL, prompt],
   },

@@ -114,8 +114,8 @@ Deep dives: [docs/architecture.md](docs/architecture.md) (source map, key design
 | Tier          | Agents                                | Role                       |
 |---------------|---------------------------------------|----------------------------|
 | 1             | glm-code, codex, kimi                 | architect / review         |
-| 2 *(default)* | mm-code, opencode, qwen, pi, cline    | dev / QA                   |
-| 3             | kilo, agy, kiro, devin               | experimental / boilerplate |
+| 2 *(default)* | mm-code, opencode, qwen, cline    | dev / QA                   |
+| 3             | kilo, agy, kiro, devin, pi               | experimental / boilerplate |
 | 4             | mock, mock-long                       | dry-run / test agents      |
 
 ### Scheduling modes
