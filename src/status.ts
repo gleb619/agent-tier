@@ -346,7 +346,13 @@ export function formatCombinedReport(stateDirs: string | string[], runs: RunReco
   return formatStatusTable(runs) + "\n\n" + formatStateReports(dirs);
 }
 
-export async function runStatus(stateDirs: string | string[], opts?: { json?: boolean }): Promise<void> {
+/**
+ * The data behind one `at status` render: best-effort naming-queue drain, one
+ * locked read→prune→detect→write per dir (output matches disk, no race with
+ * concurrent addRun/updateRun), then the joined runs + state report. Also the
+ * payload of `at bridge status get`.
+ */
+export async function buildStatusSnapshot(stateDirs: string | string[]): Promise<StatusReport> {
   const dirs = Array.isArray(stateDirs) ? stateDirs : [stateDirs];
   // Best-effort flush of the naming queue (jobs land there when the namer
   // lock timed out). Drain is silent and never throws — naming is
@@ -359,21 +365,22 @@ export async function runStatus(stateDirs: string | string[], opts?: { json?: bo
       // ignore — status must work regardless
     }
   }
-  // Single locked read→prune→detect→write per dir: output matches disk, no
-  // race with concurrent addRun/updateRun (the old code fired pruneRuns()
-  // without awaiting it, then persisted an unpruned snapshot via unlocked
-  // saveRuns).
   const runsPerDir: RunRecord[][] = [];
   for (const dir of dirs) {
     runsPerDir.push(await refreshRuns(dir));
   }
   const runs = joinRuns(dirs, runsPerDir);
+  return buildStatusReport(runs, buildStateReportFor(dirs));
+}
+
+export async function runStatus(stateDirs: string | string[], opts?: { json?: boolean }): Promise<void> {
+  const dirs = Array.isArray(stateDirs) ? stateDirs : [stateDirs];
+  const report = await buildStatusSnapshot(dirs);
 
   if (opts?.json) {
-    const state = buildStateReportFor(dirs);
-    process.stdout.write(formatStatusJson(runs, state) + "\n");
+    process.stdout.write(JSON.stringify(report) + "\n");
     return;
   }
 
-  console.log(formatCombinedReport(dirs, runs));
+  console.log(formatCombinedReport(dirs, report.runs));
 }

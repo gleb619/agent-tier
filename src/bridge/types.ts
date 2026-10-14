@@ -9,7 +9,7 @@ export interface BridgeContext {
   stateDirs: string[];
 }
 
-export type BridgeHandler = (params: BridgeParams, ctx: BridgeContext) => unknown;
+export type BridgeHandler = (params: BridgeParams, ctx: BridgeContext) => unknown | Promise<unknown>;
 
 /**
  * Error with a machine-readable code for the bridge error envelope.

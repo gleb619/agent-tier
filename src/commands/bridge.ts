@@ -44,10 +44,14 @@ export function registerBridgeCommand(program: Command): void {
     .action(async (resource: string | undefined, verb: string | undefined) => {
       try {
         if (!resource || !verb) {
-          throw new BridgeError("USAGE", "usage: at bridge <resource> <verb>  (resources: ping, agents)", 2);
+          throw new BridgeError(
+            "USAGE",
+            "usage: at bridge <resource> <verb>  (resources: ping, agents, runs, status, feedback, kanban, config)",
+            2,
+          );
         }
         const params = parseParams(await readStdin());
-        const data = dispatchBridge(resource, verb, params, { stateDirs: resolveStatusDirs() });
+        const data = await Promise.resolve(dispatchBridge(resource, verb, params, { stateDirs: resolveStatusDirs() }));
         writeEnvelope({ ok: true, data });
       } catch (err) {
         if (err instanceof BridgeError) {

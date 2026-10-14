@@ -1,5 +1,10 @@
 import { agentsResource } from "./agents";
+import { configResource } from "./config";
+import { feedbackResource } from "./feedback";
+import { kanbanResource } from "./kanban";
 import { pingResource } from "./ping";
+import { runsResource } from "./runs";
+import { statusResource } from "./status";
 import type { BridgeContext, BridgeParams } from "./types";
 import { BridgeError } from "./types";
 
@@ -12,6 +17,11 @@ import { BridgeError } from "./types";
 const RESOURCES: Record<string, typeof pingResource> = {
   ping: pingResource,
   agents: agentsResource,
+  runs: runsResource,
+  status: statusResource,
+  feedback: feedbackResource,
+  kanban: kanbanResource,
+  config: configResource,
 };
 
 export function listBridgeResources(): string[] {
