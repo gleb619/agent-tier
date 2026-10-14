@@ -51,6 +51,11 @@ export interface RunOptions {
    * produce a `[at] scope violation` warning and count as a failed run.
    */
   scope?: string[];
+  /**
+   * When true, print a single JSON summary line to stdout after a blocking
+   * run finishes (see src/summary.ts). No-op for detached non-blocking runs.
+   */
+  jsonSummary?: boolean;
 }
 
 interface ArgvOptions {
@@ -73,6 +78,7 @@ interface ArgvOptions {
   verify?: string;
   normka?: boolean;
   sandbox?: boolean;
+  jsonSummary?: boolean;
   globalPrompt?: string;
   scope?: string[];
 }
@@ -96,6 +102,7 @@ export interface ParsedJson {
   promptFileContent?: string;
   normka?: boolean;
   sandbox?: boolean;
+  jsonSummary?: boolean;
   globalPrompt?: string;
 }
 
@@ -173,6 +180,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     verify: argv.verify?.trim() || undefined,
     normka: argv.normka === true,
     sandbox: argv.sandbox === true ? true : undefined,
+    jsonSummary: argv.jsonSummary === true ? true : undefined,
     globalPrompt: argv.globalPrompt?.trim() || undefined,
     scope: argv.scope && argv.scope.length > 0 ? argv.scope : undefined,
   };
@@ -268,6 +276,7 @@ export function parseJsonInput(raw: string): ParsedJson {
     promptFileContent,
     normka: parsed.normka === true,
     sandbox: parsed.sandbox === true ? true : undefined,
+    jsonSummary: parsed.jsonSummary === true ? true : undefined,
     globalPrompt: (parsed.globalPrompt as string | undefined)?.trim() || undefined,
   };
 }

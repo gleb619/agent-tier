@@ -35,6 +35,10 @@ export function registerDefaultCommand(program: Command): void {
       false,
     )
     .option(
+      "--json-summary",
+      "After a blocking run (-s/--wait) print one JSON summary line (status, files changed, diffstat)",
+    )
+    .option(
       "--sandbox",
       "After a successful run, verify the agent with a real `at` sandbox test in /tmp (also enabled by sandbox.enabled in config)",
       false,
@@ -131,6 +135,7 @@ export function registerDefaultCommand(program: Command): void {
             ssePort: parsed.ssePort,
             normka: parsed.normka ?? (opts.normka as boolean | undefined),
             sandbox: opts.sandbox as boolean,
+            jsonSummary: opts.jsonSummary as boolean,
             globalPrompt: effectiveGlobalPrompt,
             scope: scopeGlobs.length > 0 ? scopeGlobs : undefined,
           });
@@ -163,6 +168,7 @@ export function registerDefaultCommand(program: Command): void {
             sse: opts.sse,
             normka: opts.normka as boolean,
             sandbox: opts.sandbox as boolean,
+            jsonSummary: opts.jsonSummary as boolean,
             globalPrompt: effectiveGlobalPrompt,
             scope: scopeGlobs.length > 0 ? scopeGlobs : undefined,
           });

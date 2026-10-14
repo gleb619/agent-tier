@@ -17,6 +17,7 @@ import { runSandboxTest } from "./sandbox";
 import { getStateFile, pickAgent } from "./scheduler";
 import { findScopeViolations } from "./scope";
 import { getStateFilePath } from "./state-dir";
+import { buildSummary, defaultGitRunner } from "./summary";
 
 interface TrackedChild {
   pid: number;
@@ -627,6 +628,7 @@ export async function run(options: RunOptions, agents: AgentDef[], spawner: Spaw
     const maxAttempts = isNamed ? 1 : 1 + Math.min(options.retries, candidates.length - 1);
     let agent = isNamed ? candidates[0] : await pickAgent(candidates, stateFile, schedKey);
 
+    const startedAt = Date.now();
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) {
         agent = await pickAgent(candidates, stateFile, schedKey);
@@ -685,13 +687,17 @@ export async function run(options: RunOptions, agents: AgentDef[], spawner: Spaw
         if (options.sandbox && (options.stream || options.wait)) {
           await runSandboxTest(agent.name);
         }
+        emitJsonSummary(options, runId, agent, 0, startedAt);
         return 0;
       } catch (err) {
         if (!healthRecorded) {
           await recordResult(stateFilePath, agent.name, false);
         }
         const isLast = attempt === maxAttempts - 1;
-        if (isLast || !(err instanceof AgentError)) throw err;
+        if (isLast || !(err instanceof AgentError)) {
+          emitJsonSummary(options, runId, agent, err instanceof AgentError ? err.code : 1, startedAt);
+          throw err;
+        }
       }
     }
 
@@ -704,6 +710,34 @@ export async function run(options: RunOptions, agents: AgentDef[], spawner: Spaw
       killActiveChildren();
     }
   }
+}
+
+/** `--json-summary`: one JSON line on stdout once a blocking run is finished. */
+function emitJsonSummary(
+  options: RunOptions,
+  runId: string,
+  agent: AgentDef,
+  exitCode: number,
+  startedAt: number,
+): void {
+  if (!options.jsonSummary || !(options.stream || options.wait)) return;
+  const status = exitCode === 0 ? "done" : "failed";
+  console.log(
+    buildSummary(
+      {
+        runId,
+        agent: agent.name,
+        tier: agent.tier,
+        status,
+        exitCode,
+        durationMs: Date.now() - startedAt,
+        cwd: options.cwd ?? process.cwd(),
+        verifyRan: Boolean(options.verify),
+        verifyExitCode: options.verify && status === "done" ? 0 : null,
+      },
+      defaultGitRunner(),
+    ),
+  );
 }
 
 function buildDoneEvent(
