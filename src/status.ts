@@ -1,7 +1,7 @@
 import os from "os";
 import path from "path";
 import { loadGenericAgents } from "./agents/generic-loader";
-import { AGENTS, getAgentsByTier } from "./agents/registry";
+import { AGENTS, type AgentDef, getAgentsByTier } from "./agents/registry";
 import { getLineAgents, loadConfig } from "./config";
 import { type AgentHealth, loadHealth } from "./health";
 import { drainNamingQueue } from "./naming";
@@ -57,7 +57,12 @@ export function buildStateReport(stateDir: string, opts?: { quiet?: boolean }): 
   if (state.scheduler && Object.keys(state.scheduler).length > 0) {
     const allAgents = [...AGENTS, ...loadGenericAgents()];
     const config = loadConfig(opts);
-    const lineAgents = getLineAgents(allAgents, config, opts);
+    let lineAgents: AgentDef[] = [];
+    try {
+      lineAgents = getLineAgents(allAgents, config, opts);
+    } catch {
+      // empty/invalid line config: status must still render; "line" entry gets agentName null
+    }
     for (const [key, sched] of Object.entries(state.scheduler)) {
       let agentName: string | null = null;
       if (key === "line") {

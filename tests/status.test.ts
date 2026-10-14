@@ -163,6 +163,15 @@ function mockLineConfig(line: string[]): void {
 }
 
 describe("buildStateReport", () => {
+  it("does not throw when line config resolves to no agents", () => {
+    writeTestStateFile({}, { line: { index: 0 }, "tier-2": { index: 0 } });
+    mockLineConfig(["nonexistent"]);
+
+    const report = buildStateReport(tmpDir, { quiet: true });
+    expect(report.scheduler.find((e) => e.key === "line")?.agentName).toBeNull();
+    expect(report.scheduler.find((e) => e.key === "tier-2")).toBeDefined();
+  });
+
   it("includes agents array in report", () => {
     writeTestStateFile({
       opencode: { failureTimes: [], disabledTo: null, deactivated: true },
