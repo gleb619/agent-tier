@@ -132,3 +132,10 @@ Success-rate card color: ≥80% green, 50–79% amber, <50% red.
 * Same status/tier colors and glyphs (section 7).
 * WebUI-only extras (drawer, hover tooltips, bulk select, PWA) must not change structure.
 * TUI-only constraints (no pointer, fixed grid) may drop decoration, never a section.
+
+## 9. Machine-readable spec
+
+`src/ui-spec.ts` is the executable counterpart of this document: view ids, ordered
+sections per view, layout tokens (nav widths, breakpoints), and the shared
+status/tier/health vocabulary. Both TUI and WebUI consume it; keep this file and
+the spec in sync.
