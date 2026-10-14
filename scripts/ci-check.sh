@@ -61,11 +61,20 @@ if [ "$SKIP_DOCKER" -eq 0 ]; then
   elif docker run --rm \
       --user "$(id -u):$(id -g)" \
       -e HOME=/tmp \
-      -v "$ROOT":/work -w /work \
+      -v "$ROOT":/src:ro \
       -e npm_config_update_notifier=false \
       -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
       "$IMAGE" \
-      sh -c 'corepack pnpm@9.15.9 install --frozen-lockfile --config.confirmModulesPurge=false && corepack pnpm@9.15.9 run build && node dist/cli.js --help >/dev/null'; then
+      sh -c 'work=/tmp/ci-check-build &&
+        mkdir -p "$work" &&
+        # Copy the tree instead of building in the bind mount: worktrees keep
+        # node_modules as a symlink pointing outside the mount, and pnpm then
+        # dies on ENOTDIR trying to mkdir /work/node_modules.
+        tar -C /src --exclude=node_modules --exclude=.git -cf - . | tar -C "$work" -xf - &&
+        cd "$work" &&
+        corepack pnpm@9.15.9 install --frozen-lockfile --config.confirmModulesPurge=false &&
+        corepack pnpm@9.15.9 run build &&
+        node dist/cli.js --help >/dev/null'; then
     echo "OK: project builds in docker"
   else
     echo "FAIL: docker build check failed" >&2

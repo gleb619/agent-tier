@@ -42,6 +42,15 @@ describe("ci-check script", () => {
     expect(sh).toMatch(/--user "\$\(id -u\):\$\((id -g)\)"/);
     expect(sh).toMatch(/-e HOME=/);
   });
+
+  it("builds in a container-local copy that ignores host node_modules", () => {
+    const sh = readFileSync(SCRIPT, "utf8");
+    // host tree is mounted read-only, never as the build dir — a symlinked
+    // node_modules (worktrees) breaks pnpm with ENOTDIR when mounted at /work
+    expect(sh).toMatch(/-v "\$ROOT":\/src:ro/);
+    expect(sh).not.toMatch(/-v "\$ROOT":\/work\b/);
+    expect(sh).toMatch(/--exclude=node_modules/);
+  });
 });
 
 describe("ci workflow file", () => {
