@@ -29,6 +29,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { scanForFatalMarkers } from "./fatal-markers";
 import { recordResult } from "./health";
 import { applyRunName, drainNamingQueue, readLogTail } from "./naming";
 import { isPidAlive } from "./process-utils";
@@ -111,22 +112,15 @@ export function spawnRunWatch(o: RunWatchOptions): void {
   }
 }
 
-/** Marker patterns providers emit when a quota/rate limit kills the run. */
-const QUOTA_MARKERS = /(?:\b429\b|rate[ -]?limit|usage limit|quota|weekly limit|plan limit)/i;
-/** How much of the log tail to scan — markers appear at the very end. */
-const QUOTA_SCAN_BYTES = 64 * 1024;
-
 /**
- * Best-effort: true (with the matched marker) when the end of the run log
- * looks like a provider quota/rate-limit kill, false on no match or any
- * read error.
+ * Scan the log tail for known fatal markers (unrecognized model, quota 429,
+ * usage limit reached).  Uses the shared pure detector from fatal-markers.ts.
+ * Returns the matched marker string, or null if none found.
  */
 export function detectQuotaLimit(logFile: string): string | null {
   try {
     const content = readFileSync(logFile, "utf8");
-    const tail = content.length > QUOTA_SCAN_BYTES ? content.slice(-QUOTA_SCAN_BYTES) : content;
-    const m = tail.match(QUOTA_MARKERS);
-    return m ? m[0] : null;
+    return scanForFatalMarkers(content) ?? null;
   } catch {
     return null;
   }
@@ -250,10 +244,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
       // marked done and the agent would stay in the rotation.
       const quotaHit = detectQuotaLimit(logFile);
       if (quotaHit) {
-        appendFileSync(
-          logFile,
-          `[at] run-watch: agent appears quota/rate-limited ("${quotaHit}"), marking run failed and recording agent failure\n`,
-        );
+        appendFileSync(logFile, `[at] agent ${agent} reported fatal error: ${quotaHit}\n`);
       }
       await updateRun(stateDir, runId, {
         status: quotaHit ? "failed" : "done",

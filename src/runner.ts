@@ -1,10 +1,11 @@
 import { spawn, spawnSync } from "node:child_process";
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, writeSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, writeSync } from "node:fs";
 import path from "node:path";
 import { AgentError } from "./agent-error";
 import { applyNormkaFlag } from "./agents/normka-flag";
 import { AGENTS, type AgentDef } from "./agents/registry";
 import { getLineAgents, loadConfig } from "./config";
+import { scanForFatalMarkers } from "./fatal-markers";
 import { filterHealthy, isDeactivated, loadHealth, recordResult } from "./health";
 import { applyRunName, readLogTail } from "./naming";
 import { type Hub, type NotifyEvent, setupNotify, startHub, tailLogFile } from "./notify";
@@ -400,13 +401,36 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
     throw new Error(`${agent.name} killed after ${timeoutMs}ms timeout`);
   }
 
-  const exitCode = code ?? 1;
+  let exitCode = code ?? 1;
   let status: "done" | "failed" = exitCode === 0 ? "done" : "failed";
   await updateRun(options.stateDir, runId, {
     status,
     finishedAt: new Date().toISOString(),
     exitCode,
   });
+
+  // Check for fatal markers after agent exit. If present and agent exitCode was 0,
+  // treat the run as failed. This catches errors like unrecognized models, quota
+  // rejections, etc. that cause the agent to exit with success but actually
+  // indicate a fatal provider error.
+  if (exitCode === 0) {
+    try {
+      const logContent = readFileSync(logFile, "utf8");
+      const fatalMarker = scanForFatalMarkers(logContent);
+      if (fatalMarker) {
+        appendFileSync(logFile, `[at] agent ${agent.name} reported fatal error: ${fatalMarker}\n`);
+        status = "failed";
+        const effectiveExitCode = 1;
+        await updateRun(options.stateDir, runId, {
+          status,
+          exitCode: effectiveExitCode,
+        });
+        exitCode = effectiveExitCode;
+      }
+    } catch {
+      // Log file may be gone — nothing to do
+    }
+  }
 
   // Post-agent verify hook: fail the run when the command exits non-zero.
   // On failure: status flipped to 'failed', log line appended, --callback
@@ -636,13 +660,36 @@ async function awaitDetachedExit(result: LaunchResult, options: RunOptions): Pro
     throw new Error(`${agent.name} killed after ${options.timeout}ms timeout`);
   }
 
-  const exitCode = code ?? 1;
+  let exitCode = code ?? 1;
   let status: "done" | "failed" = exitCode === 0 ? "done" : "failed";
   await updateRun(options.stateDir, runId, {
     status,
     finishedAt: new Date().toISOString(),
     exitCode,
   });
+
+  // Check for fatal markers after agent exit. If present and agent exitCode was 0,
+  // treat the run as failed. This catches errors like unrecognized models, quota
+  // rejections, etc. that cause the agent to exit with success but actually
+  // indicate a fatal provider error.
+  if (exitCode === 0) {
+    try {
+      const logContent = readFileSync(logFile, "utf8");
+      const fatalMarker = scanForFatalMarkers(logContent);
+      if (fatalMarker) {
+        appendFileSync(logFile, `[at] agent ${agent.name} reported fatal error: ${fatalMarker}\n`);
+        status = "failed";
+        const effectiveExitCode = 1;
+        await updateRun(options.stateDir, runId, {
+          status,
+          exitCode: effectiveExitCode,
+        });
+        exitCode = effectiveExitCode;
+      }
+    } catch {
+      // Log file may be gone — nothing to do
+    }
+  }
   const sfp = getStateFilePath(options.stateDir);
   await recordResult(sfp, agent.name, exitCode === 0);
 
@@ -885,13 +932,36 @@ export const defaultSpawner: Spawner = async (agent, options, providedRunId) => 
   });
 
   const { code } = await agentExit;
-  const exitCode = code ?? 1;
+  let exitCode = code ?? 1;
   let status: "done" | "failed" = exitCode === 0 ? "done" : "failed";
   await updateRun(options.stateDir, runId, {
     status,
     finishedAt: new Date().toISOString(),
     exitCode,
   });
+
+  // Check for fatal markers after agent exit. If present and agent exitCode was 0,
+  // treat the run as failed. This catches errors like unrecognized models, quota
+  // rejections, etc. that cause the agent to exit with success but actually
+  // indicate a fatal provider error.
+  if (exitCode === 0) {
+    try {
+      const logContent = readFileSync(logFile, "utf8");
+      const fatalMarker = scanForFatalMarkers(logContent);
+      if (fatalMarker) {
+        appendFileSync(logFile, `[at] agent ${agent.name} reported fatal error: ${fatalMarker}\n`);
+        status = "failed";
+        const effectiveExitCode = 1;
+        await updateRun(options.stateDir, runId, {
+          status,
+          exitCode: effectiveExitCode,
+        });
+        exitCode = effectiveExitCode;
+      }
+    } catch {
+      // Log file may be gone — nothing to do
+    }
+  }
   const sfp = getStateFilePath(options.stateDir);
   await recordResult(sfp, agent.name, exitCode === 0);
 

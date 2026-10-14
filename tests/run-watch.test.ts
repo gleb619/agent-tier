@@ -245,7 +245,7 @@ describe("run-watch — quota/rate-limit detection", () => {
     });
     expect(recordResultMock).toHaveBeenCalledWith(expect.stringContaining("state.json"), "test-agent", false);
     const logged = appendFileMock.mock.calls.map((c) => String(c[1])).join("\n");
-    expect(logged).toMatch(/quota|rate.?limit/i);
+    expect(logged).toContain(`[at] agent test-agent reported fatal error: API Error: Request rejected (429)`);
   });
 
   it("keeps status done when the log tail has no quota markers", async () => {

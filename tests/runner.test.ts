@@ -413,6 +413,34 @@ describe("defaultSpawner", () => {
     expect(content).toContain("agent=test");
     expect(content).toContain("status=done");
   });
+
+  it("marks run failed when agent exits 0 but writes fatal marker to log", async () => {
+    const markerFile = path.join(tmpLogDir, "marker.txt");
+    const agent: AgentDef = {
+      name: "test-fatal-marker",
+      tier: 2,
+      bin: () => "/bin/bash",
+      buildArgs: () => [
+        "-c",
+        `echo "[claude-code:unrecognized_model] {"model":"bad"}" > ${markerFile}; cat ${markerFile}; exit 0`,
+      ],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: "hello",
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const files = readdirSync(tmpLogDir);
+    expect(files.length).toBeGreaterThan(0);
+    const logPath = path.join(tmpLogDir, files[0]);
+    const content = readFileSync(logPath, "utf8");
+    expect(content).toContain("[at] agent test-fatal-marker reported fatal error: [claude-code:unrecognized_model]");
+  });
 });
 
 describe("defaultSpawner — --verify hook", () => {
