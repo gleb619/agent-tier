@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { NotifyEvent } from "./types";
 
@@ -26,4 +26,17 @@ export function readEvents(stateDir: string, runId: string): NotifyEvent[] {
 
 export function readEventsSince(stateDir: string, runId: string, sinceSeq: number): NotifyEvent[] {
   return readEvents(stateDir, runId).filter((e) => e.seq > sinceSeq);
+}
+
+/** Read every stored event under a state dir, excluding discuss files. */
+export function readAllEvents(stateDir: string): NotifyEvent[] {
+  const dir = getEventsDir(stateDir);
+  if (!existsSync(dir)) return [];
+  const out: NotifyEvent[] = [];
+  for (const entry of readdirSync(dir)) {
+    if (!entry.endsWith(".jsonl") || entry.endsWith(".discuss.jsonl")) continue;
+    const runId = entry.slice(0, -".jsonl".length);
+    out.push(...readEvents(stateDir, runId));
+  }
+  return out;
 }

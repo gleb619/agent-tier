@@ -5,7 +5,7 @@ import { BridgeError } from "../bridge/types";
 import { resolveStatusDirs } from "../state-dir";
 
 /**
- * `at bridge <resource> <verb>` — machine-readable JSON RPC surface.
+ * `at bridge <resource> <verb> [id]` — machine-readable JSON RPC surface.
  * Contract: docs/bridge.md. stdin = JSON params, stdout = JSON envelope only.
  */
 
@@ -39,19 +39,24 @@ function writeEnvelope(envelope: unknown): void {
 
 export function registerBridgeCommand(program: Command): void {
   program
-    .command("bridge [resource] [verb]")
+    .command("bridge [resource] [verb] [id]")
     .description("Machine-readable JSON RPC surface: stdin = JSON params, stdout = JSON envelope (docs/bridge.md)")
-    .action(async (resource: string | undefined, verb: string | undefined) => {
+    .action(async (resource: string | undefined, verb: string | undefined, id: string | undefined) => {
       try {
         if (!resource || !verb) {
           throw new BridgeError(
             "USAGE",
-            `usage: at bridge <resource> <verb>  (resources: ${listBridgeResources().join(", ")})`,
+            `usage: at bridge <resource> <verb> [id]  (resources: ${listBridgeResources().join(", ")})`,
             2,
           );
         }
         const params = parseParams(await readStdin());
-        const data = await Promise.resolve(dispatchBridge(resource, verb, params, { stateDirs: resolveStatusDirs() }));
+        if (id !== undefined && params.id === undefined) {
+          params.id = id;
+        }
+        const data = await Promise.resolve(
+          dispatchBridge(resource, verb, params, { stateDirs: resolveStatusDirs() }),
+        );
         writeEnvelope({ ok: true, data });
       } catch (err) {
         if (err instanceof BridgeError) {

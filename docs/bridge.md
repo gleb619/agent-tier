@@ -7,11 +7,12 @@ instead of parsing CLI text output. Implemented in `src/commands/bridge.ts`
 ## Invocation
 
 ```
-at bridge <resource> <verb> [params on stdin as JSON]
+at bridge <resource> <verb> [id]
 ```
 
 - **Input:** request params on **stdin** as a single JSON object. Empty stdin is
-  treated as `{}`. There is no `--json` flag — stdin *is* JSON.
+  treated as `{}`. There is no `--json` flag — stdin *is* JSON. The optional
+  `[id]` positional is merged into params as `id` when present.
 - **Output:** **stdout = JSON only**, exactly one line (compact, no pretty
   printing), terminated by `\n`. No banners, no ANSI escapes, no log lines on
   stdout. Logs go to stderr only.
@@ -35,12 +36,12 @@ Error (stdout is still valid JSON, one line):
 Machine codes: `USAGE`, `UNKNOWN_RESOURCE`, `UNKNOWN_VERB`, `BAD_JSON`,
 `INTERNAL`, `NOT_FOUND`, `INVALID`, `CONFLICT`.
 
-## Resources & verbs (core)
+## Resources & verbs
 
 ### `ping`
 
 | Verb   | stdin params | data payload              |
-| :----- | :----------- | :------------------------ |
+| :----- | :----------- | :-------------------------- |
 | `ping` | `{}`         | `{"version": "<semver>"}` |
 
 Smoke/health verb for proxies.
@@ -126,6 +127,65 @@ clean stdout envelope.
 All three go through `src/commands/line.ts` (`saveConfig` re-signs the HMAC), so the on-disk
 contract matches `at line add|rm|move`. Config dir resolved via `AT_CONFIG_DIR` (default `~/.at`).
 
+### `events`
+
+| Verb   | stdin params                                   | data payload                |
+| :----- | :--------------------------------------------- | :-------------------------- |
+| `tail` | `{ since?: 0, limit?: N }` plus optional `id` / `runId` | Array of stored `NotifyEvent` objects. |
+
+- `id` / `runId` scopes to one run; omitted returns events for all runs.
+- `since` is an exclusive seq cursor (defaults to `0`).
+- `limit` caps the returned array (defaults to unlimited).
+
+Event wire shape (same as `src/notify/types.ts`):
+
+```json
+{
+  "runId": "string",
+  "agent": "string",
+  "ts": "ISO-8601",
+  "seq": 1,
+  "type": "start|message|tool|progress|error|done|question|answer|rename",
+  "text": "string (optional)",
+  "data": { "...": "optional adapter payload" }
+}
+```
+
+### `discuss`
+
+| Verb     | stdin params                        | data payload                          |
+| :------- | :---------------------------------- | :------------------------------------ |
+| `list`   | `{ runId: "...", pending?: false }` | Full thread (`DiscussEntry[]`).       |
+| `list`   | `{ runId: "...", pending: true }`   | Unanswered questions only.            |
+| `thread` | `{ runId: "..." }` or `id` positional | Full thread (`DiscussEntry[]`).       |
+| `answer` | `{ runId: "...", qid: "...", text: "..." }` | `{ id: "mN" }` of the new answer.     |
+| `say`    | `{ runId: "...", text: "..." }`     | `{ id: "mN" }` of the new host say.   |
+
+`id` / `runId` identify the run. `answer` and `say` write to the run's state
+ directory and reuse the existing discuss store path.
+
+Discuss entry wire shape:
+
+```json
+{
+  "id": "m1",
+  "from": "agent|host",
+  "kind": "question|answer|say|note",
+  "text": "string",
+  "options": ["..."],
+  "replyTo": "mN",
+  "ts": "ISO-8601"
+}
+```
+
+### `health`
+
+| Verb  | stdin params | data payload                                        |
+| :---- | :----------- | :-------------------------------------------------- |
+| `get` | `{}`         | Scheduler + agent-health snapshot (`StateReport`).  |
+
+Payload matches `at status --json` state section: `{ scheduler, maxEntries, agents }`.
+
 ## Adding a resource
 
 1. Create `src/bridge/<name>.ts` exporting a `BridgeResource`
@@ -141,4 +201,4 @@ contract matches `at line add|rm|move`. Config dir resolved via `AT_CONFIG_DIR` 
 
 - T27 — read verbs: done (`runs list|get`, `status get`, `agents health`, `feedback list|get`, `kanban list|show|next`, `config get`)
 - T28 — mutations: done (`runs stop|stop-all`, `feedback add|update|resolve|rm`, `kanban add|status|remove`, `line add|rm|move`)
-- T29 — streaming: `events`, `discuss` (NDJSON)
+- T29 — streaming + health: done (`events tail`, `discuss list|thread|answer|say`, `health get`)

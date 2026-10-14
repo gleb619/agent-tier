@@ -1,6 +1,9 @@
 import { agentsResource } from "./agents";
 import { configResource } from "./config";
+import { discussResource } from "./discuss";
+import { eventsResource } from "./events";
 import { feedbackResource } from "./feedback";
+import { healthResource } from "./health";
 import { kanbanResource } from "./kanban";
 import { lineResource } from "./line";
 import { pingResource } from "./ping";
@@ -24,6 +27,9 @@ const RESOURCES: Record<string, typeof pingResource> = {
   kanban: kanbanResource,
   config: configResource,
   line: lineResource,
+  events: eventsResource,
+  discuss: discussResource,
+  health: healthResource,
 };
 
 export function listBridgeResources(): string[] {
@@ -41,7 +47,7 @@ export function dispatchBridge(
   if (!verbs) {
     throw new BridgeError(
       "UNKNOWN_RESOURCE",
-      `unknown bridge resource: ${resource} (usage: at bridge <resource> <verb>)`,
+      `unknown bridge resource: ${resource} (usage: at bridge <resource> <verb> [id])`,
       2,
     );
   }
