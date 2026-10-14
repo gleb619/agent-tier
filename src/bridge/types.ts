@@ -9,6 +9,7 @@ export interface BridgeContext {
   stateDirs: string[];
 }
 
+/** Handlers may be async (mutations take file locks); the dispatcher awaits them. */
 export type BridgeHandler = (params: BridgeParams, ctx: BridgeContext) => unknown | Promise<unknown>;
 
 /**

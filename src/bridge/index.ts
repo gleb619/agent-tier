@@ -2,6 +2,7 @@ import { agentsResource } from "./agents";
 import { configResource } from "./config";
 import { feedbackResource } from "./feedback";
 import { kanbanResource } from "./kanban";
+import { lineResource } from "./line";
 import { pingResource } from "./ping";
 import { runsResource } from "./runs";
 import { statusResource } from "./status";
@@ -22,14 +23,20 @@ const RESOURCES: Record<string, typeof pingResource> = {
   feedback: feedbackResource,
   kanban: kanbanResource,
   config: configResource,
+  line: lineResource,
 };
 
 export function listBridgeResources(): string[] {
   return Object.keys(RESOURCES);
 }
 
-/** Dispatch one `bridge <resource> <verb>` call and return the payload. */
-export function dispatchBridge(resource: string, verb: string, params: BridgeParams, ctx: BridgeContext): unknown {
+/** Dispatch one `bridge <resource> <verb>` call and return the payload (handlers may be async). */
+export function dispatchBridge(
+  resource: string,
+  verb: string,
+  params: BridgeParams,
+  ctx: BridgeContext,
+): unknown | Promise<unknown> {
   const verbs = RESOURCES[resource];
   if (!verbs) {
     throw new BridgeError(

@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { dispatchBridge } from "../bridge";
+import { dispatchBridge, listBridgeResources } from "../bridge";
 import type { BridgeParams } from "../bridge/types";
 import { BridgeError } from "../bridge/types";
 import { resolveStatusDirs } from "../state-dir";
@@ -46,7 +46,7 @@ export function registerBridgeCommand(program: Command): void {
         if (!resource || !verb) {
           throw new BridgeError(
             "USAGE",
-            "usage: at bridge <resource> <verb>  (resources: ping, agents, runs, status, feedback, kanban, config)",
+            `usage: at bridge <resource> <verb>  (resources: ${listBridgeResources().join(", ")})`,
             2,
           );
         }

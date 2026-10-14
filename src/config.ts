@@ -29,7 +29,8 @@ export interface AtConfig {
   globalPrompt?: string;
 }
 
-const CONFIG_DIR = path.join(os.homedir(), ".at");
+/** Overridable for tests/machine callers (bridge line mutations); defaults to ~/.at. */
+const CONFIG_DIR = process.env.AT_CONFIG_DIR ?? path.join(os.homedir(), ".at");
 export const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 export const HMAC_FILE = path.join(CONFIG_DIR, "config.json.hmac");
 const HMAC_ALGO = "sha256";
@@ -52,6 +53,18 @@ export function signConfig(): void {
     );
   }
   console.log(`[at] config signed: ${HMAC_FILE}`);
+}
+
+/**
+ * Write config.json and re-sign it, silently — the same HMAC-sign path as
+ * `at config sign`, for machine callers (`at bridge line …`) whose stdout
+ * must stay JSON-only. CLI commands keep the verbose `signConfig()`.
+ */
+export function saveConfig(config: AtConfig): void {
+  const data = JSON.stringify(config, null, 2);
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  writeFileSync(CONFIG_FILE, data, "utf8");
+  writeFileSync(HMAC_FILE, computeHmac(data), "utf8");
 }
 
 export function loadConfig(opts?: { quiet?: boolean }): AtConfig | null {

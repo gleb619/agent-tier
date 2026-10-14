@@ -33,7 +33,7 @@ Error (stdout is still valid JSON, one line):
 ```
 
 Machine codes: `USAGE`, `UNKNOWN_RESOURCE`, `UNKNOWN_VERB`, `BAD_JSON`,
-`INTERNAL`, `NOT_FOUND`.
+`INTERNAL`, `NOT_FOUND`, `INVALID`, `CONFLICT`.
 
 ## Resources & verbs (core)
 
@@ -57,10 +57,12 @@ Health entry shape: `{ name, deactivated, failures, lastFailure, disabledTo }`.
 
 ### `runs`
 
-| Verb   | stdin params                          | data payload                                  |
-| :----- | :------------------------------------ | :-------------------------------------------- |
-| `list` | `{agent?, status?, limit?}` (all optional) | Array of `RunRecord` (see below), newest store order, joined across state dirs like `at status`. |
-| `get`  | `{id}`                                | Single `RunRecord`, or `NOT_FOUND` (exit 3).  |
+| Verb       | stdin params                          | data payload                                  |
+| :--------- | :------------------------------------ | :-------------------------------------------- |
+| `list`     | `{agent?, status?, limit?}` (all optional) | Array of `RunRecord` (see below), newest store order, joined across state dirs like `at status`. |
+| `get`      | `{id}`                                | Single `RunRecord`, or `NOT_FOUND` (exit 3).  |
+| `stop`     | `{id?, force?}` (no id → newest running) | `{ runId, pid, signal, alive, stopped }`. Signals via the same SIGTERM/SIGKILL path as `at stop` and marks the run failed in runs.jsonl. |
+| `stop-all` | `{force?}`                            | `{ stopped: string[], errors: { runId, error }[] }`. Skips pids no longer alive (same as `at stop`). |
 
 `RunRecord` shape: `{ runId, agent, tier, pid, prompt, logFile, startedAt, finishedAt, exitCode, status, name }`
 where `status` is `running | done | failed | stuck`. Filters: `agent`/`status` are exact-match
@@ -75,25 +77,33 @@ strings, `limit` caps the number of returned records (positive number). Read-onl
 
 ### `feedback`
 
-| Verb   | stdin params                    | data payload |
-| :----- | :------------------------------ | :----------- |
-| `list` | `{status?, kind?, agent?, tag?, limit?}` (all optional) | Array of feedback entries, newest first (same filter semantics as `at feedback list`). |
-| `get`  | `{id}` (exact id or unique prefix) | Single feedback entry, or `NOT_FOUND` (exit 3). |
+| Verb      | stdin params                    | data payload |
+| :-------- | :------------------------------ | :----------- |
+| `list`    | `{status?, kind?, agent?, tag?, limit?}` (all optional) | Array of feedback entries, newest first (same filter semantics as `at feedback list`). |
+| `get`     | `{id}` (exact id or unique prefix) | Single feedback entry, or `NOT_FOUND` (exit 3). |
+| `add`     | `{text, kind?, agent?, runId?, tier?, tags?, context?}` | `{ entry, evicted }`. Mirrors `at feedback add`; `text` ≤ 4000 chars. |
+| `update`  | `{id, text?, kind?, status?, agent?, tags?}` | `{ entry }`. `kind` ∈ `bug|improvement|note`, `status` ∈ `open|resolved|wontfix`. |
+| `resolve` | `{id, wontfix?}`                 | `{ entry }`. Default status `resolved`; `wontfix: true` → `wontfix`. |
+| `rm`      | `{ids: string[]}`                | `{ removed: number }`. Each id is exact or unique prefix; ambiguous → USAGE. |
 
 Feedback entry shape: `{ id, kind, text, agent?, runId?, tier?, status, tags?, createdAt, updatedAt, resolvedAt?, cwd?, atVersion?, context?, log? }`.
 Same state-dir resolution as `at feedback` (`AT_STATE_DIR` → project `.at` with feedback.jsonl → `~/.at`).
 
 ### `kanban`
 
-| Verb   | stdin params      | data payload |
-| :----- | :---------------- | :----------- |
-| `list` | `{board?}`        | Array of task objects, one per board row, keyed by the board's column headers (`ID`, `Status`, `Title`, …). |
-| `show` | `{id, board?}`    | Single task object, or `NOT_FOUND` (exit 3). |
-| `next` | `{board?}`        | `{ type: "current" | "next", task }` from the same selection logic as `at kanban next`, or `null` when nothing is executable. |
+| Verb     | stdin params                                       | data payload |
+| :------- | :------------------------------------------------- | :----------- |
+| `list`   | `{board?}`                                         | Array of task objects, one per board row, keyed by the board's column headers (`ID`, `Status`, `Title`, …). |
+| `show`   | `{id, board?}`                                     | Single task object, or `NOT_FOUND` (exit 3). |
+| `next`   | `{board?}`                                         | `{ type: "current" | "next", task }` from the same selection logic as `at kanban next`, or `null` when nothing is executable. |
+| `add`    | `{title?, priority?, description?, id?, owner?, blocks?, blockedBy?, plan?, board?}` | `{ id, title, updated, task }`. Mirrors `at kanban add`. |
+| `status` | `{id, status, board?}`                             | `{ id, status }`. Status vocabulary comes from the board Status Legend; invalid → INVALID. |
+| `remove` | `{id, board?}`                                     | `{ id }`. |
 
 `board` overrides the board file (absolute/relative path); default resolution is
-`AT_KANBAN_FILE` → `<project root>/docs/kanban.md`, same as `at kanban`. Read-only: no lock,
-no mutation. Missing board file → `NOT_FOUND` (exit 3).
+`AT_KANBAN_FILE` → `<project root>/docs/kanban.md`, same as `at kanban`. Read-only verbs take no lock;
+mutations (`add`/`status`/`remove`) go through `mutateBoard` (same file lock as the CLI).
+Missing board file → `NOT_FOUND` (exit 3).
 
 ### `config`
 
@@ -104,6 +114,17 @@ no mutation. Missing board file → `NOT_FOUND` (exit 3).
 The HMAC secret is never stored in the config file (it comes from `AT_HMAC_SECRET`), so there is
 nothing to redact. Verification is silent (`quiet`), matching JSON consumers' expectation of a
 clean stdout envelope.
+
+### `line`
+
+| Verb   | stdin params    | data payload |
+| :----- | :-------------- | :----------- |
+| `add`  | `{agent}`       | `{ agent, line: string[] }`. Duplicate → CONFLICT; unknown agent → INVALID. |
+| `rm`   | `{agent}`       | `{ agent, line: string[] }`. Absent agent or line queue → NOT_FOUND. |
+| `move` | `{agent, position}` | `{ agent, position, line: string[] }`. 1-based position; out of range → INVALID. |
+
+All three go through `src/commands/line.ts` (`saveConfig` re-signs the HMAC), so the on-disk
+contract matches `at line add|rm|move`. Config dir resolved via `AT_CONFIG_DIR` (default `~/.at`).
 
 ## Adding a resource
 
@@ -119,5 +140,5 @@ clean stdout envelope.
 ## Roadmap
 
 - T27 — read verbs: done (`runs list|get`, `status get`, `agents health`, `feedback list|get`, `kanban list|show|next`, `config get`)
-- T28 — mutations: `run create|retry|delete`, `agent enable|disable`, `settings put`
+- T28 — mutations: done (`runs stop|stop-all`, `feedback add|update|resolve|rm`, `kanban add|status|remove`, `line add|rm|move`)
 - T29 — streaming: `events`, `discuss` (NDJSON)
