@@ -23,7 +23,7 @@ cd ../agent-tier-<short-name>
 #    ...
 
 # 3. Run guardrails — ALL must pass before merging
-npx biome ci .        # lint + format drift fails the merge
+pnpm exec biome ci .  # lint + format drift fails the merge
 npx tsc --noEmit
 npx vitest run        # unit suite (tests/**) ONLY
 
@@ -136,7 +136,7 @@ Line order is stored in `~/.at/config.json` (`"line": ["agent", ...]`, HMAC-sign
 
 ## Formatting & lint
 
-Biome (`biome.json`, `@biomejs/biome`) is the single source of truth for lint + format — no ESLint/Prettier. 2-space indent, double quotes, semicolons, 120 width, recommended lint preset, import order via `organizeImports`. `npx biome ci .` is a merge guardrail (fix drift with `npm run lint:fix`); suppress real false positives with `// biome-ignore lint/<rule>: reason` (a11y already off for `src/tui/**` — opentui, not DOM).
+Biome (`biome.json`, `@biomejs/biome`) is the single source of truth for lint + format — no ESLint/Prettier. 2-space indent, double quotes, semicolons, 120 width, recommended lint preset, import order via `organizeImports`. `pnpm exec biome ci .` is a merge guardrail (fix drift with `npm run lint:fix`); suppress real false positives with `// biome-ignore lint/<rule>: reason` (a11y already off for `src/tui/**` — opentui, not DOM).
 
 ## Rules
 
