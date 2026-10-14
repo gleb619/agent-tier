@@ -254,6 +254,73 @@ describe("opAdd", () => {
     const tasks = toTasks(loadBoard(file));
     expect(tasks.find((t) => t.ID === "T4")?.Blocks).toBe("T6");
   });
+
+  it("warns when --plan points at a gitignored file (isIgnored callback returns true)", () => {
+    const { dir, file } = fresh([]);
+    const doc = loadBoard(file);
+    const r = opAdd(doc, {
+      title: "x",
+      plan: "plans/T1-spec.md",
+      isIgnored: (p, cwd) => {
+        expect(p).toBe(resolvePlanPath(file, "plans/T1-spec.md"));
+        expect(cwd).toBe(path.dirname(file));
+        return true;
+      },
+    });
+    saveBoard(doc);
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toMatch(/^\[kanban-add] plan file plans\/T1-spec\.md is gitignored/);
+    expect(toTasks(loadBoard(file))[0]["Plan File"]).toBe("plans/T1-spec.md");
+    expect(dir).toBeTruthy();
+  });
+
+  it("does not warn when --plan is clean (isIgnored returns false)", () => {
+    const { file } = fresh([]);
+    const doc = loadBoard(file);
+    const r = opAdd(doc, { title: "x", plan: "plans/x.md", isIgnored: () => false });
+    saveBoard(doc);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it("does not warn when no isIgnored callback is supplied", () => {
+    const { file } = fresh([]);
+    const doc = loadBoard(file);
+    const r = opAdd(doc, { title: "x", plan: "plans/x.md" });
+    saveBoard(doc);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it("skips the gitignore check when --plan is the sentinel", () => {
+    const { file } = fresh([]);
+    const doc = loadBoard(file);
+    let called = false;
+    const r = opAdd(doc, {
+      title: "x",
+      plan: undefined,
+      isIgnored: () => {
+        called = true;
+        return true;
+      },
+    });
+    saveBoard(doc);
+    expect(called).toBe(false);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it("swallows an isIgnored callback throw and never fails the add", () => {
+    const { file } = fresh([]);
+    const doc = loadBoard(file);
+    const r = opAdd(doc, {
+      title: "x",
+      plan: "plans/x.md",
+      isIgnored: () => {
+        throw new Error("boom");
+      },
+    });
+    saveBoard(doc);
+    expect(r.changed).toBe(true);
+    expect(r.messages).toEqual(["Added T1: x"]);
+  });
 });
 
 describe("opStatus", () => {

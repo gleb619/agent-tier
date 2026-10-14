@@ -152,6 +152,7 @@ export interface AddOptions {
   blocks?: string;
   blockedBy?: string;
   plan?: string;
+  isIgnored?: (planPath: string, cwd: string) => boolean;
   description?: string;
 }
 
@@ -160,13 +161,29 @@ export function opAdd(doc: BoardDoc, opts: AddOptions): OpResult {
     throw new Error(`Invalid priority "${opts.priority}". Allowed: ${VALID_PRIORITIES.join(", ")}`);
   }
 
+  const r = op();
+
   const idIdx = requireIndex(doc, "ID");
   const id = opts.id?.trim() || nextId(doc);
   const existingRowIdx = findRowById(doc, id);
   const isUpdate = existingRowIdx !== -1;
   const existing = isUpdate ? toTasks(doc).find((t) => t.ID === id) : undefined;
 
-  const r = op();
+  // Warn only — never fail — when --plan points at a path git ignores: worktrees
+  // and fresh checkouts will not have the file.
+  if (opts.isIgnored && opts.plan && opts.plan !== SENTINEL) {
+    const absPlanPath = resolvePlanPath(doc.file, opts.plan);
+    const cwd = path.dirname(doc.file);
+    try {
+      if (opts.isIgnored(absPlanPath, cwd)) {
+        r.warnings.push(
+          `[kanban-add] plan file ${opts.plan} is gitignored; it will vanish with a worktree and be missing in fresh checkouts`,
+        );
+      }
+    } catch {
+      // Callback threw — treat as "unknown" and stay silent.
+    }
+  }
   const values: Record<string, string> = {};
   for (const header of doc.headers) values[header] = existing?.[header] || SENTINEL;
 

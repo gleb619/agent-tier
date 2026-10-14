@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Command } from "commander";
@@ -26,6 +27,14 @@ interface BoardOpts {
 
 function boardPath(file: string | undefined, opts: BoardOpts): string {
   return resolveBoardFile(file ?? opts.board);
+}
+
+/** `git check-ignore -q <path>` — true when the path matches a gitignore pattern.
+ *  Returns false if `git` is missing, errors, or the cwd is not inside a repo. */
+function gitIgnored(planPath: string, cwd: string): boolean {
+  const r = spawnSync("git", ["check-ignore", "-q", planPath], { cwd, stdio: "ignore" });
+  // status === 0 → matched an ignore pattern; null/!=0 → not ignored or git unavailable
+  return r.status === 0;
 }
 
 function printText(r: OpResult): void {
@@ -160,6 +169,7 @@ export function registerKanbanCommand(program: Command): void {
             blockedBy: opts.blockedBy,
             plan: opts.plan,
             description: opts.description,
+            isIgnored: gitIgnored,
           };
           const r = await mutateBoard(p, (doc) => opAdd(doc, addOpts));
           if (opts.json) printJson({ file: p, ...(r.data as object), warnings: r.warnings });
