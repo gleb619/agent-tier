@@ -3,19 +3,21 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { Command } from "commander";
 import { chopLines } from "../chop";
+import { cachedRuns } from "../daemon-cache";
 import { loadRuns } from "../run-store";
 import { resolveStatusDirs } from "../state-dir";
 import { runStatus } from "../status";
 
-function showRunLogs(
+async function showRunLogs(
   stateDirs: string[],
   runId: string,
   opts: { lines?: number; head?: boolean; tail?: boolean; follow?: boolean; noChop?: boolean } = {},
-): void {
-  // Joined lookup: project `.at/` first, then `~/.at/`
+): Promise<void> {
+  // Joined lookup: project `.at/` first, then `~/.at/`. The runs index comes
+  // from the daemon hot cache when it answers (T35), else straight off disk.
   let runs: ReturnType<typeof loadRuns> = [];
   for (const dir of stateDirs) {
-    const dirRuns = loadRuns(dir);
+    const dirRuns = (await cachedRuns(dir)) ?? loadRuns(dir);
     if (dirRuns.some((r) => r.runId === runId || r.runId.startsWith(runId))) {
       runs = dirRuns;
       break;
@@ -73,7 +75,7 @@ export function registerStatusCommand(program: Command): void {
       try {
         const stateDirs = resolveStatusDirs();
         if (runId) {
-          showRunLogs(stateDirs, runId, {
+          await showRunLogs(stateDirs, runId, {
             lines: opts.lines as number | undefined,
             head: opts.head as boolean,
             tail: opts.tail as boolean,

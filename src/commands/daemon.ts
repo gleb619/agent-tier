@@ -3,6 +3,13 @@ import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Command } from "commander";
+import {
+  agentBinCandidates,
+  type BinResolution,
+  cachedBinResolution,
+  cacheStats,
+  type DaemonCacheStats,
+} from "../daemon-cache";
 
 function atdSock(): string {
   const home = os.homedir();
@@ -71,4 +78,47 @@ export function registerDaemonCommand(program: Command): void {
         console.error("[at] daemon status error:", err);
       }
     });
+  cmd
+    .command("cache")
+    .description("Daemon hot caches: read/miss counters + resolved agent bins")
+    .action(async () => {
+      try {
+        const [stats, bins] = await Promise.all([cacheStats(), cachedBinResolution(agentBinCandidates())]);
+        console.log(formatCacheReport(stats, bins));
+      } catch (err) {
+        console.error("[at] daemon cache error:", err);
+        process.exit(1);
+      }
+    });
+}
+
+const BIN_MISSING = "<missing>";
+
+/**
+ * Render the daemon's hot-cache state for `at daemon cache`. Null stats means
+ * the daemon did not answer (not running, or caches disabled) — say so instead
+ * of implying an empty cache, which would read as "nothing invalidated".
+ */
+export function formatCacheReport(stats: DaemonCacheStats | null, bins: BinResolution | null): string {
+  if (!stats) return "[at] daemon not running (no hot cache data)";
+
+  const lines = [
+    "# Hot caches",
+    "",
+    `hits: ${stats.hits}  misses: ${stats.misses}  invalidations: ${stats.invalidations}  entries: ${stats.entries}`,
+    `watched: ${stats.watched.length > 0 ? stats.watched.join(", ") : "(none)"}`,
+  ];
+
+  if (!bins) {
+    lines.push("", `[at] daemon is not serving bin resolution (no data)`);
+    return lines.join("\n");
+  }
+
+  const names = Object.keys(bins).sort();
+  const width = Math.max(...names.map((n) => n.length), 4);
+  lines.push("", "Agent bins:");
+  for (const name of names) {
+    lines.push(`  ${name.padEnd(width)}  ${bins[name] ?? BIN_MISSING}`);
+  }
+  return lines.join("\n");
 }

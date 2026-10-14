@@ -40,40 +40,57 @@ export interface DaemonResponse {
   ok: boolean;
   version?: string;
   error?: string;
+  /** Hot-cache payload (T35) — shape depends on `kind`. */
+  data?: unknown;
+  /** True when the daemon served `data` straight from a hot cache. */
+  cached?: boolean;
+  kind?: string;
 }
 
-export function connectDaemon(cmd: string = "ping", payload?: Record<string, unknown>): Promise<DaemonResponse | null> {
+export function connectDaemon(
+  cmd: string = "ping",
+  payload?: Record<string, unknown>,
+  timeoutMs: number = 1500,
+): Promise<DaemonResponse | null> {
   return new Promise((resolve) => {
     if (isDaemonDisabled() || !daemonRunning()) {
       resolve(null);
       return;
     }
     const conn = net.connect({ path: daemonSockPath() });
-    const timeout = setTimeout(() => {
+    let settled = false;
+    const finish = (resp: DaemonResponse | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       conn.destroy();
-      resolve(null);
-    }, 1500);
+      resolve(resp);
+    };
+    const timeout = setTimeout(() => finish(null), timeoutMs);
     conn.on("connect", () => {
       conn.write(`${JSON.stringify({ cmd, version: DAEMON_VERSION, ...payload })}\n`);
     });
     let data = "";
+    const parse = (line: string): DaemonResponse | null => {
+      try {
+        return JSON.parse(line) as DaemonResponse;
+      } catch {
+        return null;
+      }
+    };
     conn.on("data", (chunk) => {
       data += chunk.toString();
+      // atd answers one JSON line per request and keeps the connection open for
+      // the next one, so the first complete line IS the answer — waiting for
+      // `close` here would time out on every call.
+      const nl = data.indexOf("\n");
+      if (nl >= 0) finish(parse(data.slice(0, nl)));
     });
     conn.on("close", () => {
-      clearTimeout(timeout);
-      try {
-        const resp = JSON.parse(data.trim().split("\n").pop() || "{}");
-        resolve(resp as DaemonResponse);
-      } catch {
-        resolve(null);
-      }
+      const rest = data.trim();
+      finish(rest.length > 0 ? parse(rest.split("\n").pop() || "") : null);
     });
-    conn.on("error", () => {
-      clearTimeout(timeout);
-      conn.destroy();
-      resolve(null);
-    });
+    conn.on("error", () => finish(null));
   });
 }
 

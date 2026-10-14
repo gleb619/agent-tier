@@ -1,3 +1,6 @@
+import { mkdirSync, rmSync } from "node:fs";
+import net from "node:net";
+import { dirname } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   connectDaemon,
@@ -54,6 +57,30 @@ describe("daemon client", () => {
     process.env.AT_NO_DAEMON = "1";
     const result = await connectDaemon();
     expect(result).toBeNull();
+  });
+
+  it("connectDaemon resolves when the daemon keeps the connection open", async () => {
+    // Real atd answers one JSON line per request and stays in its read loop;
+    // the client must treat that line as the answer instead of waiting for EOF.
+    const sock = daemonSockPath();
+    mkdirSync(dirname(sock), { recursive: true });
+    const server = net.createServer((conn) => {
+      conn.on("data", () => {
+        conn.write(`${JSON.stringify({ ok: true, version: DAEMON_VERSION, data: [1, 2], cached: true })}\n`);
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(sock, resolve);
+    });
+    try {
+      const resp = await connectDaemon("runs", { dir: dirname(sock) }, 2000);
+      expect(resp).toMatchObject({ ok: true, data: [1, 2], cached: true });
+    } finally {
+      server.closeAllConnections?.();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      rmSync(sock, { force: true });
+    }
   });
 
   it("tryWithDaemon falls back when disabled", async () => {

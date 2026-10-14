@@ -75,10 +75,27 @@ export function loadConfig(opts?: { quiet?: boolean }): AtConfig | null {
     return null;
   }
 
-  let storedHmac: string;
+  let storedHmac: string | null;
   try {
     storedHmac = readFileSync(HMAC_FILE, "utf8").trim();
   } catch {
+    storedHmac = null;
+  }
+
+  return verifyConfigBytes(data, storedHmac, opts);
+}
+
+/**
+ * Verify and parse config.json bytes. Split out of `loadConfig` so the daemon
+ * hot-cache reader (`src/daemon-cache.ts`) can check the bytes it fetched over
+ * the socket: `atd` caches config, it never vouches for it.
+ */
+export function verifyConfigBytes(
+  data: string,
+  storedHmac: string | null,
+  opts?: { quiet?: boolean },
+): AtConfig | null {
+  if (storedHmac === null) {
     if (!opts?.quiet) console.warn("[at] ~/.at/config.json found but no HMAC — ignoring. Run: at config sign");
     return null;
   }

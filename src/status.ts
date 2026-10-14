@@ -2,11 +2,12 @@ import os from "node:os";
 import path from "node:path";
 import { loadGenericAgents } from "./agents/generic-loader";
 import { AGENTS, type AgentDef, getAgentsByTier } from "./agents/registry";
-import { getLineAgents, loadConfig } from "./config";
-import { type AgentHealth, loadHealth } from "./health";
+import { type AtConfig, getLineAgents, loadConfig } from "./config";
+import { cachedConfig, cachedHealth, cachedState } from "./daemon-cache";
+import { type AgentHealth, type HealthState, loadHealth } from "./health";
 import { drainNamingQueue } from "./naming";
 import { type RunRecord, refreshRuns } from "./run-store";
-import { loadStateFile } from "./scheduler";
+import { loadStateFile, type StateFile } from "./scheduler";
 import { buildSchedulerMermaid, resolveSchedulerDiagram } from "./scheduler-diagram";
 import { getStateFilePath } from "./state-dir";
 
@@ -49,14 +50,45 @@ export function buildStatusReport(runs: RunRecord[], state?: StateReport): Statu
   return state ? { total: runs.length, runs, state } : { total: runs.length, runs };
 }
 
-export function buildStateReport(stateDir: string, opts?: { quiet?: boolean }): StateReport {
+export interface StateReportSource {
+  /** `state.json` as read from the daemon hot cache; undefined ⇒ read the file. */
+  state?: StateFile;
+  /** `state.json`'s agents block from the daemon; undefined ⇒ read the file. */
+  health?: HealthState;
+  /** HMAC-verified `config.json`; `undefined` ⇒ read the file, `null` ⇒ no usable config. */
+  config?: AtConfig | null;
+}
+
+/**
+ * Prefetch the state files `buildStateReport` needs from the `atd` hot caches.
+ * Missing entries are left `undefined` so the sync readers fall back to disk —
+ * the daemon is an optimisation, never a dependency.
+ */
+async function readStateSources(dirs: string[], opts?: { quiet?: boolean }): Promise<StateReportSource[]> {
+  const config = await cachedConfig(opts);
+  return Promise.all(
+    dirs.map(async (dir) => {
+      const [state, health] = await Promise.all([cachedState(dir), cachedHealth(dir)]);
+      const source: StateReportSource = {};
+      if (state) source.state = state;
+      if (health) source.health = health;
+      if (config !== undefined) source.config = config;
+      return source;
+    }),
+  );
+}
+
+export function buildStateReport(
+  stateDir: string,
+  opts?: { quiet?: boolean; source?: StateReportSource },
+): StateReport {
   const stateFilePath = getStateFilePath(stateDir);
-  const state = loadStateFile(stateFilePath);
+  const state = opts?.source?.state ?? loadStateFile(stateFilePath);
   const scheduler: SchedulerEntry[] = [];
 
   if (state.scheduler && Object.keys(state.scheduler).length > 0) {
     const allAgents = [...AGENTS, ...loadGenericAgents()];
-    const config = loadConfig(opts);
+    const config = opts?.source?.config !== undefined ? opts.source.config : loadConfig(opts);
     let lineAgents: AgentDef[] = [];
     try {
       lineAgents = getLineAgents(allAgents, config, opts);
@@ -80,7 +112,7 @@ export function buildStateReport(stateDir: string, opts?: { quiet?: boolean }): 
     }
   }
 
-  const health = loadHealth(stateFilePath);
+  const health = opts?.source?.health ?? loadHealth(stateFilePath);
   const agents: AgentHealthEntry[] = Object.entries(health.agents).map(([name, h]) => buildAgentHealthEntry(name, h));
 
   return { scheduler, maxEntries: state.runs?.maxEntries ?? null, agents };
@@ -94,8 +126,8 @@ function scopeOf(stateDir: string): "project" | "global" {
 
 /** Merge per-dir state reports: scheduler entries keep both (scoped), agent
  *  health dedupes by name (earlier dir wins), maxEntries first non-null. */
-export function buildJoinedStateReport(dirs: string[]): StateReport {
-  const reports = dirs.map((d) => buildStateReport(d, { quiet: true }));
+export function buildJoinedStateReport(dirs: string[], sources?: StateReportSource[]): StateReport {
+  const reports = dirs.map((d, i) => buildStateReport(d, { quiet: true, source: sources?.[i] }));
   const scheduler: SchedulerEntry[] = reports.flatMap((r, i) =>
     r.scheduler.map((e) => ({ ...e, scope: scopeOf(dirs[i]) })),
   );
@@ -115,9 +147,10 @@ export function buildJoinedStateReport(dirs: string[]): StateReport {
 
 /** Build the state report for a resolved dir list: joined (scoped) when more
  *  than one dir, plain single-dir report otherwise — matches `at status --json`
- *  and the TUI dashboard. */
-export function buildStateReportFor(dirs: string[]): StateReport {
-  return dirs.length > 1 ? buildJoinedStateReport(dirs) : buildStateReport(dirs[0], { quiet: true });
+ *  and the TUI dashboard. `sources` carries prefetched daemon-cache reads. */
+export function buildStateReportFor(dirs: string[], sources?: StateReportSource[]): StateReport {
+  if (dirs.length > 1) return buildJoinedStateReport(dirs, sources);
+  return buildStateReport(dirs[0], { quiet: true, source: sources?.[0] });
 }
 
 /** Union of per-dir run lists, tagged with scope; dedupe by runId (earlier
@@ -375,7 +408,10 @@ export async function buildStatusSnapshot(stateDirs: string | string[]): Promise
     runsPerDir.push(await refreshRuns(dir));
   }
   const runs = joinRuns(dirs, runsPerDir);
-  return buildStatusReport(runs, buildStateReportFor(dirs));
+  // Runs are refreshed (and written) directly; the state files behind the
+  // report are prefetched from the daemon's hot caches where they exist.
+  const sources = await readStateSources(dirs, { quiet: true });
+  return buildStatusReport(runs, buildStateReportFor(dirs, sources));
 }
 
 export async function runStatus(stateDirs: string | string[], opts?: { json?: boolean }): Promise<void> {

@@ -27,6 +27,9 @@ type Daemon struct {
 	mu        sync.Mutex
 	idleTimer *time.Timer
 	stopped   bool
+	// cache serves the hot reads (T35) so CLI callers skip re-reading and
+	// re-parsing the state files. nil only when the watcher could not start.
+	cache *HotCache
 }
 
 func (d *Daemon) sockDir() string {
@@ -107,6 +110,8 @@ func (d *Daemon) idleExit() {
 	if d.listener != nil {
 		d.listener.Close()
 	}
+	_ = d.cache.Close()
+	d.cache = nil
 	_ = os.Remove(d.PidPath)
 }
 
@@ -128,6 +133,13 @@ func (d *Daemon) Start() error {
 	}
 	if d.IdleMs == 0 {
 		d.IdleMs = defaultIdleMs
+	}
+	// Hot caches are an optimisation: if the watcher cannot start, the daemon
+	// still serves ping/stop and clients fall back to their own direct reads.
+	if c, err := newHotCache(d.sockDir()); err != nil {
+		fmt.Fprintf(os.Stderr, "atd hot caches disabled: %v\n", err)
+	} else {
+		d.cache = c
 	}
 	d.resetIdle()
 	go d.acceptLoop()
@@ -153,14 +165,14 @@ func (d *Daemon) handleConn(conn net.Conn) {
 	scanner := bufio.NewScanner(conn)
 	for scanner.Scan() {
 		line := scanner.Text()
-		var req map[string]string
+		var req map[string]interface{}
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
 			resp := map[string]interface{}{"ok": false, "error": "bad json"}
 			_ = json.NewEncoder(conn).Encode(resp)
 			continue
 		}
-		cmd := req["cmd"]
-		clientVer := req["version"]
+		cmd, _ := req["cmd"].(string)
+		clientVer, _ := req["version"].(string)
 		if d.Version != "" && clientVer != "" && clientVer != d.Version {
 			resp := map[string]interface{}{"ok": false, "error": "version mismatch"}
 			_ = json.NewEncoder(conn).Encode(resp)
@@ -174,10 +186,44 @@ func (d *Daemon) handleConn(conn net.Conn) {
 			_ = json.NewEncoder(conn).Encode(map[string]interface{}{"ok": true})
 			d.idleExit()
 			return
+		case CacheRuns, CacheState, CacheHealth, CacheConfig, CacheBins:
+			d.serveCache(conn, cmd, req)
+		case CacheStatsCmd:
+			_ = json.NewEncoder(conn).Encode(map[string]interface{}{"ok": true, "data": d.cacheStats()})
 		default:
 			_ = json.NewEncoder(conn).Encode(map[string]interface{}{"ok": false, "error": "unknown cmd"})
 		}
 	}
+}
+
+// serveCache answers one hot-cache read. `dir` selects a state dir other than
+// the daemon's own (project-local `.at`); everything else is passed through as
+// kind params.
+func (d *Daemon) serveCache(conn net.Conn, kind string, req map[string]interface{}) {
+	if d.cache == nil {
+		_ = json.NewEncoder(conn).Encode(map[string]interface{}{"ok": false, "error": "hot caches unavailable"})
+		return
+	}
+	dir, _ := req["dir"].(string)
+	val, cached, err := d.cache.get(kind, dir, req)
+	if err != nil {
+		_ = json.NewEncoder(conn).Encode(map[string]interface{}{"ok": false, "error": err.Error()})
+		return
+	}
+	_ = json.NewEncoder(conn).Encode(map[string]interface{}{
+		"ok":      true,
+		"kind":    kind,
+		"data":    val,
+		"cached":  cached,
+		"version": d.Version,
+	})
+}
+
+func (d *Daemon) cacheStats() interface{} {
+	if d.cache == nil {
+		return CacheStats{Watched: []string{}}
+	}
+	return d.cache.Stats()
 }
 
 func (d *Daemon) Stop() error {

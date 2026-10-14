@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { AgentDef } from "./agents/registry";
+import { cachedState } from "./daemon-cache";
 import { withLock } from "./lock";
 
 export interface SchedulerState {
@@ -34,8 +35,12 @@ export function getStateFile(stateDir: string): string {
 }
 
 export async function pickAgent(agents: AgentDef[], stateFilePath: string, key = "default"): Promise<AgentDef> {
-  return withLock(stateFilePath, () => {
-    const state = loadStateFile(stateFilePath);
+  return withLock(stateFilePath, async () => {
+    // Read through the daemon's state.json cache (fingerprint-checked, so as
+    // fresh as the direct read); the advance below is still written directly.
+    const cached =
+      path.basename(stateFilePath) === "state.json" ? await cachedState(path.dirname(stateFilePath)) : null;
+    const state = cached ?? loadStateFile(stateFilePath);
     if (!state.scheduler) state.scheduler = {};
 
     let sched: SchedulerState = { index: -1 };
