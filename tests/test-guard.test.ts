@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -103,4 +103,20 @@ describe("test-guard script", () => {
     mine.kill("SIGKILL");
     void run(["orphans", "--kill"], other);
   }, 20000);
+
+  it("worktree-clean removes a leftover skeleton directory with read-only files", () => {
+    const dir = makeTempRepo(`"tests/**/*.test.ts"`);
+    const skeleton = join(dir, "agent-tier-skeleton");
+    const nested = join(skeleton, ".remember");
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(join(nested, "lock"), "x");
+    chmodSync(join(nested, "lock"), 0o444);
+    chmodSync(nested, 0o555);
+    chmodSync(skeleton, 0o555);
+    const res = run(["worktree-clean", skeleton], dir);
+    expect(res.status).toBe(0);
+    expect(res.out).toMatch(/OK: no orphans/);
+    expect(res.out).toMatch(/removing leftover skeleton/);
+    expect(existsSync(skeleton)).toBe(false);
+  });
 });

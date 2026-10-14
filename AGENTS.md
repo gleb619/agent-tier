@@ -31,9 +31,8 @@ npx vitest run        # unit suite (tests/**) ONLY
 #   .github/workflows/*, scripts/ci-check.sh, or package.json "ci:check"
 pnpm run ci:check       # wrkflw dry-run validate + docker build check + test-guard
 
-# Worktree cleanup — kill orphan processes before removing:
+# Worktree cleanup — removes worktree, kills orphans, and deletes leftover skeleton files:
 bash scripts/test-guard.sh worktree-clean ../agent-tier-<short-name>
-git worktree remove ../agent-tier-<short-name>
 git branch -d feat/<short-name>
 git worktree prune
 ```

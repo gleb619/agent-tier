@@ -11,8 +11,9 @@
 #   orphans [--kill]       List orphan `dist/cli.js ... -s -a ...` processes scoped to
 #                          THIS repo root (never other worktrees). --kill: SIGTERM,
 #                          then SIGKILL after 3s.
-#   worktree-clean <path>  Kill this worktree's orphans, refuse (exit 1) if any
-#                          survive, and print the `git worktree remove` command to run.
+#   worktree-clean <path>  Kill this worktree's orphans, remove it with
+#                          `git worktree remove --force`, and delete any leftover
+#                          skeleton files (untracked node_modules, .remember, etc.).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -104,7 +105,17 @@ cmd_worktree_clean() {
     fail "orphan processes still alive in $wt — kill them before removing the worktree"
   fi
   echo "OK: no orphans in $wt"
-  echo "next: git worktree remove $wt"
+
+  # Remove the git worktree, then wipe any skeleton git leaves behind
+  # (untracked files/symlinks such as node_modules or .remember directories).
+  if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git -C "$ROOT" worktree remove --force "$wt" 2>/dev/null || true
+  fi
+  if [ -e "$wt" ]; then
+    echo "removing leftover skeleton $wt"
+    chmod -R u+w "$wt" 2>/dev/null || true
+    rm -rf "$wt"
+  fi
 }
 
 case "${1:-}" in

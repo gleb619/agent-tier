@@ -28,3 +28,4 @@ bin/at
 /gradle/wrapper/gradle-wrapper.properties
 /gradlew
 /gradlew.bat
+/build/
