@@ -44,6 +44,13 @@ export interface RunOptions {
   normka?: boolean;
   sandbox?: boolean;
   globalPrompt?: string;
+  /**
+   * Optional list of glob patterns (repeatable --scope flag). When present:
+   * (a) a prompt suffix is appended restricting the agent to those paths, and
+   * (b) after a successful blocking run, changed files outside the globs
+   * produce a `[at] scope violation` warning and count as a failed run.
+   */
+  scope?: string[];
 }
 
 interface ArgvOptions {
@@ -67,6 +74,7 @@ interface ArgvOptions {
   normka?: boolean;
   sandbox?: boolean;
   globalPrompt?: string;
+  scope?: string[];
 }
 
 export interface ParsedJson {
@@ -166,6 +174,7 @@ export function resolveFromArgs(argv: ArgvOptions): RunOptions {
     normka: argv.normka === true,
     sandbox: argv.sandbox === true ? true : undefined,
     globalPrompt: argv.globalPrompt?.trim() || undefined,
+    scope: argv.scope && argv.scope.length > 0 ? argv.scope : undefined,
   };
 }
 

@@ -15,6 +15,7 @@ import { spawnRunWatch } from "./run-watch";
 import { assertRealAgentAllowed, assertSafeToStart, currentNestingDepth, startRssWatchdog } from "./safety";
 import { runSandboxTest } from "./sandbox";
 import { getStateFile, pickAgent } from "./scheduler";
+import { findScopeViolations } from "./scope";
 import { getStateFilePath } from "./state-dir";
 
 interface TrackedChild {
@@ -95,6 +96,90 @@ export function executeCallback(command: string | undefined, context: CallbackCo
   if (result.status !== 0) {
     console.warn(`[at] callback exited with code ${result.status ?? 1}: ${cmd}`);
   }
+}
+
+/**
+ * Check scope violations after a successful agent run. Runs `git status
+ * --porcelain` and `git diff --name-only HEAD` in the run cwd, collects the
+ * changed file paths, and returns any that fall outside `globs`.
+ *
+ * Exported for unit testing; not intended for external callers.
+ */
+export function collectChangedFiles(cwd: string): string[] {
+  const run = (cmd: string, args: string[]) => {
+    const result = spawnSync(cmd, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    if (result.status !== 0) return "";
+    return typeof result.stdout === "string" ? result.stdout : "";
+  };
+
+  const porcelain = run("git", ["status", "--porcelain"]);
+  // Each line: "XY filename" or "XY old -> new" for renames
+  const fromStatus = porcelain
+    .split("\n")
+    .map((l) => l.slice(3).trim())
+    .filter(Boolean)
+    // handle rename "old -> new": keep only the destination
+    .map((f) => (f.includes(" -> ") ? f.split(" -> ").pop()! : f));
+
+  const diffHead = run("git", ["diff", "--name-only", "HEAD"]);
+  const fromDiff = diffHead
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  // Merge and deduplicate
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const f of [...fromStatus, ...fromDiff]) {
+    if (!seen.has(f)) {
+      seen.add(f);
+      result.push(f);
+    }
+  }
+  return result;
+}
+
+/**
+ * Enforce scope globs after a successful run. When violations are found, logs
+ * a warning, updates the run record to failed and throws AgentError so the
+ * retry-with-next-agent loop applies.
+ */
+async function enforceScopeCheck(
+  options: RunOptions,
+  runId: string,
+  logFile: string,
+  agent: AgentDef,
+  exitCode: number,
+  baseline?: Set<string>,
+): Promise<void> {
+  const globs = options.scope;
+  if (!globs || globs.length === 0) return;
+
+  const cwd = options.cwd ?? process.cwd();
+  const changed = collectChangedFiles(cwd).filter((f) => !baseline?.has(f));
+  const violations = findScopeViolations(changed, globs);
+
+  if (violations.length === 0) return;
+
+  const msg = `scope violation: ${violations.join(", ")}`;
+  console.warn(`[at] ${msg}`);
+  try {
+    appendFileSync(logFile, `[at] ${msg}\n`);
+  } catch {
+    // best effort
+  }
+  await updateRun(options.stateDir, runId, { status: "failed" });
+  executeCallback(options.callback, {
+    runId,
+    agent: agent.name,
+    tier: agent.tier,
+    exitCode,
+    logFile,
+    prompt: options.prompt,
+    status: "failed",
+    name: options.runName ?? UNNAMED_PLACEHOLDER,
+  });
+  throw new AgentError(`scope violation: ${violations.join(", ")}`, 1);
 }
 
 /**
@@ -321,6 +406,8 @@ export async function getProcessHub(options: RunOptions): Promise<Hub> {
 async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Promise<number> {
   const { child, runId, logFile, agent } = result;
   const timeoutMs = options.timeout;
+  // Files already dirty before the run are not the agent's doing — exclude them from scope checks.
+  const scopeBaseline = options.scope?.length ? new Set(collectChangedFiles(options.cwd ?? process.cwd())) : undefined;
 
   const agentExit = new Promise<{ code: number | null; signal: string | null }>((resolve) => {
     child.on("close", (code, signal) => resolve({ code, signal }));
@@ -438,6 +525,11 @@ async function streamLogsAndWatch(result: LaunchResult, options: RunOptions): Pr
   // `run()`'s retry-with-next-agent logic applies (blocking modes only).
   // Agent exitCode is kept on the record — the failure source is visible
   // via the log line.
+  if (exitCode === 0) {
+    // Scope check: runs only when the agent succeeded (exitCode 0, no fatal marker).
+    await enforceScopeCheck(options, runId, logFile, agent, exitCode, scopeBaseline);
+  }
+
   if (options.verify?.trim()) {
     const verifyCmd = options.verify.trim();
     const verifyCwd = options.cwd ?? process.cwd();

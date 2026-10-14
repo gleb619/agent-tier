@@ -6,6 +6,7 @@ import { readPromptFile } from "../prompt-file";
 import type { RunOptions } from "../resolver";
 import { mergeJsonDefaults, parseJsonInput, resolveFromArgs } from "../resolver";
 import { run } from "../runner";
+import { buildScopeSuffix } from "../scope";
 
 async function readStdin(): Promise<string> {
   if (process.stdin.isTTY) return "";
@@ -67,6 +68,12 @@ export function registerDefaultCommand(program: Command): void {
       "Global prompt text prepended to every run's prompt (overrides config globalPrompt and JSON globalPrompt)",
     )
     .option(
+      "--scope <glob>",
+      "Restrict the agent to files matching this glob (repeatable). Appends a prompt instruction and validates changed files after a successful blocking run.",
+      (val: string, prev: string[]) => [...prev, val],
+      [] as string[],
+    )
+    .option(
       "--json",
       'Read JSON from stdin: {"agent":"...","prompt":"...","model":"...","cwd":"...","env":{},"sse":true,"ssePort":0,"globalPrompt":"..."}. Supports globalPrompt field and --global-prompt flag.',
       false,
@@ -100,7 +107,9 @@ export function registerDefaultCommand(program: Command): void {
 
           // Build final prompt with globalPrompt prepended (if any)
           const basePrompt = (parsed.prompt || parsed.promptFileContent || filePrompt || opts.prompt || "").trim();
-          const finalPrompt = effectiveGlobalPrompt ? `${effectiveGlobalPrompt}\n\n${basePrompt}`.trim() : basePrompt;
+          const withGlobal = effectiveGlobalPrompt ? `${effectiveGlobalPrompt}\n\n${basePrompt}`.trim() : basePrompt;
+          const scopeGlobs: string[] = (opts.scope as string[]) ?? [];
+          const finalPrompt = withGlobal + buildScopeSuffix(scopeGlobs);
 
           runOptions = resolveFromArgs({
             agent: parsed.agent,
@@ -123,6 +132,7 @@ export function registerDefaultCommand(program: Command): void {
             normka: parsed.normka ?? (opts.normka as boolean | undefined),
             sandbox: opts.sandbox as boolean,
             globalPrompt: effectiveGlobalPrompt,
+            scope: scopeGlobs.length > 0 ? scopeGlobs : undefined,
           });
         } else {
           // For non-JSON mode: precedence CLI > config
@@ -132,7 +142,9 @@ export function registerDefaultCommand(program: Command): void {
 
           const stdinData = !opts.prompt && !opts.promptFile && !process.stdin.isTTY ? await readStdin() : "";
           const basePrompt = (stdinData || filePrompt || (opts.prompt as string | undefined) || "").trim();
-          const finalPrompt = effectiveGlobalPrompt ? `${effectiveGlobalPrompt}\n\n${basePrompt}`.trim() : basePrompt;
+          const withGlobal = effectiveGlobalPrompt ? `${effectiveGlobalPrompt}\n\n${basePrompt}`.trim() : basePrompt;
+          const scopeGlobs: string[] = (opts.scope as string[]) ?? [];
+          const finalPrompt = withGlobal + buildScopeSuffix(scopeGlobs);
 
           runOptions = resolveFromArgs({
             agent: opts.agent,
@@ -152,6 +164,7 @@ export function registerDefaultCommand(program: Command): void {
             normka: opts.normka as boolean,
             sandbox: opts.sandbox as boolean,
             globalPrompt: effectiveGlobalPrompt,
+            scope: scopeGlobs.length > 0 ? scopeGlobs : undefined,
           });
         }
 
