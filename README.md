@@ -1,7 +1,6 @@
 # at — Agent Tier Router
 
-`at` is a thin CLI that routes a coding prompt to one of many AI agent binaries via round-robin scheduling and
-automatic retry.
+`at` is a thin CLI that routes a coding prompt to one of many AI agent binaries via round-robin scheduling and automatic retry.
 
 ![new-tui.jpg](new-tui.jpg)  
 <details>
