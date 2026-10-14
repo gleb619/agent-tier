@@ -19,14 +19,14 @@ const (
 )
 
 type Daemon struct {
-	SockPath    string
-	PidPath     string
-	Version     string
-	IdleMs      int64
-	listener    net.Listener
-	mu          sync.Mutex
-	idleTimer   *time.Timer
-	stopped     bool
+	SockPath  string
+	PidPath   string
+	Version   string
+	IdleMs    int64
+	listener  net.Listener
+	mu        sync.Mutex
+	idleTimer *time.Timer
+	stopped   bool
 }
 
 func (d *Daemon) sockDir() string {
@@ -107,6 +107,7 @@ func (d *Daemon) idleExit() {
 	if d.listener != nil {
 		d.listener.Close()
 	}
+	_ = os.Remove(d.PidPath)
 }
 
 func (d *Daemon) Start() error {
@@ -192,6 +193,7 @@ func (d *Daemon) Stop() error {
 	_ = json.NewEncoder(conn).Encode(map[string]string{"cmd": "stop", "version": d.Version})
 	buf := make([]byte, 1024)
 	_, _ = conn.Read(buf)
+	_ = os.Remove(d.PidPath)
 	return nil
 }
 
