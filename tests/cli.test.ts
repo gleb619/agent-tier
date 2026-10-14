@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { computeHmac } from "../src/config";
 import { isDeactivated, setDeactivated } from "../src/health";
 import { formatInitResults, runInit } from "../src/init";
+import { resolveFromArgs } from "../src/resolver";
 import { getRunsFile } from "../src/run-store";
 import { runStatus } from "../src/status";
 
@@ -186,5 +187,25 @@ describe("runInit", () => {
 
   it("throws for non-existent agent", () => {
     expect(() => runInit({ agent: "nonexistent-agent-xyz" })).toThrow();
+  });
+});
+
+describe("--scope flag", () => {
+  it("resolves scope array from argv", () => {
+    const opts = resolveFromArgs({
+      prompt: "test",
+      scope: ["src/**/*.ts", "tests/**/*.ts"],
+    });
+    expect(opts.scope).toEqual(["src/**/*.ts", "tests/**/*.ts"]);
+  });
+
+  it("omits scope when empty array passed", () => {
+    const opts = resolveFromArgs({ prompt: "test", scope: [] });
+    expect(opts.scope).toBeUndefined();
+  });
+
+  it("omits scope when undefined", () => {
+    const opts = resolveFromArgs({ prompt: "test" });
+    expect(opts.scope).toBeUndefined();
   });
 });

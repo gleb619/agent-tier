@@ -50,6 +50,27 @@ When an agent exits non-zero, `at` automatically picks the next agent in the sam
 | `--state-dir <path>` | Override the state directory (default: `.at/` in CWD if it exists, else `~/.at/`) |
 | `--sse [port]` | Live-progress SSE hub, default port 7777, `0` = random (see [progress.md](progress.md)) |
 | `--global-prompt <text>` | Global prompt text prepended to every run's prompt |
+| `--scope <glob>` | Restrict the agent to files matching this glob (repeatable). Appends a prompt instruction and validates changed files after a successful blocking run. Supports `**`, `*`, `?`. |
+
+## Scope restriction
+
+The `--scope` flag restricts agent work to specific files by:
+
+1. Appending a prompt suffix instructing the agent to modify ONLY files matching the globs (plus any new test files it creates) and never run repo-wide formatters (e.g. `biome --write .`).
+2. After a successful blocking run (`-s` or `--wait`), comparing `git status --porcelain` / `git diff --name-only HEAD` paths against the globs. Files outside scope produce a loud `[at] scope violation: <files>` warning and mark the run as failed (retry/health logic applies).
+
+The glob matcher supports:
+- `**` — matches zero or more path segments (including slashes)
+- `*` — matches any sequence of non-slash characters
+- `?` — matches exactly one non-slash character
+
+Example:
+
+```bash
+at -s -p "fix the bug" --scope "src/**/*.ts" --scope "tests/**/*.ts"
+```
+
+Multiple globs are OR'd together — a file matching any pattern is in scope.
 
 ## Global JSON defaults
 
