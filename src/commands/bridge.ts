@@ -54,9 +54,7 @@ export function registerBridgeCommand(program: Command): void {
         if (id !== undefined && params.id === undefined) {
           params.id = id;
         }
-        const data = await Promise.resolve(
-          dispatchBridge(resource, verb, params, { stateDirs: resolveStatusDirs() }),
-        );
+        const data = await Promise.resolve(dispatchBridge(resource, verb, params, { stateDirs: resolveStatusDirs() }));
         writeEnvelope({ ok: true, data });
       } catch (err) {
         if (err instanceof BridgeError) {
