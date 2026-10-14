@@ -22,3 +22,13 @@ export function scanForFatalMarkers(logContent: string): string | null {
   }
   return null;
 }
+
+const QUOTA_MARKER_NAMES: ReadonlySet<string> = new Set(["quota_429", "usage_limit"]);
+
+/**
+ * True when a marker matched by scanForFatalMarkers means provider quota /
+ * rate-limit exhaustion — the signal to park the agent instead of retrying it.
+ */
+export function isQuotaMarker(matched: string): boolean {
+  return FATAL_MARKERS.some((m) => QUOTA_MARKER_NAMES.has(m.name) && m.pattern.test(matched));
+}

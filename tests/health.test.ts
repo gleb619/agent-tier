@@ -317,6 +317,67 @@ describe("setDeactivated", () => {
   });
 });
 
+describe("quota auto-deactivation", () => {
+  let stateDir: string;
+  let stateFile: string;
+
+  beforeEach(() => {
+    stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "at-health-quota-"));
+    stateFile = path.join(stateDir, "state.json");
+  });
+
+  afterEach(() => {
+    delete process.env.AT_DEACTIVATE_TTL_MS;
+    fs.rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it("a quota-triggered deactivation keeps the agent deactivated", async () => {
+    // Exactly what the quota failure paths in runner.ts / run-watch.ts do.
+    await setDeactivated(stateFile, "mm-code", true);
+    expect(isDeactivated(stateFile, "mm-code")).toBe(true);
+    const state = loadHealth(stateFile);
+    expect(state.agents["mm-code"].deactivated).toBe(true);
+    expect(new Date(state.agents["mm-code"].deactivatedAt as string).getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("auto-reactivates after AT_DEACTIVATE_TTL_MS elapses and persists it", async () => {
+    process.env.AT_DEACTIVATE_TTL_MS = "1000";
+    const expired = new Date(Date.now() - 5000).toISOString();
+    fs.writeFileSync(
+      stateFile,
+      JSON.stringify({
+        agents: { "mm-code": { failureTimes: [], disabledTo: null, deactivated: true, deactivatedAt: expired } },
+      }),
+      "utf8",
+    );
+
+    expect(isDeactivated(stateFile, "mm-code")).toBe(false);
+    // TTL reactivation is fire-and-forget — let the write settle before asserting on disk.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(loadHealth(stateFile).agents["mm-code"].deactivated).toBeUndefined();
+  });
+
+  it("is cleared again by the `at enable` path", async () => {
+    await setDeactivated(stateFile, "mm-code", true);
+    await setDeactivated(stateFile, "mm-code", false);
+    expect(isDeactivated(stateFile, "mm-code")).toBe(false);
+  });
+
+  it("stays deactivated while inside a shortened AT_DEACTIVATE_TTL_MS", () => {
+    process.env.AT_DEACTIVATE_TTL_MS = "60000";
+    const recent = new Date(Date.now() - 1000).toISOString();
+    fs.writeFileSync(
+      stateFile,
+      JSON.stringify({
+        agents: { "mm-code": { failureTimes: [], disabledTo: null, deactivated: true, deactivatedAt: recent } },
+      }),
+      "utf8",
+    );
+
+    expect(isDeactivated(stateFile, "mm-code")).toBe(true);
+  });
+});
+
 describe("resetAgent", () => {
   let stateDir: string;
   let stateFile: string;

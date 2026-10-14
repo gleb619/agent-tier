@@ -29,8 +29,8 @@
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { scanForFatalMarkers } from "./fatal-markers";
-import { recordResult } from "./health";
+import { isQuotaMarker, scanForFatalMarkers } from "./fatal-markers";
+import { recordResult, setDeactivated } from "./health";
 import { applyRunName, drainNamingQueue, readLogTail } from "./naming";
 import { isPidAlive } from "./process-utils";
 import { UNNAMED_PLACEHOLDER, updateRun } from "./run-store";
@@ -265,6 +265,16 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
         // Feed the health system so repeated quota deaths auto-disable the
         // agent (same signal the blocking paths emit on non-zero exit).
         await recordResult(getStateFilePath(stateDir), agent, false).catch(() => {});
+        if (isQuotaMarker(quotaHit)) {
+          // A hard quota/usage-limit marker will not heal between runs — park the
+          // agent for the deactivation TTL so the scheduler stops picking it.
+          try {
+            await setDeactivated(getStateFilePath(stateDir), agent, true);
+            appendFileSync(logFile, `[at] agent ${agent} deactivated (reason: quota)\n`);
+          } catch {
+            // health state is best-effort; the run is failed either way
+          }
+        }
       }
     } catch (err) {
       try {

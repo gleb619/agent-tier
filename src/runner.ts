@@ -5,8 +5,8 @@ import { AgentError } from "./agent-error";
 import { applyNormkaFlag } from "./agents/normka-flag";
 import { AGENTS, type AgentDef } from "./agents/registry";
 import { getLineAgents, loadConfig } from "./config";
-import { scanForFatalMarkers } from "./fatal-markers";
-import { filterHealthy, isDeactivated, loadHealth, recordResult } from "./health";
+import { isQuotaMarker, scanForFatalMarkers } from "./fatal-markers";
+import { filterHealthy, isDeactivated, loadHealth, recordResult, setDeactivated } from "./health";
 import { applyRunName, readLogTail } from "./naming";
 import { type Hub, type NotifyEvent, setupNotify, startHub, tailLogFile } from "./notify";
 import type { RunOptions } from "./resolver";
@@ -706,7 +706,8 @@ export async function run(options: RunOptions, agents: AgentDef[], spawner: Spaw
 
 /**
  * Scan the finished run's log for fatal provider markers. On a hit: log line, run record flipped to
- * failed (exit 1). Returns true when the run must be treated as failed.
+ * failed (exit 1); a quota marker additionally parks the agent for the deactivation TTL. Returns
+ * true when the run must be treated as failed.
  */
 async function failOnFatalMarker(
   options: RunOptions,
@@ -719,6 +720,16 @@ async function failOnFatalMarker(
     if (!marker) return false;
     appendFileSync(logFile, `[at] agent ${agent.name} reported fatal error: ${marker}\n`);
     await updateRun(options.stateDir, runId, { status: "failed", exitCode: 1 });
+    if (isQuotaMarker(marker)) {
+      // Quota exhaustion will not heal on retry-with-next-agent — park the agent
+      // for the same TTL `at disable` uses so the scheduler stops picking it.
+      try {
+        await setDeactivated(getStateFilePath(options.stateDir), agent.name, true);
+        appendFileSync(logFile, `[at] agent ${agent.name} deactivated (reason: quota)\n`);
+      } catch {
+        // health state is best-effort; the run is failed either way
+      }
+    }
     return true;
   } catch {
     return false; // log file may be gone

@@ -440,6 +440,32 @@ describe("defaultSpawner", () => {
     const logPath = path.join(tmpLogDir, files[0]);
     const content = readFileSync(logPath, "utf8");
     expect(content).toContain("[at] agent test-fatal-marker reported fatal error: [claude-code:unrecognized_model]");
+    // A non-quota fatal marker must not park the agent.
+    expect(health.setDeactivated).not.toHaveBeenCalled();
+  });
+
+  it("deactivates the agent when the fatal marker is a quota marker", async () => {
+    const agent: AgentDef = {
+      name: "test-quota-marker",
+      tier: 2,
+      bin: () => "/bin/bash",
+      buildArgs: () => ["-c", 'echo "API Error: Request rejected (429)"; exit 0'],
+    };
+    const options: RunOptions = {
+      ...baseOptions,
+      stream: true,
+      noChop: true,
+      logDir: tmpLogDir,
+      prompt: "hello",
+    };
+    const exitCode = await defaultSpawner(agent, options);
+    expect(exitCode).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(health.setDeactivated).toHaveBeenCalledWith(
+      expect.stringContaining("state.json"),
+      "test-quota-marker",
+      true,
+    );
   });
 });
 

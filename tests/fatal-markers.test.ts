@@ -1,4 +1,4 @@
-import { scanForFatalMarkers } from "../src/fatal-markers";
+import { isQuotaMarker, scanForFatalMarkers } from "../src/fatal-markers";
 
 describe("scanForFatalMarkers", () => {
   it("returns null when no fatal markers are present", () => {
@@ -62,5 +62,32 @@ describe("scanForFatalMarkers", () => {
 
   it("returns null for whitespace-only content", () => {
     expect(scanForFatalMarkers("   \n  \n")).toBeNull();
+  });
+});
+
+describe("isQuotaMarker", () => {
+  it("is true for the 429 marker text", () => {
+    expect(isQuotaMarker("API Error: Request rejected (429)")).toBe(true);
+  });
+
+  it("is true for the usage-limit marker text, any case", () => {
+    expect(isQuotaMarker("usage limit has been reached")).toBe(true);
+    expect(isQuotaMarker("USAGE LIMIT HAS BEEN REACHED")).toBe(true);
+  });
+
+  it("is false for the non-quota fatal markers", () => {
+    expect(isQuotaMarker("[claude-code:unrecognized_model]")).toBe(false);
+    expect(isQuotaMarker("<|channel|>commentary<|message|>")).toBe(false);
+  });
+
+  it("is false for empty and unrelated text", () => {
+    expect(isQuotaMarker("")).toBe(false);
+    expect(isQuotaMarker("model ready")).toBe(false);
+  });
+
+  it("classifies the string returned by scanForFatalMarkers", () => {
+    const matched = scanForFatalMarkers("boom...\nusage limit has been reached\n");
+    expect(matched).not.toBeNull();
+    expect(isQuotaMarker(matched as string)).toBe(true);
   });
 });

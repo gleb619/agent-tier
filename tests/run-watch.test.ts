@@ -8,6 +8,7 @@ const {
   appendFileMock,
   readFileMock,
   recordResultMock,
+  setDeactivatedMock,
   applyRunNameMock,
   drainNamingQueueMock,
   readLogTailMock,
@@ -19,6 +20,7 @@ const {
   appendFileMock: vi.fn(),
   readFileMock: vi.fn(() => ""),
   recordResultMock: vi.fn(async () => {}),
+  setDeactivatedMock: vi.fn(async () => {}),
   applyRunNameMock: vi.fn(async () => null),
   drainNamingQueueMock: vi.fn(async () => {}),
   readLogTailMock: vi.fn(() => ""),
@@ -26,7 +28,7 @@ const {
 
 vi.mock("../src/process-utils", () => ({ isPidAlive: isPidAliveMock }));
 vi.mock("../src/run-store", () => ({ updateRun: updateRunMock, UNNAMED_PLACEHOLDER: "unnamed" }));
-vi.mock("../src/health", () => ({ recordResult: recordResultMock }));
+vi.mock("../src/health", () => ({ recordResult: recordResultMock, setDeactivated: setDeactivatedMock }));
 vi.mock("../src/naming", () => ({
   applyRunName: applyRunNameMock,
   drainNamingQueue: drainNamingQueueMock,
@@ -244,8 +246,28 @@ describe("run-watch — quota/rate-limit detection", () => {
       exitCode: 1,
     });
     expect(recordResultMock).toHaveBeenCalledWith(expect.stringContaining("state.json"), "test-agent", false);
+    expect(setDeactivatedMock).toHaveBeenCalledWith(expect.stringContaining("state.json"), "test-agent", true);
     const logged = appendFileMock.mock.calls.map((c) => String(c[1])).join("\n");
     expect(logged).toContain(`[at] agent test-agent reported fatal error: API Error: Request rejected (429)`);
+    expect(logged).toContain("[at] agent test-agent deactivated (reason: quota)");
+  });
+
+  it("deactivates on a usage-limit marker regardless of case", async () => {
+    readFileMock.mockReturnValue(" USAGE LIMIT HAS BEEN REACHED");
+    expect(await main(ARGS)).toBe(0);
+    expect(setDeactivatedMock).toHaveBeenCalledWith(expect.stringContaining("state.json"), "test-agent", true);
+  });
+
+  it("fails the run without deactivating for a non-quota fatal marker", async () => {
+    readFileMock.mockReturnValue("[claude-code:unrecognized_model] model not found");
+    expect(await main(ARGS)).toBe(0);
+    expect(updateRunMock).toHaveBeenCalledWith("/tmp/at-state", "run-1", {
+      status: "failed",
+      finishedAt: expect.any(String),
+      exitCode: 1,
+    });
+    expect(recordResultMock).toHaveBeenCalledWith(expect.stringContaining("state.json"), "test-agent", false);
+    expect(setDeactivatedMock).not.toHaveBeenCalled();
   });
 
   it("keeps status done when the log tail has no quota markers", async () => {
