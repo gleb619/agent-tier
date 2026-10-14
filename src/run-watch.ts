@@ -112,6 +112,10 @@ export function spawnRunWatch(o: RunWatchOptions): void {
   }
 }
 
+/** Broader provider quota/rate-limit phrases; only trusted for a detached run that died without an exit code. */
+const QUOTA_MARKERS = /(?:\b429\b|rate[ -]?limit|usage limit|quota|weekly limit|plan limit)/i;
+const QUOTA_SCAN_BYTES = 64 * 1024;
+
 /**
  * Scan the log tail for known fatal markers (unrecognized model, quota 429,
  * usage limit reached).  Uses the shared pure detector from fatal-markers.ts.
@@ -120,7 +124,10 @@ export function spawnRunWatch(o: RunWatchOptions): void {
 export function detectQuotaLimit(logFile: string): string | null {
   try {
     const content = readFileSync(logFile, "utf8");
-    return scanForFatalMarkers(content) ?? null;
+    const fatal = scanForFatalMarkers(content);
+    if (fatal) return fatal;
+    const tail = content.length > QUOTA_SCAN_BYTES ? content.slice(-QUOTA_SCAN_BYTES) : content;
+    return tail.match(QUOTA_MARKERS)?.[0] ?? null;
   } catch {
     return null;
   }
