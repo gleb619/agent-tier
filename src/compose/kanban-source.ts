@@ -1,6 +1,6 @@
-import { readFileSync } from "fs";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { readFileSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { type BoardDoc, findRowById, headerIndex, mutateBoard, toTasks } from "../kanban/board";
 import { type OpResult, resolvePlanPath } from "../kanban/ops";
 import { setCellText } from "../kanban/parse";
@@ -8,7 +8,7 @@ import { backlogCandidates } from "../kanban/select";
 import { blank, IN_PROGRESS, type Task } from "../kanban/types";
 import { acquireLock, getLockDir, type LockInfo, pathToLockName, releaseLock } from "../lock";
 import { isPidAlive } from "../process-utils";
-import type { ComposeTask, TaskFinishInfo, TaskSource } from "./task-source";
+import type { ComposeTask, TaskSource } from "./task-source";
 
 /**
  * The only compose module that imports kanban. The board is human-edited, so

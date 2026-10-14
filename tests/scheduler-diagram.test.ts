@@ -77,6 +77,7 @@ describe("resolveSchedulerDiagram", () => {
   });
 
   it("tags scope per dir for joined reports", () => {
+    vi.spyOn(configModule, "loadConfig").mockReturnValue({ line: ["opencode"] });
     const dirA = path.join(tmpDir, "a");
     const dirB = path.join(tmpDir, "b");
     writeState(dirA, { "tier-1": { index: 0 } });

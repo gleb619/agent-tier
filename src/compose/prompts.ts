@@ -149,7 +149,7 @@ export function buildBrainPrompt(input: BrainPromptInput): string {
     input.question,
     "",
   ];
-  if (input.options && input.options.length) {
+  if (input.options?.length) {
     sections.push("## Options", input.options.map((o) => `- ${o}`).join("\n"), "");
   }
   return sections.join("\n");

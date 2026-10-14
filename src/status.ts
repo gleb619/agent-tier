@@ -1,5 +1,5 @@
-import os from "os";
-import path from "path";
+import os from "node:os";
+import path from "node:path";
 import { loadGenericAgents } from "./agents/generic-loader";
 import { AGENTS, type AgentDef, getAgentsByTier } from "./agents/registry";
 import { getLineAgents, loadConfig } from "./config";
@@ -202,12 +202,12 @@ const NAME_COL_MAX = 24;
 function formatNameCell(name: string): string {
   if (!name) return "";
   if (name.length <= NAME_COL_MAX) return name;
-  return name.slice(0, NAME_COL_MAX - 1) + "…";
+  return `${name.slice(0, NAME_COL_MAX - 1)}…`;
 }
 
 export function formatStatusTable(runs: RunRecord[]): string {
   const headerSection = "# Runs\n\n";
-  if (runs.length === 0) return headerSection + "[at] no runs found";
+  if (runs.length === 0) return `${headerSection}[at] no runs found`;
 
   const now = Date.now();
   const rows = runs.map((r) => {
@@ -246,7 +246,7 @@ export function formatStatusTable(runs: RunRecord[]): string {
     " | " +
     padRight("DURATION", colDur) +
     " | " +
-    (showScope ? padRight("SCOPE", colScope) + " | " : "") +
+    (showScope ? `${padRight("SCOPE", colScope)} | ` : "") +
     padRight("LOG", colLog) +
     " |";
 
@@ -262,7 +262,7 @@ export function formatStatusTable(runs: RunRecord[]): string {
     " | " +
     "-".repeat(colDur) +
     " | " +
-    (showScope ? "-".repeat(colScope) + " | " : "") +
+    (showScope ? `${"-".repeat(colScope)} | ` : "") +
     "-".repeat(colLog) +
     " |";
 
@@ -279,7 +279,7 @@ export function formatStatusTable(runs: RunRecord[]): string {
       " | " +
       padRight(r.duration, colDur) +
       " | " +
-      (showScope ? padRight(r.scope ?? "", colScope) + " | " : "") +
+      (showScope ? `${padRight(r.scope ?? "", colScope)} | ` : "") +
       padRight(r.log, colLog) +
       " |",
   );
@@ -348,7 +348,7 @@ export function formatStateReports(dirs: string[]): string {
 
 export function formatCombinedReport(stateDirs: string | string[], runs: RunRecord[]): string {
   const dirs = Array.isArray(stateDirs) ? stateDirs : [stateDirs];
-  return formatStatusTable(runs) + "\n\n" + formatStateReports(dirs);
+  return `${formatStatusTable(runs)}\n\n${formatStateReports(dirs)}`;
 }
 
 /**
@@ -383,7 +383,7 @@ export async function runStatus(stateDirs: string | string[], opts?: { json?: bo
   const report = await buildStatusSnapshot(dirs);
 
   if (opts?.json) {
-    process.stdout.write(JSON.stringify(report) + "\n");
+    process.stdout.write(`${JSON.stringify(report)}\n`);
     return;
   }
 

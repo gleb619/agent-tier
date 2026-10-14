@@ -1,5 +1,5 @@
 import { execSync, spawn } from "node:child_process";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it } from "vitest";
 import { describeLive } from "./live";
 import { agentBinExists, cleanupSandbox, createSandbox, getCliPath, type Sandbox } from "./setup";
 

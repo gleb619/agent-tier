@@ -1,6 +1,6 @@
-import { mkdirSync, rmSync, writeFileSync } from "fs";
-import os from "os";
-import path from "path";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type RunRecord, saveRuns } from "../src/run-store";
 import * as stateDirModule from "../src/state-dir";
@@ -10,7 +10,7 @@ import { buildStateReportFor, formatStateReports, formatStatusTable, runStatus }
 
 let baseRun: RunRecord;
 
-const root = path.join(os.tmpdir(), "at-status-join-test-" + process.pid);
+const root = path.join(os.tmpdir(), `at-status-join-test-${process.pid}`);
 const projectDir = path.join(root, "project", ".at");
 const homeDir = path.join(root, "home", ".at");
 

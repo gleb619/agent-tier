@@ -17,4 +17,9 @@ if [ ! -e "$WORKTREE_NODE_MODULES" ]; then
   ln -s "$MAIN_NODE_MODULES" "$WORKTREE_NODE_MODULES"
 fi
 
+# webui is its own pnpm workspace member with its own node_modules (vite etc.)
+if [ -d "$(pwd)/src/webui/node_modules" ] && [ ! -e "$WORKTREE_ABS/src/webui/node_modules" ]; then
+  ln -s "$(pwd)/src/webui/node_modules" "$WORKTREE_ABS/src/webui/node_modules"
+fi
+
 echo "$WORKTREE_ABS"

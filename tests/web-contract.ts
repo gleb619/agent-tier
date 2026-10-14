@@ -21,6 +21,8 @@ export interface ContractHooks {
   start(stateDir: string): Promise<ContractTarget>;
   /** Argv of every detached `at` CLI spawn since boot (POST /api/runs, retry). */
   spawnedArgs(target: ContractTarget): Promise<string[][]>;
+  /** Backend streams new events to an open SSE connection (default true). The Go proxy only replays until atd (T33+) ships live fan-out. */
+  liveFanout?: boolean;
 }
 
 export function makeRun(overrides: Partial<RunRecord> = {}): RunRecord {
@@ -526,7 +528,7 @@ export function describeWebApiSSEContract(name: string, hooks: ContractHooks): v
       expect(JSON.parse(pending.body)).toEqual([]);
     });
 
-    it("POST /api/runs/:id/discuss mirrors the entry as an SSE event", async () => {
+    it.skipIf(hooks.liveFanout === false)("POST /api/runs/:id/discuss mirrors the entry as an SSE event", async () => {
       await start();
       const run = makeRun({ runId: "discuss-3" });
       saveRuns(stateDir, [run]);

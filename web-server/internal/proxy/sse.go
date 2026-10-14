@@ -19,20 +19,14 @@ import (
 // Resumes via the SSE Last-Event-ID header (the standard) are translated
 // to `since=` for the bridge; explicit `?since=` query wins.
 func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
-	rest := strings.TrimPrefix(r.URL.Path, "/events")
-	rest = strings.Trim(rest, "/")
-	// Map /events/runId → runId; /events/ → "" (all runs); /events → "".
-	id := ""
-	if rest != "" && !strings.HasPrefix(rest, "/") {
-		// `rest` may itself contain prefix leftovers if the mux matched a
-		// longer path (e.g. /api/events/X). Take only the first segment.
-		if idx := strings.Index(rest, "/"); idx >= 0 {
-			id = rest[:idx]
-		} else {
-			id = rest
-		}
-	}
+	// /events → "" (all runs); /events/<runId> → runId. Only the first
+	// segment after the prefix is the run id.
+	id, _, _ := strings.Cut(strings.Trim(strings.TrimPrefix(r.URL.Path, "/events"), "/"), "/")
+	s.serveEvents(w, r, id)
+}
 
+// serveEvents replays stored events for one run (or all runs when id is "").
+func (s *Server) serveEvents(w http.ResponseWriter, r *http.Request, id string) {
 	params := map[string]any{}
 	if id != "" {
 		params["id"] = id
@@ -62,8 +56,7 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 // handleSSE but kept separate so callers see the right intent at the call
 // site. (Restating the same handler keeps the refactor self-documenting.)
 func (s *Server) sseFromAPI(w http.ResponseWriter, r *http.Request, id string) {
-	s.handleSSE(w, r)
-	_ = id // reserved for the future where /api/events branches differently
+	s.serveEvents(w, r, id)
 }
 
 // streamJSONAsSSE serialises a JSON array as SSE frames: one `data:` line

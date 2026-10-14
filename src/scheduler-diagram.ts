@@ -1,5 +1,5 @@
-import os from "os";
-import path from "path";
+import os from "node:os";
+import path from "node:path";
 import { loadGenericAgents } from "./agents/generic-loader";
 import { AGENTS, type AgentDef, getAgentsByTier } from "./agents/registry";
 import { getLineAgents, loadConfig } from "./config";
@@ -104,5 +104,5 @@ export function buildSchedulerMermaid(groups: DiagramGroup[]): string {
   });
   lines.push("  classDef current fill:#1f6feb,stroke:#58a6ff,color:#ffffff;");
 
-  return "```mermaid\n" + lines.join("\n") + "\n```";
+  return `\`\`\`mermaid\n${lines.join("\n")}\n\`\`\``;
 }

@@ -1,12 +1,11 @@
-import { exec as _exec, execFile as _execFile } from "child_process";
+import { exec as _exec, execFile as _execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { promisify } from "node:util";
 import type { Command } from "commander";
-import { readFileSync } from "fs";
-import { promisify } from "util";
 import { getCodegraphContext } from "../commands/codegraph";
 import { postDiscussEntry } from "../commands/discuss-helpers";
 import { resolveBoardFile } from "../kanban/board";
 import { unansweredQuestions } from "../notify/discuss-store";
-import type { DiscussEntry } from "../notify/types";
 import { loadRuns } from "../run-store";
 import { resolveStateDir } from "../state-dir";
 import { createKanbanSource } from "./kanban-source";
@@ -95,11 +94,17 @@ export async function runBoardTasks(
   let anyFailed = false;
   let claimedSpecific = false;
   for (;;) {
-    const task = opts.taskId
-      ? claimedSpecific
-        ? null
-        : ((claimedSpecific = true), await source.claimId(opts.taskId))
-      : await source.claim();
+    let task: Awaited<ReturnType<typeof source.claim>>;
+    if (opts.taskId) {
+      if (claimedSpecific) {
+        task = null;
+      } else {
+        claimedSpecific = true;
+        task = await source.claimId(opts.taskId);
+      }
+    } else {
+      task = await source.claim();
+    }
     if (!task) {
       if (opts.taskId) return 1; // explicitly requested task not found
       break;
@@ -155,7 +160,7 @@ export function createComposeDeps(workspace: ComposeWorkspace, stateDir = resolv
           if (attempted.has(q.id)) continue;
           attempted.add(q.id);
           const answer = await onQuestion(q);
-          if (answer && answer.trim()) {
+          if (answer?.trim()) {
             await postDiscussEntry(
               runId,
               { from: "host", kind: "answer", text: answer.trim(), replyTo: q.id },

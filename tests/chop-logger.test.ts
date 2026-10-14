@@ -78,29 +78,29 @@ describe("ChopLogger", () => {
     h.spawnSyncMock.mockImplementation((...args: unknown[]) => (h.realSpawnSync as any)(...args));
   });
 
-afterEach(() => {
-  vi.restoreAllMocks();
-  try {
-    rmSync(tmpDir, { recursive: true, force: true });
-  } catch {
-    // tmp dir cleanup best-effort
-  }
-  // Clean up any leftover chop temp files from this test
-  try {
-    const tempFiles = readdirSync(os.tmpdir())
-      .filter(f => f.startsWith("agent-tier-chop-"))
-      .map(f => path.join(os.tmpdir(), f));
-    for (const file of tempFiles) {
-      try {
-        unlinkSync(file);
-      } catch {
-        // best effort cleanup
-      }
+  afterEach(() => {
+    vi.restoreAllMocks();
+    try {
+      rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // tmp dir cleanup best-effort
     }
-  } catch {
-    // ignore errors in temp dir cleanup
-  }
-});
+    // Clean up any leftover chop temp files from this test
+    try {
+      const tempFiles = readdirSync(os.tmpdir())
+        .filter((f) => f.startsWith("agent-tier-chop-"))
+        .map((f) => path.join(os.tmpdir(), f));
+      for (const file of tempFiles) {
+        try {
+          unlinkSync(file);
+        } catch {
+          // best effort cleanup
+        }
+      }
+    } catch {
+      // ignore errors in temp dir cleanup
+    }
+  });
 
   it("buffers lines without printing and clears the buffer on flush", async () => {
     const installDir = path.join(tmpDir, "isolated");

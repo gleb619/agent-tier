@@ -1,4 +1,4 @@
-import { promises as fs, renameSync, unlinkSync, writeFileSync } from "fs";
+import { promises as fs, renameSync, unlinkSync, writeFileSync } from "node:fs";
 
 function tmpPathFor(file: string): string {
   return `${file}.tmp-${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

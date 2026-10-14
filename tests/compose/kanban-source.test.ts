@@ -1,7 +1,7 @@
-import { type ChildProcess, spawn, spawnSync } from "child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
-import os from "os";
-import path from "path";
+import { type ChildProcess, spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createKanbanSource, type KanbanSource } from "../../src/compose/kanban-source";
 import { loadBoard, toTasks } from "../../src/kanban/board";

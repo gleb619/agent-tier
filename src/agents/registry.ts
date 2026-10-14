@@ -1,9 +1,9 @@
-const NODE_BIN = process.env.NODE_BIN ?? require("path").dirname(process.execPath);
+const NODE_BIN = process.env.NODE_BIN ?? require("node:path").dirname(process.execPath);
 const LOCAL_BIN = process.env.LOCAL_BIN ?? `${process.env.HOME}/.local/bin`;
 const DEVIN_DESKTOP_BIN = "/usr/share/devin-desktop/resources/app/extensions/windsurf/devin/bin/devin";
 
 function findBin(name: string): string {
-  const fs = require("fs");
+  const fs = require("node:fs");
   for (const dir of [NODE_BIN, LOCAL_BIN]) {
     const p = `${dir}/${name}`;
     if (fs.existsSync(p)) return p;
@@ -22,7 +22,7 @@ function resolveZaiApiKey(): string | undefined {
   if (plausible(process.env.ZAI_API_KEY)) return process.env.ZAI_API_KEY;
   if (plausible(process.env.ANTHROPIC_AUTH_TOKEN)) return process.env.ANTHROPIC_AUTH_TOKEN;
   try {
-    const fs = require("fs");
+    const fs = require("node:fs");
     const p = `${process.env.HOME}/.cline/data/secrets.json`;
     const key = JSON.parse(fs.readFileSync(p, "utf8"))?.openAiApiKey;
     if (typeof key === "string" && key) return key;
@@ -36,8 +36,8 @@ function resolveZaiApiKey(): string | undefined {
 // cline stores provider auth in `<data-dir>/settings/providers.json`; without
 // it, runs against a fresh data dir would need interactive `cline auth`.
 function seedClineProviderConfig(dataDir: string, apiKey: string, model: string): void {
-  const fs = require("fs");
-  const path = require("path");
+  const fs = require("node:fs");
+  const path = require("node:path");
   const settingsDir = path.join(dataDir, "settings");
   fs.mkdirSync(settingsDir, { recursive: true });
   fs.writeFileSync(
@@ -154,7 +154,7 @@ export const AGENTS: AgentDef[] = [
     bin: () => {
       if (process.env.DEVIN_BIN) return process.env.DEVIN_BIN;
       const local = `${LOCAL_BIN}/devin`;
-      if (require("fs").existsSync(local)) return local;
+      if (require("node:fs").existsSync(local)) return local;
       return DEVIN_DESKTOP_BIN;
     },
     buildArgs: (prompt) => ["--permission-mode", "bypass", "--respect-workspace-trust", "false", "-p", prompt],

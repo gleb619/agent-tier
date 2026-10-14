@@ -1,10 +1,10 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { Command } from "commander";
-import { mkdtempSync, rmSync } from "fs";
-import os from "os";
-import path from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type ComposeCliOptions, registerComposeCommand, runBoardTasks } from "../../src/compose/cli";
-import type { ComposeTask, TaskSource } from "../../src/compose/task-source";
+import type { ComposeTask } from "../../src/compose/task-source";
 import { loadBoard, toTasks } from "../../src/kanban/board";
 import { cleanupTmpDirs, makeTmpDir, row, writeBoard } from "../kanban/helpers";
 
@@ -137,7 +137,7 @@ describe("compose command — missing prompt", () => {
 
   it("exits 1 without running", async () => {
     const run = vi.fn(async () => 0);
-    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+    const _exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
       throw new Error(`exit ${code}`);
     }) as never);
     const { program, errors } = build(run);

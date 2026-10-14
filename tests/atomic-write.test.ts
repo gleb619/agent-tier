@@ -1,6 +1,6 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
-import os from "os";
-import path from "path";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { writeFileAtomic, writeFileAtomicSync } from "../src/atomic-write";
 

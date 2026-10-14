@@ -147,7 +147,9 @@ describe("global --json and --no-chop still work on root (regression)", () => {
     const logDir = mkdtempSync(path.join(os.tmpdir(), "at-global-json-"));
     const result = spawnSync("node", [cliPath, "--json", "-a", "mock", "--log-dir", logDir], {
       encoding: "utf8",
-      input: JSON.stringify({ prompt: "global json prompt" }),
+      input: JSON.stringify({ prompt: "global json prompt", agent: "mock" }),
+      // isolate from the real ~/.at (jsonDefaults, line config, running-run limit)
+      env: { ...process.env, HOME: logDir, MOCK_BIN: path.resolve(__dirname, "..", "bin", "mock-agent") },
     });
     expect(result.status).toBe(0);
     const out = (result.stdout ?? "") + (result.stderr ?? "");
@@ -163,6 +165,7 @@ describe("global --json and --no-chop still work on root (regression)", () => {
       [cliPath, "--no-chop", "-a", "mock", "-s", "-p", "global nochop", "--log-dir", logDir],
       {
         encoding: "utf8",
+        env: { ...process.env, HOME: logDir, MOCK_BIN: path.resolve(__dirname, "..", "bin", "mock-agent") },
       },
     );
     expect(result.status).toBe(0);

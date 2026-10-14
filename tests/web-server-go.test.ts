@@ -313,28 +313,40 @@ if (!built) {
     },
     async spawnedArgs(target) {
       const t = target as GoTarget;
-      await vi.waitFor(
-        () => {
-          if (!existsSync(t.__captureFile)) throw new Error("no capture yet");
-        },
-        { timeout: 5000, interval: 50 },
-      );
       // Only spawn-style invocations are recorded in-order; filter out the
       // synchronous bridge/agents/enable/disable calls (they have distinct argv).
-      return readFileSync(t.__captureFile, "utf8")
-        .trim()
-        .split("\n")
-        .filter(Boolean)
-        .map((line) => JSON.parse(line) as string[])
-        .filter(
-          (args) => args[0] !== "bridge" && args[0] !== "agents" && args[0] !== "enable" && args[0] !== "disable",
+      const read = () =>
+        existsSync(t.__captureFile)
+          ? readFileSync(t.__captureFile, "utf8")
+              .trim()
+              .split("\n")
+              .filter(Boolean)
+              .map((line) => JSON.parse(line) as string[])
+              .filter(
+                (args) => args[0] !== "bridge" && args[0] !== "agents" && args[0] !== "enable" && args[0] !== "disable",
+              )
+          : [];
+      // The proxy spawns detached, so the fake `at` may log after the HTTP
+      // response; bridge calls also create the capture file earlier. Wait for
+      // a spawn entry, then fall back to whatever is there (no-spawn cases).
+      try {
+        await vi.waitFor(
+          () => {
+            if (read().length === 0) throw new Error("no spawn captured yet");
+          },
+          { timeout: 5000, interval: 50 },
         );
+      } catch {
+        // fall through
+      }
+      return read();
     },
   };
 
   describeWebApiContract("web server contract (go)", describeWebApiContractHooks);
 
   describeWebApiSSEContract("web server sse contract (go)", {
+    liveFanout: false,
     async start(stateDir) {
       const t = await describeWebApiContractHooks.start(stateDir);
       return {

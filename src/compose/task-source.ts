@@ -1,4 +1,4 @@
-import { promises as fs } from "fs";
+import { promises as fs } from "node:fs";
 import type { ComposePhase } from "./state";
 
 /** One unit of work supplied to compose by a task source (e.g. a kanban board row). */

@@ -1,4 +1,4 @@
-import { statSync } from "fs";
+import { statSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import { loadBoard, mutateBoard, toTasks } from "../../src/kanban/board";
 import { opAdd } from "../../src/kanban/ops";

@@ -1,6 +1,6 @@
-import { mkdtemp, rm, writeFile } from "fs/promises";
-import os from "os";
-import path from "path";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type CommandResult, type ComposeDeps, runCompose } from "../../src/compose/machine";
 import { loadState } from "../../src/compose/state";

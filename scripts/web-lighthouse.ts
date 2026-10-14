@@ -117,11 +117,9 @@ async function main(): Promise<number> {
 }
 
 // Imported as a module (tests) vs executed directly.
-{
-  main()
-    .then((code) => process.exit(code))
-    .catch((err) => {
-      console.error(err);
-      process.exit(1);
-    });
-}
+main()
+  .then((code) => process.exit(code))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

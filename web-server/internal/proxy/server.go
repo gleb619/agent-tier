@@ -124,7 +124,7 @@ func (s *Server) dispatchAPI(w http.ResponseWriter, r *http.Request) {
 		s.handleDiscuss(w, r, parts[1])
 
 	// --- events (SSE) ------------------------------------------------
-	case parts[0] == "events" && r.Method == http.MethodGet:
+	case parts[0] == "events" && r.Method == http.MethodGet && len(parts) == 1:
 		s.sseFromAPI(w, r, "")
 
 	case parts[0] == "events" && r.Method == http.MethodGet && len(parts) == 2:
@@ -272,9 +272,14 @@ func defaultRunAt(ctx context.Context, atBin string, args ...string) (string, er
 	cmd := exec.CommandContext(ctx, atBin, args...)
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = nil
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	cmd.Stdin = nil
 	if err := cmd.Run(); err != nil {
+		// Keep stderr in the error: callers match on it (e.g. "Unknown agent").
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return "", fmt.Errorf("%w: %s", err, msg)
+		}
 		return "", err
 	}
 	return stdout.String(), nil

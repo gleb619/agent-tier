@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, rm, writeFile } from "fs/promises";
-import os from "os";
-import path from "path";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type CommandResult, type ComposeDeps, runCompose } from "../../src/compose/machine";
 import { allDone } from "../../src/compose/md-state";
@@ -412,7 +412,7 @@ describe("runCompose — resume", () => {
       status: "running",
       name: "unnamed",
     };
-    await writeFile(path.join(stateDir, "runs.jsonl"), JSON.stringify(inFlight) + "\n");
+    await writeFile(path.join(stateDir, "runs.jsonl"), `${JSON.stringify(inFlight)}\n`);
     await saveState(ws, {
       goal: "saved goal",
       state: "IMPLEMENT",
@@ -456,7 +456,7 @@ describe("runCompose — resume", () => {
       status: "failed",
       finishedAt: new Date().toISOString(),
     };
-    await writeFile(path.join(stateDir, "runs.jsonl"), JSON.stringify(dead) + "\n");
+    await writeFile(path.join(stateDir, "runs.jsonl"), `${JSON.stringify(dead)}\n`);
     await saveState(ws, {
       goal: "saved goal",
       state: "IMPLEMENT",
