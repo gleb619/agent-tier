@@ -1,15 +1,11 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { Command } from "commander";
 import { config } from "dotenv";
 import { registerCommands } from "./commands";
 import { resolveTuiEntry, spawnTui } from "./tui-entry";
+import { CLI_VERSION } from "./version";
 
 config();
-
-const pkg = JSON.parse(readFileSync(path.join(__dirname, "..", "package.json"), "utf8")) as { version: string };
-const CLI_VERSION = pkg.version;
 
 const program = new Command();
 

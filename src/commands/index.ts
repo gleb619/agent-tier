@@ -1,6 +1,7 @@
 import type { Command } from "commander";
 import { registerComposeCommand } from "../compose/cli";
 import { registerAgentsCommand } from "./agents";
+import { registerBridgeCommand } from "./bridge";
 import { registerCodegraphCommand } from "./codegraph";
 import { registerConfigCommand } from "./config";
 import { registerDefaultCommand } from "./default";
@@ -37,4 +38,5 @@ export function registerCommands(program: Command): void {
   registerServeCommand(program);
   registerWebCommand(program);
   registerDiscussCommand(program);
+  registerBridgeCommand(program);
 }
