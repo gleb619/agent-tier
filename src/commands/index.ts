@@ -4,6 +4,7 @@ import { registerAgentsCommand } from "./agents";
 import { registerBridgeCommand } from "./bridge";
 import { registerCodegraphCommand } from "./codegraph";
 import { registerConfigCommand } from "./config";
+import { registerDaemonCommand } from "./daemon";
 import { registerDefaultCommand } from "./default";
 import { registerDiscussCommand } from "./discuss";
 import { registerEventsCommand } from "./events";
@@ -39,4 +40,5 @@ export function registerCommands(program: Command): void {
   registerWebCommand(program);
   registerDiscussCommand(program);
   registerBridgeCommand(program);
+  registerDaemonCommand(program);
 }
