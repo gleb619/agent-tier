@@ -15,6 +15,7 @@ permissions:
 
 env:
   NODE_VERSION: 22
+  GO_VERSION: "1.21"
 
 jobs:
   # ── Build & Test ──────────────────────────────────
@@ -33,9 +34,20 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm run build
+        if: ${{ always() }}
+
+      # bin/mock-agent and bin/mock-long-agent are gitignored — they must
+      # exist on disk for tests that set MOCK_BIN / MOCK_LONG_BIN to repo
+      # paths. Build them once per CI run.
+      - run: pnpm run build:mock
         if: ${{ always() }}
 
       - run: pnpm test

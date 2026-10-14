@@ -23,6 +23,9 @@ env.local.sh
 bin/at-web
 # Standalone CLI binary (built on demand by scripts/build-at-bin.sh)
 bin/at
+# Built Go mock agents (built on demand by pnpm run build:mock / make build)
+bin/mock-agent
+bin/mock-long-agent
 /.gradle/*
 /gradle/wrapper/gradle-wrapper.jar
 /gradle/wrapper/gradle-wrapper.properties

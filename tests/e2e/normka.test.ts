@@ -10,13 +10,17 @@ const mockBin = path.join(binDir, "mock-agent");
 const mockLongBin = path.join(binDir, "mock-long-agent");
 const repoRoot = path.resolve(here, "..", "..");
 
-function build(): void {
+// bin/mock-agent and bin/mock-long-agent are gitignored (built on demand by
+// `make build` / `pnpm run build:mock`). Only rebuild when missing so a
+// repeated test run does not pointlessly recompile Go.
+function buildIfMissing(): void {
+  if (existsSync(mockBin) && existsSync(mockLongBin)) return;
   const r = spawnSync("make", ["build"], { cwd: repoRoot, stdio: "inherit" });
   if (r.status !== 0) throw new Error("make build failed");
 }
 
 beforeAll(() => {
-  build();
+  buildIfMissing();
 }, 120_000);
 
 describe("normka e2e (mock-agent binary)", () => {
