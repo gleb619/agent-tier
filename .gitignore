@@ -21,6 +21,8 @@ env.local.sh
 
 # Built Go WebUI backend (built on demand by pnpm run build:go)
 bin/at-web
+# Standalone CLI binary (built on demand by scripts/build-at-bin.sh)
+bin/at
 /.gradle/*
 /gradle/wrapper/gradle-wrapper.jar
 /gradle/wrapper/gradle-wrapper.properties

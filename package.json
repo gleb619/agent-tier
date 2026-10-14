@@ -20,6 +20,7 @@
     "test:orphans": "bash scripts/test-guard.sh orphans",
     "hooks:install": "git config core.hooksPath .githooks",
     "build:go": "export PATH=$PATH:/usr/local/go/bin; if ! command -v go >/dev/null 2>&1; then echo '[build:go] go not found, skipping at-web build'; exit 0; fi; cd web-server && go build -trimpath -ldflags \"-s -w\" -o ../bin/at-web ./cmd/at-web",
+    "build:bin": "bash scripts/build-at-bin.sh",
     "build:mock": "make build",
     "test:go": "make test-go",
     "lint": "biome check .",
