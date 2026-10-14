@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseLegend } from "./legend";
@@ -19,6 +20,18 @@ export interface LintResult {
   legend: string[];
 }
 
+/** `git check-ignore -q <path>` — true when the path matches a gitignore pattern.
+ *  Returns false if git is missing, errors, or the cwd is not inside a repo. */
+export function isGitIgnored(filePath: string, cwd: string): boolean {
+  try {
+    const r = spawnSync("git", ["check-ignore", "-q", filePath], { cwd, stdio: "ignore" });
+    // status === 0 → matched an ignore pattern; null / non-zero → not ignored or git unavailable
+    return r.status === 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Split on unescaped pipes only — the mirror of the mutator's `escapePipes`. */
 export function splitCells(line: string): string[] {
   return line
@@ -38,25 +51,42 @@ export function extractIds(text: string): Set<string> {
   return ids;
 }
 
-function planResolves(plan: string, id: string, root: string): boolean {
+export type IsIgnoredFn = (filePath: string, cwd: string) => boolean;
+
+function planResolves(plan: string, id: string, root: string, isIgnored: IsIgnoredFn): boolean {
   const abs = path.isAbsolute(plan) ? plan : path.resolve(root, plan);
   if (existsSync(abs)) return true;
 
   // `clean` drops Done rows but leaves their plan files behind, so a re-added task can
   // carry a drifted slug. An `<ID>-*` file in docs/plans is accepted as the real spec.
   const plansDir = path.join(root, PLANS_DIR_REL);
-  if (!id.startsWith("T") || !existsSync(plansDir)) return false;
-  return readdirSync(plansDir).some((name) => {
-    if (!name.startsWith(`${id}-`)) return false;
-    try {
-      return statSync(path.join(plansDir, name)).isFile();
-    } catch {
-      return false;
-    }
-  });
+  if (id.startsWith("T") && existsSync(plansDir)) {
+    const found = readdirSync(plansDir).some((name) => {
+      if (!name.startsWith(`${id}-`)) return false;
+      try {
+        return statSync(path.join(plansDir, name)).isFile();
+      } catch {
+        return false;
+      }
+    });
+    if (found) return true;
+  }
+
+  // A gitignored path is absent in fresh checkouts and worktrees by design — not a lint error.
+  try {
+    return isIgnored(abs, root);
+  } catch {
+    return false;
+  }
 }
 
-export function lintBoard(text: string, root: string): LintResult {
+export interface LintOptions {
+  /** Override the git-ignore check; defaults to `isGitIgnored`. Inject a stub in tests. */
+  isIgnored?: IsIgnoredFn;
+}
+
+export function lintBoard(text: string, root: string, opts: LintOptions = {}): LintResult {
+  const checkIgnored: IsIgnoredFn = opts.isIgnored ?? isGitIgnored;
   const lines = text.split("\n");
   const legend = parseLegend(text);
   const violations: LintViolation[] = [];
@@ -104,7 +134,7 @@ export function lintBoard(text: string, root: string): LintResult {
 
     const planIdx = headerCols.indexOf("Plan File");
     const plan = (planIdx >= 0 ? (cells[planIdx] ?? "") : "").replace(/`/g, "").trim();
-    if (plan && plan !== SENTINEL && !planResolves(plan, id, root)) {
+    if (plan && plan !== SENTINEL && !planResolves(plan, id, root, checkIgnored)) {
       fail(`line ${lineNo}: ${id} Plan File '${plan}' does not exist`);
     }
   });

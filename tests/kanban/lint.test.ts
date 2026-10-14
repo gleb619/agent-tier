@@ -203,3 +203,51 @@ describe("lintBoard — the generated fixture", () => {
     expect(lintBoard(text, root).violations).toEqual([]);
   });
 });
+
+describe("lintBoard — gitignored plan files", () => {
+  // Stub helpers: always-ignored and never-ignored
+  const alwaysIgnored = () => true;
+  const neverIgnored = () => false;
+
+  it("does not flag a missing plan file when the path is gitignored", () => {
+    const root = makeTmpDir();
+    // File does not exist, but our stub says it is ignored → no violation
+    const result = lintBoard(rawBoard([goodRow("T1", "Backlog", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: alwaysIgnored,
+    });
+    expect(result.violations).toEqual([]);
+  });
+
+  it("flags a missing plan file when the path is NOT gitignored", () => {
+    const root = makeTmpDir();
+    const result = lintBoard(rawBoard([goodRow("T1", "Backlog", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: neverIgnored,
+    });
+    expect(result.violations).toHaveLength(1);
+    expect(result.violations[0].message).toMatch(/T1 Plan File.*does not exist/);
+  });
+
+  it("does not call isIgnored when the plan file exists on disk", () => {
+    const root = makeTmpDir();
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), "# spec\n");
+    let called = false;
+    lintBoard(rawBoard([goodRow("T1", "Backlog", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: () => {
+        called = true;
+        return false;
+      },
+    });
+    expect(called).toBe(false);
+  });
+
+  it("treats a git error (isIgnored throws) as not-ignored and flags the missing file", () => {
+    const root = makeTmpDir();
+    const throwingIgnored = (): boolean => {
+      throw new Error("git not found");
+    };
+    const result = lintBoard(rawBoard([goodRow("T1", "Backlog", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: throwingIgnored,
+    });
+    expect(result.violations).toHaveLength(1);
+  });
+});
