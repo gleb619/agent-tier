@@ -39,6 +39,15 @@ JSON `prompt` > JSON `promptFile` > `-f` file > `-p` text.
 When an agent exits non-zero, `at` automatically picks the next agent in the same tier and retries, up to
 `min(retries, candidates.length - 1)` additional attempts. Named agents (`-a <name>`) never retry.
 
+### Fatal provider errors
+
+An agent can exit `0` after only logging a provider error. After every blocking run (and in the detached supervisor) `at`
+scans the log tail (last 200 lines / 32 KB, `src/fatal-markers.ts`) for: `[claude-code:unrecognized_model]`,
+`API Error: Request rejected (429)`, `usage limit has been reached`, and agy's leaked `<|channel|>commentary<|message|>`.
+A hit marks the run `failed` (exit 1), logs `[at] agent <name> reported fatal error: <marker>`, and lets retry/health apply.
+Quota markers (429 / usage limit) also deactivate the agent for the deactivation TTL (`AT_DEACTIVATE_TTL_MS`, 24h);
+`at enable <agent>` clears it.
+
 ## Other flags
 
 | Flag | Behavior |
@@ -51,6 +60,14 @@ When an agent exits non-zero, `at` automatically picks the next agent in the sam
 | `--sse [port]` | Live-progress SSE hub, default port 7777, `0` = random (see [progress.md](progress.md)) |
 | `--global-prompt <text>` | Global prompt text prepended to every run's prompt |
 | `--scope <glob>` | Restrict the agent to files matching this glob (repeatable). Appends a prompt instruction and validates changed files after a successful blocking run. Supports `**`, `*`, `?`. |
+
+## Worktree helpers
+
+- `bash scripts/worktree-new.sh <short-name>` — worktree + `feat/<short-name>` branch off `main`, `node_modules` symlinked.
+- `bash scripts/merge-worktree.sh <worktree-path> <branch>` — refuses a dirty worktree, rebases on `main`, ff-merges from the
+  main checkout, and only then removes the worktree and branch. Failures print `DIRTY_WORKTREE` / `REBASE_CONFLICT` /
+  `MERGE_FAIL` and keep the worktree.
+- Mock agent binaries (`bin/mock-*`) are gitignored; tests copy them from the main checkout or run `make build`.
 
 ## Scope restriction
 
