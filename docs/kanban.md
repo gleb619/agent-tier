@@ -44,7 +44,6 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T48 | Backlog | WebUI quality gates + docs     | coverage floor, bundle+Lighthouse (a11y>=90) gates re-pass, E2E new flows, design-system section in docs/webui.md                   | Low      | loop  | -                   | T47,T50             | -              |
 | T49 | Done    | Shared TUI/WebUI layout spec   | docs/layout.md is canonical ASCII layout; add src/ui-spec.ts (nav, sections, tokens) mirroring it, used by both UIs                 | High     | loop  | T41,T42,T43,T44,T50 | T25                 | docs/layout.md |
 | T50 | Backlog | TUI layout parity              | align src/tui to ui-spec: same nav/sections, dashboard metrics, agents view, status colors; spec-driven parity tests                | High     | loop  | T48                 | T41,T42,T43,T44,T49 | -              |
-| T51 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 
 ## Compose + Kanban
 
