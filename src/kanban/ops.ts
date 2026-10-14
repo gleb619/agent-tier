@@ -213,6 +213,38 @@ export function opAdd(doc: BoardDoc, opts: AddOptions): OpResult {
     if (insertedAt === -1) rows.push(newRow);
   }
 
+  // Update reciprocal Blocks columns for any blockers specified via --blocked-by
+  if (opts.blockedBy) {
+    const blockers = opts.blockedBy
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (blockers.length > 0) {
+      const blocksIdx = requireIndex(doc, "Blocks");
+      // Ensure ID column exists for reference (already used earlier)
+      for (const blockerId of blockers) {
+        const blockerRowIdx = findRowById(doc, blockerId);
+        if (blockerRowIdx === -1) {
+          r.warnings.push(`[kanban-add] blocker task ${blockerId} not found`);
+          continue;
+        }
+        const cell = doc.table.children[blockerRowIdx].children[blocksIdx];
+        const current = cellText(cell);
+        let newBlocks: string;
+        if (blank(current) || current === SENTINEL) {
+          newBlocks = id;
+        } else {
+          const existing = current
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (!existing.includes(id)) existing.push(id);
+          newBlocks = existing.join(", ");
+        }
+        setCellText(doc.table.children[blockerRowIdx].children[blocksIdx], newBlocks);
+      }
+    }
+  }
   r.changed = true;
   r.messages.push(`${isUpdate ? "Updated" : "Added"} ${id}: ${values.Title}`);
   r.data = { id, title: values.Title, updated: isUpdate, task: { ...values } };

@@ -204,6 +204,56 @@ describe("opAdd", () => {
     saveBoard(doc);
     expect(lintBoard(readBoard(file), dir).violations).toEqual([]);
   });
+
+  it("--blocked-by fills the reciprocal Blocks cell of an existing blocker (T6 blocked-by T4)", () => {
+    const { file } = fresh([row("T1", "Done", "first"), row("T4", "Backlog", "fourth")]);
+    const doc = loadBoard(file);
+    const r = opAdd(doc, { id: "T6", title: "sixth", blockedBy: "T4" });
+    saveBoard(doc);
+    const tasks = toTasks(loadBoard(file));
+    const t4 = tasks.find((t) => t.ID === "T4");
+    const t6 = tasks.find((t) => t.ID === "T6");
+    expect(t4?.Blocks).toBe("T6");
+    expect(t6?.["Blocked By"]).toBe("T4");
+    expect(r.warnings).toEqual([]);
+    expect(r.changed).toBe(true);
+  });
+
+  it("--blocked-by appends to an existing Blockers list without duplicating", () => {
+    const { file } = fresh([row("T4", "Backlog", "fourth", { blocks: "T5" })]);
+    const doc = loadBoard(file);
+    opAdd(doc, { id: "T6", title: "sixth", blockedBy: "T4" });
+    saveBoard(doc);
+    const t4 = toTasks(loadBoard(file)).find((t) => t.ID === "T4");
+    expect(t4?.Blocks).toBe("T5, T6");
+
+    // Re-add T6 with same --blocked-by — must not duplicate
+    const doc2 = loadBoard(file);
+    opAdd(doc2, { id: "T6", title: "sixth", blockedBy: "T4" });
+    saveBoard(doc2);
+    const t4again = toTasks(loadBoard(file)).find((t) => t.ID === "T4");
+    expect(t4again?.Blocks).toBe("T5, T6");
+  });
+
+  it("--blocked-by supports a comma-separated list of blockers", () => {
+    const { file } = fresh([row("T3", "Backlog", "third"), row("T4", "Backlog", "fourth")]);
+    const doc = loadBoard(file);
+    opAdd(doc, { id: "T6", title: "sixth", blockedBy: "T3, T4" });
+    saveBoard(doc);
+    const tasks = toTasks(loadBoard(file));
+    expect(tasks.find((t) => t.ID === "T3")?.Blocks).toBe("T6");
+    expect(tasks.find((t) => t.ID === "T4")?.Blocks).toBe("T6");
+  });
+
+  it("--blocked-by warns and skips unknown blocker IDs but still applies the known ones", () => {
+    const { file } = fresh([row("T4", "Backlog", "fourth")]);
+    const doc = loadBoard(file);
+    const r = opAdd(doc, { id: "T6", title: "sixth", blockedBy: "T4, T9" });
+    saveBoard(doc);
+    expect(r.warnings[0]).toMatch(/blocker task T9 not found/);
+    const tasks = toTasks(loadBoard(file));
+    expect(tasks.find((t) => t.ID === "T4")?.Blocks).toBe("T6");
+  });
 });
 
 describe("opStatus", () => {
