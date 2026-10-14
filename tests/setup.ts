@@ -4,7 +4,7 @@
  * never pollute real ~/.at/runs.jsonl.
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -20,7 +20,26 @@ const atDir = process.env.AT_STATE_DIR;
 const repoRoot = path.resolve(__dirname, "..");
 const mockBin = path.join(repoRoot, "bin", "mock-agent");
 const mockLongBin = path.join(repoRoot, "bin", "mock-long-agent");
+// Linked worktrees have no bin/ of their own: reuse the binaries already built in the main
+// checkout (git common dir's parent) instead of recompiling Go in every worktree.
+function copyFromMainCheckout(target: string): boolean {
+  const r = spawnSync("git", ["rev-parse", "--git-common-dir"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  if (r.status !== 0) return false;
+  const src = path.join(path.dirname(path.resolve(repoRoot, r.stdout.trim())), "bin", path.basename(target));
+  if (src === target || !existsSync(src)) return false;
+  mkdirSync(path.dirname(target), { recursive: true });
+  copyFileSync(src, target);
+  chmodSync(target, 0o755);
+  return true;
+}
+
 function ensureMockBuilt(): void {
+  for (const bin of [mockBin, mockLongBin]) {
+    if (!existsSync(bin)) copyFromMainCheckout(bin);
+  }
   if (existsSync(mockBin) && existsSync(mockLongBin)) return;
   const r = spawnSync("make", ["build"], { cwd: repoRoot, stdio: "inherit" });
   if (r.status !== 0) {
@@ -32,7 +51,7 @@ beforeAll(() => {
   mkdirSync(atDir, { recursive: true });
   writeFileSync(path.join(atDir, "state.json"), "{}", "utf8");
   ensureMockBuilt();
-});
+}, 180_000);
 
 afterAll(() => {
   rmSync(atDir, { recursive: true, force: true });
