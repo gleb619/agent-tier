@@ -32,19 +32,36 @@ If no binary is found, the command prints a build hint and exits.
 
 ## API
 
-Implemented by the Go server `web-server/internal/api`:
+The Go server `web-server/internal/proxy` is a thin HTTP+static+SSE proxy:
+every request is translated to one `at bridge <resource> <verb> [id]` call
+(JSON in/out, see [docs/bridge.md](bridge.md)). Endpoints that have no bridge
+verb yet fall through to a small direct `at` shim (the bridge is the
+source of truth; the shims will move into bridge verbs in later tasks).
 
-| Endpoint | Description |
-| :------- | :---------- |
-| `GET /api/runs` | joined run list from all state dirs |
-| `POST /api/runs` | launch a run (`{prompt, agent?, tier?, cwd?}`) |
-| `GET/DELETE /api/runs/:id` | run record; DELETE kills (`?force=1` → SIGKILL) |
-| `POST /api/runs/:id/retry` | relaunch with same prompt/agent/tier |
-| `GET /api/runs/:id/log?lines=N` | log tail (default 200 lines) |
-| `GET/POST /api/runs/:id/discuss` | discuss thread (proxied to the event hub) |
-| `GET /api/events[/:runId]` | SSE replay/live stream |
-| `GET /api/agents`, `GET /api/stats` | registry + health, aggregate stats |
-| `GET/PUT /api/settings` | `web-settings.json` defaults |
+| Endpoint | Bridge path | Notes |
+| :------- | :---------- | :----- |
+| `GET /api/runs` | `runs list` | joined state dirs (`at bridge` resolves) |
+| `POST /api/runs` | spawn `at -p ... -a ... -t ... -s` | direct shim; awaiting a `runs create` bridge verb |
+| `GET /api/runs/:id` | `runs get` | |
+| `DELETE /api/runs/:id` | `runs stop` | `?force=1` propagates as `{force:true}` |
+| `POST /api/runs/:id/retry` | `runs get` + spawn | direct shim; reads stored prompt/agent/tier |
+| `GET /api/runs/:id/log?lines=N` | `runs get` + tail file | direct; `lines` defaults to 200 |
+| `GET /api/runs/:id/discuss` | `discuss list` | `?pending=1` → unanswered only |
+| `POST /api/runs/:id/discuss` | `discuss answer`/`say` | `kind:"answer"` carries `replyTo` |
+| `GET /api/events[/:runId]` | `events tail` | SSE replay; live fan-out ships with the daemon (T33+) |
+| `GET /api/agents` | `agents list` | |
+| `PUT /api/agents/:name/enable\|disable` | exec `at enable\|disable` | direct shim |
+| `GET /api/stats` | `runs list` + `agents health` | computed in Go |
+| `GET /api/ping` | `ping ping` | smoke check |
+| `GET /api/health` | `health get` | scheduler state block |
+| `GET /api/settings` | read `<stateDir>/web-settings.json` | direct shim; awaiting a `settings get` verb |
+| `PUT /api/settings` | atomic write to the same file | direct shim |
+
+Any bridge error envelope (`USAGE`, `NOT_FOUND`, `CONFLICT`, `INVALID`, …)
+maps to the closest HTTP status; envelopes with no machine code (timeout,
+exec failure, malformed stdout) become `502 Bad Gateway`. The `at` binary is
+resolved via `AT_BIN` (defaults to `at`); `at-web` itself never reads or
+modifies the state dirs directly.
 
 Any non-`/api` path falls back to the SPA shell (`index.html`).
 

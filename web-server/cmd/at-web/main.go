@@ -1,11 +1,16 @@
-// at-web is the Go replacement for `at web`: WebUI backend serving the runs
-// API (read + mutations delegated to the `at` CLI) plus the built SPA.
+// at-web is the thin Go proxy for `at web`: a HTTP+static+SSE backend that
+// translates every request into an `at bridge <resource> <verb> [id]` call
+// (see docs/bridge.md) and serves the built SPA. Mutations that don't have a
+// bridge verb yet (POST /api/runs, /api/runs/:id/retry, PUT agents,
+// /api/settings, /api/runs/:id/log) exec `at` directly — see internal/proxy.
+//
 // Flags mirror the Node CLI:
 //
 //	at-web --port 7800 --host 127.0.0.1 --static <dir> --state-dir <dir>
 //
-// Without --state-dir (or AT_STATE_DIR), state dirs are joined the same way
-// as `at status`: project `.at/` (when it holds state) first, then `~/.at/`.
+// --state-dir is accepted for parity with prior releases; the proxy no
+// longer needs it (the bridge does its own state-dir resolution via
+// AT_STATE_DIR).
 package main
 
 import (
@@ -22,8 +27,7 @@ import (
 	"syscall"
 	"time"
 
-	"web-server/internal/api"
-	"web-server/internal/state"
+	"web-server/internal/proxy"
 )
 
 const (
@@ -42,11 +46,13 @@ func run() error {
 	port := flag.String("port", defaultPort, "listen port")
 	host := flag.String("host", defaultHost, "bind address (127.0.0.1 default; 0.0.0.0 for containers)")
 	staticDir := flag.String("static", "", "webui build dir (empty = API-only)")
-	stateDir := flag.String("state-dir", "", "state dir (collapses the joined project + ~/.at/ default)")
+	// Accepted for parity with prior releases; unused — the proxy currently
+	// trusts the at bridge to resolve state dirs the way `at status` does.
+	_ = flag.String("state-dir", "", "state dir (unused; bridge resolves via AT_STATE_DIR)")
 	flag.Parse()
 
-	stateDirs := state.ResolveStatusDirs(*stateDir, resolvedCwd())
-	srv := api.NewServer(stateDirs, *staticDir)
+	srv := proxy.New(*staticDir)
+	srv.SetBaseURL("")
 
 	addr := *host + ":" + *port
 	server := &http.Server{
@@ -61,9 +67,7 @@ func run() error {
 	defer listener.Close()
 
 	actualAddr := listener.Addr().String()
-	baseURL := "http://" + actualAddr
-	srv.SetBaseURL(baseURL)
-	fmt.Fprintf(os.Stderr, "[at-web] serving on http://%s (state: %v)\n", actualAddr, stateDirs)
+	fmt.Fprintf(os.Stderr, "[at-web] serving on http://%s (bridge via: %s)\n", actualAddr, srv.AtBin)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -87,8 +91,9 @@ func run() error {
 	return nil
 }
 
-// resolvedCwd is a tiny helper so the join logic sees a real cwd even when
-// PWD is unset.
+// resolvedCwd unused after the proxy refactor; kept as the package root
+// symbol so future shells (e.g. daemon command) can call it without
+// re-importing `path/filepath`.
 func resolvedCwd() string {
 	if cwd, err := os.Getwd(); err == nil {
 		return cwd
