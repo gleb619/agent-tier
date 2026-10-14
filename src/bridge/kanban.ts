@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { loadBoard, mutateBoard, resolveBoardFile, toTasks } from "../kanban/board";
-import { nextExecutable } from "../kanban/select";
 import { type AddOptions, type OpResult, opAdd, opRemove, opStatus } from "../kanban/ops";
+import { nextExecutable } from "../kanban/select";
 import { BridgeError, type BridgeParams, type BridgeResource } from "./types";
 import { optionalString, requireString, storeError } from "./util";
 

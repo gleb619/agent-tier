@@ -1,6 +1,7 @@
 import {
   addFeedback,
   type FeedbackEntry,
+  type FeedbackFilter,
   type FeedbackKind,
   type FeedbackStatus,
   getFeedback,
@@ -40,7 +41,7 @@ function optionalStringRaw(params: BridgeParams, name: string): string | undefin
   return raw;
 }
 
-function filterFrom(params: BridgeParams) {
+function filterFrom(params: BridgeParams): FeedbackFilter {
   const limitRaw = params.limit;
   let limit: number | undefined;
   if (limitRaw !== undefined) {
@@ -51,8 +52,8 @@ function filterFrom(params: BridgeParams) {
     limit = Math.floor(n);
   }
   return {
-    status: optionalStringRaw(params, "status"),
-    kind: optionalStringRaw(params, "kind"),
+    status: optionalStringRaw(params, "status") as FeedbackFilter["status"],
+    kind: optionalStringRaw(params, "kind") as FeedbackFilter["kind"],
     agent: optionalStringRaw(params, "agent"),
     tag: optionalStringRaw(params, "tag"),
     limit,
