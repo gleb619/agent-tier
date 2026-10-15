@@ -72,6 +72,32 @@ describe("MainLayout shell", () => {
     connectionError.set(null);
   });
 
+  it("renders the filter above the navigation inside the sidebar", () => {
+    render(MainLayout);
+    const sidebar = screen.getByRole("complementary", { name: /sidebar/i });
+    const filter = screen.getByLabelText("Filter runs");
+    const nav = screen.getByRole("navigation", { name: /main/i });
+    // filter precedes nav in document order
+    const FILTER_PRECEDES_NAV = Node.DOCUMENT_POSITION_FOLLOWING | Node.DOCUMENT_POSITION_CONTAINED_BY;
+    expect(sidebar.compareDocumentPosition(filter) & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeTruthy();
+    expect(sidebar.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeTruthy();
+    expect(filter.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    FILTER_PRECEDES_NAV; // keep reference for clarity
+  });
+
+  it("hides nav items whose labels don't match the search query", async () => {
+    render(MainLayout);
+    expect(screen.getByRole("button", { name: /Dashboard/ })).toBeInTheDocument();
+    await fireEvent.input(screen.getByLabelText("Filter runs"), { target: { value: "xyz-no-match" } });
+    expect(screen.queryByRole("button", { name: /Dashboard/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /New Task/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Run Details/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Settings/ })).not.toBeInTheDocument();
+    // number keys still navigate even though every nav row is hidden
+    await fireEvent.keyDown(window, { key: "1" });
+    expect(get(currentView)).toBe("dashboard");
+  });
+
   it("keeps the selected run in sync with the run-details URL", async () => {
     setRuns([makeRun({ runId: "abc" })]);
     render(MainLayout);

@@ -5,7 +5,6 @@ import { setCurrentView } from "$stores/ui";
 import type { ApiRun } from "$types/api";
 import { groupRunsByDate, type RunGroup } from "$utils/grouping";
 import { layoutOffsets, virtualRange } from "$utils/virtual";
-import FilterInput from "./FilterInput.svelte";
 import RunItem from "./RunItem.svelte";
 
 /** Switch to windowed rendering above this many rows. */
@@ -47,7 +46,6 @@ function pick(run: ApiRun): void {
 </script>
 
 <div class="flex h-full flex-col gap-2" data-testid="run-list">
-  <FilterInput />
   {#if rows.length === 0}
     <p class="px-1 py-4 text-center text-sm text-gray-500" data-testid="run-list-empty">
       No runs match the current filter.

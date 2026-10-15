@@ -11,6 +11,14 @@ const STATUSES: { value: StatusFilter; label: string }[] = [
 ];
 
 $: agents = [...new Set($runs.map((run) => run.agent))].sort();
+
+function onFilterKeydown(event: KeyboardEvent): void {
+  // First Esc blurs the filter; the window-level handler only fires for non-form-field
+  // targets, so a second Esc outside the field will clear the selection (docs/layout.md §1.1).
+  if (event.key === "Escape") {
+    (event.currentTarget as HTMLInputElement).blur();
+  }
+}
 </script>
 
 <div class="flex flex-col gap-2" data-testid="filter-input">
@@ -20,6 +28,7 @@ $: agents = [...new Set($runs.map((run) => run.agent))].sort();
     aria-label="Filter runs"
     placeholder="Filter runs…"
     bind:value={$searchQuery}
+    on:keydown={onFilterKeydown}
     class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
   />
   <div class="flex gap-2">

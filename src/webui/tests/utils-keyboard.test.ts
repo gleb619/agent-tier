@@ -70,10 +70,11 @@ describe("resolveShortcut", () => {
     expect(resolveShortcut(keyEvent("p"))).toBe("show-prompt");
   });
 
-  it("maps global keys /, Escape and Ctrl+r", () => {
+  it("maps global keys /, Escape, Ctrl+r and Ctrl+f", () => {
     expect(resolveShortcut(keyEvent("/"))).toBe("focus-filter");
     expect(resolveShortcut(keyEvent("Escape"))).toBe("clear-focus");
     expect(resolveShortcut(keyEvent("r", { ctrl: true }))).toBe("refresh");
+    expect(resolveShortcut(keyEvent("f", { ctrl: true }))).toBe("focus-filter");
   });
 
   it("rejects plain keys with ctrl/alt/meta and unknown keys", () => {

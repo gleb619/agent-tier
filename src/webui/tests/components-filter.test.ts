@@ -58,4 +58,13 @@ describe("FilterInput", () => {
     await fireEvent.change(select, { target: { value: "codex" } });
     expect(get(agentFilter)).toBe("codex");
   });
+
+  it("Esc inside the filter blurs the input", async () => {
+    render(FilterInput);
+    const input = screen.getByLabelText("Filter runs") as HTMLInputElement;
+    input.focus();
+    expect(document.activeElement).toBe(input);
+    await fireEvent.keyDown(input, { key: "Escape" });
+    expect(document.activeElement).not.toBe(input);
+  });
 });

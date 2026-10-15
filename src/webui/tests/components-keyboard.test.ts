@@ -94,6 +94,12 @@ describe("MainLayout keyboard shortcuts", () => {
     expect(document.activeElement).toBe(document.querySelector("#run-filter"));
   });
 
+  it("focuses the filter input with Ctrl+F", async () => {
+    render(MainLayout);
+    await fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+    expect(document.activeElement).toBe(document.querySelector("#run-filter"));
+  });
+
   it("still ignores shortcuts typed into form fields", async () => {
     render(MainLayout);
     const input = screen.getByLabelText("Filter runs");

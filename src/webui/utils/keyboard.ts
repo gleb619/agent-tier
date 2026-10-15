@@ -42,7 +42,7 @@ export const keyboardShortcuts: { id: ShortcutId; keys: string; description: str
   { id: "retry-run", keys: "r", description: "Retry selected run" },
   { id: "kill-run", keys: "Ctrl+k", description: "Kill selected run (with confirm)" },
   { id: "show-prompt", keys: "p", description: "Show prompt of selected run" },
-  { id: "focus-filter", keys: "/", description: "Focus the run filter input" },
+  { id: "focus-filter", keys: "/ Ctrl+F", description: "Focus the run filter input" },
   { id: "clear-focus", keys: "Escape", description: "Clear selection / focus" },
   { id: "refresh", keys: "Ctrl+r", description: "Refresh data" },
 ];
@@ -67,6 +67,7 @@ const PLAIN_KEYS: Record<string, ShortcutId> = {
 const CTRL_KEYS: Record<string, ShortcutId> = {
   k: "kill-run",
   r: "refresh",
+  f: "focus-filter",
 };
 
 /** True while the user is typing — shortcuts must not fire. */

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
+import { tick } from "svelte";
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it } from "vitest";
 import RunItem from "../components/sidebar/RunItem.svelte";
@@ -81,6 +82,25 @@ describe("RunList", () => {
     render(RunList);
     expect(screen.getByRole("button", { name: /Run ok/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Run bad/ })).not.toBeInTheDocument();
+  });
+
+  it("ANDs whitespace-separated search tokens across name/agent/prompt/runId", async () => {
+    setRuns([
+      makeRun("abc", { name: "Refactor auth", agent: "mm-code", prompt: "touch login" }),
+      makeRun("xyz", { name: "Refactor db", agent: "qwen", prompt: "migrate login" }),
+      makeRun("nope", { name: "Add tests", agent: "kilo", prompt: "vitest suite" }),
+    ]);
+    searchQuery.set("refactor login");
+    render(RunList);
+    expect(screen.getByRole("button", { name: /Refactor auth/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Refactor db/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Add tests/ })).not.toBeInTheDocument();
+
+    searchQuery.set("tests vitest");
+    await tick();
+    expect(screen.queryByRole("button", { name: /Refactor auth/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Refactor db/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Add tests/ })).toBeInTheDocument();
   });
 
   it("selects the run and navigates to run-details on click", async () => {
