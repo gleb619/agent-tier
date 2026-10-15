@@ -11,6 +11,9 @@ import path from "node:path";
 // Set AT_STATE_DIR at module level — before any imports resolve
 process.env.AT_STATE_DIR = path.join(os.tmpdir(), `at-test-${process.pid}`);
 
+// Discuss is experimental + opt-in; existing suites exercise it, gate tests unset this explicitly.
+process.env.AT_DISCUSS = "1";
+
 const atDir = process.env.AT_STATE_DIR;
 
 // Build Go mock agents on demand if missing. bin/mock-agent and

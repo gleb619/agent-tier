@@ -63,9 +63,21 @@ describe("buildImplementPrompt", () => {
   });
 
   it("tells the implementer to ask the host via discuss instead of guessing", () => {
-    const p = buildImplementPrompt({ goal: "add retry", task: "1. Add resolver", plan: PLAN, workspaceDir: DIR });
+    const p = buildImplementPrompt({
+      goal: "add retry",
+      task: "1. Add resolver",
+      plan: PLAN,
+      workspaceDir: DIR,
+      discuss: true,
+    });
     expect(p).toContain("$AT_BIN discuss ask");
     expect(p).toMatch(/do not guess/i);
+  });
+
+  it("omits discuss and says do not ask when the experimental channel is off", () => {
+    const p = buildImplementPrompt({ goal: "add retry", task: "1. Add resolver", plan: PLAN, workspaceDir: DIR });
+    expect(p).not.toContain("discuss");
+    expect(p).toMatch(/do not ask questions/i);
   });
 });
 

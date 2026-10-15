@@ -312,7 +312,7 @@ describe("runCompose — discuss questions reach the brain", () => {
       questions: [makeQuestion("Which retry count?", ["3", "5"])],
       brain: () => "Use 5 retries\n(because transient errors)",
     });
-    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, discuss: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("DONE");
     expect(f.answered).toHaveLength(2); // one question per IMPLEMENT item run
@@ -332,7 +332,7 @@ describe("runCompose — discuss questions reach the brain", () => {
         throw new Error("tier-1 down");
       },
     });
-    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, discuss: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("DONE");
     expect(f.answered[0].ans).toBeUndefined();
@@ -342,11 +342,29 @@ describe("runCompose — discuss questions reach the brain", () => {
     const f = makeDeps(ws, {
       questions: [makeQuestion("q1"), makeQuestion("q2")],
     });
-    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir, maxQuestions: 1 }, f.deps);
+    await runCompose({ twoAgents: true, discuss: true, goal: "add retry", cwd: projectDir, maxQuestions: 1 }, f.deps);
 
     const forFirstRun = f.answered.slice(0, 2);
     expect(forFirstRun[0].ans).toBe("brain answer");
     expect(forFirstRun[1].ans).toBeUndefined();
+  });
+});
+
+describe("runCompose — discuss is experimental opt-in", () => {
+  it("does not call the brain without discuss, even in two-agent mode", async () => {
+    const f = makeDeps(ws, { questions: [makeQuestion("Which port?")] });
+    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
+
+    expect(res.state).toBe("DONE");
+    expect(f.brainCalls).toHaveLength(0);
+    expect(f.answered.every((a) => a.ans === undefined)).toBe(true);
+  });
+
+  it("ignores discuss in single mode", async () => {
+    const f = makeDeps(ws, { questions: [makeQuestion("Which port?")] });
+    await runCompose({ discuss: true, goal: "add retry", cwd: projectDir }, f.deps);
+
+    expect(f.brainCalls).toHaveLength(0);
   });
 });
 

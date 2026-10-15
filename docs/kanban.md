@@ -53,6 +53,8 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T57 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 | T58 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 | T59 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
+| T60 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
+| T61 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 
 ## Estimates + consumption
 

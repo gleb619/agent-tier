@@ -66,7 +66,7 @@ git worktree prune
 | Config + HMAC | `~/.at/config.json` `tierOverrides`, tamper-evident via `at config sign` | `src/config.ts`, `src/commands/config.ts` |
 | SSE live progress | `--sse` hub: `/events`, `/emit`, replay + live; standalone `at serve` | `src/notify/hub.ts`, `src/commands/serve.ts` |
 | Notify adapters | Per-agent output → structured events; log tail fallback | `src/notify/index.ts`, `src/notify/adapters/*`, `src/notify/tailer.ts` |
-| Discuss channel | Blocking agent↔host ask/answer/note over SSE or JSONL | `src/commands/discuss.ts`, `src/notify/discuss-store.ts` |
+| Discuss channel | EXPERIMENTAL (`AT_DISCUSS=1` / `compose --two-agents --discuss`), m2m: blocking agent↔orchestrator ask/answer/note | `src/commands/discuss.ts`, `src/notify/discuss-store.ts` |
 | Output chop | Stream log filtering + `ChopLogger` buffered batch compression via external `chop` (isolated install `~/.at/chop`, `AT_CHOP_DIR`, raw fallback) | `src/chop.ts` |
 | Feedback store | `feedback.jsonl` CRUD with file locking + autoclean | `src/feedback-store.ts`, `src/commands/feedback.ts` |
 | Session namer | LLM-generated run names via ollama / openrouter (`~/.at/namer.json`, `think: false`); post-run reflective naming (prompt + log tail), serialized via `namer.lock`, lock-timeout jobs queued to `naming-queue.jsonl` and drained by `applyRunName` / supervisor / `at status`; detached runs are named by the supervisor | `src/namer/`, `src/naming.ts`, `docs/namer.ignore.md` |

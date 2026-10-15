@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import type { Command } from "commander";
 import { getCodegraphContext } from "../commands/codegraph";
 import { postDiscussEntry } from "../commands/discuss-helpers";
+import { discussEnabled } from "../discuss-flag";
 import { resolveBoardFile } from "../kanban/board";
 import { unansweredQuestions } from "../notify/discuss-store";
 import { loadRuns } from "../run-store";
@@ -30,6 +31,8 @@ export interface ComposeCliOptions {
   maxQuestions: number;
   /** Opt-in tier-1 PLAN + CHECK around the tier-2 implementer (flag or AT_TWO_AGENTS). */
   twoAgents?: boolean;
+  /** EXPERIMENTAL: implementers may ask the brain via `at discuss` (two-agent only; flag or AT_DISCUSS). */
+  discuss?: boolean;
   /** Tier of the single implementer (default 2). */
   tier?: number;
   /** Codegraph keywords for INVESTIGATE (merged with plan-file keywords). */
@@ -60,11 +63,17 @@ interface ComposeCliArgs {
   maxQuestions: number;
   resume?: string;
   twoAgents?: boolean;
+  discuss?: boolean;
   tier?: number;
   keywords?: string;
 }
 
 /** `AT_TWO_AGENTS=1|true|yes|on` enables two-agent mode without the flag. */
+/** Experimental discuss channel: `--discuss` or `AT_DISCUSS=1`. Only takes effect with two-agent mode. */
+export function discussOptIn(flag: boolean | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  return flag === true || discussEnabled(env);
+}
+
 export function twoAgentsEnabled(flag: boolean | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
   return flag === true || /^(1|true|yes|on)$/i.test((env.AT_TWO_AGENTS ?? "").trim());
 }
@@ -103,7 +112,7 @@ function isTerminalPhase(state: string | undefined): state is "DONE" | "FAILED" 
 export async function runBoardTasks(
   params: Pick<
     ComposeCliOptions,
-    "testCmd" | "maxRounds" | "maxNodes" | "maxQuestions" | "twoAgents" | "tier" | "keywords"
+    "testCmd" | "maxRounds" | "maxNodes" | "maxQuestions" | "twoAgents" | "discuss" | "tier" | "keywords"
   >,
   opts: BoardTasksOptions,
 ): Promise<number> {
@@ -169,11 +178,13 @@ export function createComposeDeps(workspace: ComposeWorkspace, stateDir = resolv
   return {
     workspace,
     stateDir,
-    async startAt(tier, prompt, cwd) {
+    async startAt(tier, prompt, cwd, opts) {
       // Detached start (no -s): `at` prints the run box and returns immediately.
       const { stdout } = await execFileAsync("at", ["-t", String(tier), "--state-dir", stateDir, "-p", prompt], {
         cwd,
         maxBuffer: MAX_BUFFER,
+        // Explicit either way: a stray AT_DISCUSS in the parent env must not leak into non-discuss runs.
+        env: { ...process.env, AT_DISCUSS: opts?.discuss ? "1" : "0" },
       });
       const m = /Run ID:\s*(\S+)/.exec(stdout);
       if (!m) throw new Error(`compose: could not parse Run ID from at output: ${stdout.slice(0, 200)}`);
@@ -251,6 +262,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
           maxNodes: opts.maxNodes,
           maxQuestions: opts.maxQuestions,
           twoAgents: opts.twoAgents,
+          discuss: opts.discuss,
           tier: opts.tier,
           keywords: opts.keywords,
           cwd: process.cwd(),
@@ -277,6 +289,11 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
       "Opt in to tier-1 PLAN + CHECK around the implementer (3+ agent runs; also AT_TWO_AGENTS=1)",
       false,
     )
+    .option(
+      "--discuss",
+      "EXPERIMENTAL: with --two-agents, let implementers ask the tier-1 brain via `at discuss` (also AT_DISCUSS=1)",
+      false,
+    )
     .option("--tier <number>", "Tier of the single implementer (default 2)", (v) => parseInt(v, 10))
     .option("--keywords <list>", "Comma-separated codegraph keywords for INVESTIGATE (plan-file keywords are merged)")
     .option("--resume <id>", "Resume a saved goal by id (continues from state.json)")
@@ -301,6 +318,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
                 maxNodes: args.maxNodes,
                 maxQuestions: args.maxQuestions,
                 twoAgents: twoAgentsEnabled(args.twoAgents),
+                discuss: discussOptIn(args.discuss),
                 tier: args.tier,
                 keywords: parseKeywords(args.keywords),
               },
@@ -339,6 +357,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
             maxNodes: args.maxNodes,
             maxQuestions: args.maxQuestions,
             twoAgents: twoAgentsEnabled(args.twoAgents),
+            discuss: discussOptIn(args.discuss),
             tier: args.tier,
             keywords: parseKeywords(args.keywords),
           }),

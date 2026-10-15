@@ -54,6 +54,7 @@ describe("compose command — option parsing", () => {
       maxNodes: 30,
       maxQuestions: 5,
       twoAgents: false,
+      discuss: true, // tests/setup.ts exports AT_DISCUSS=1
       tier: undefined,
       keywords: undefined,
     });

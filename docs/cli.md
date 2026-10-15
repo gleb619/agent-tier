@@ -250,6 +250,7 @@ at compose --loop --stop-on-fail          # drain the board until nothing is exe
 | `--max-rounds <n>`     | Re-plan rounds before FAILED (default 3).                                                                     |
 | `--max-nodes <n>`      | Max codegraph nodes in the PLAN context (default 30).                                                         |
 | `--resume <id>`        | Resume a saved goal by id (continues from its `state.json`).                                                   |
+| `--discuss`            | EXPERIMENTAL, needs `--two-agents`: implementers may `at discuss ask` the tier-1 brain (also `AT_DISCUSS=1`). Off: implementers are told not to ask. |
 | `--two-agents`         | Opt in to tier-1 PLAN + CHECK around tier-2 hands (also `AT_TWO_AGENTS=1\|true\|yes\|on`). Fresh runs only.     |
 | `--tier <n>`           | Tier of the single implementer (default 2). Two-agent mode keeps tier 1 plan/check, tier 2 hands.             |
 | `--keywords <a,b>`     | Codegraph keywords for INVESTIGATE; merged with the plan file's `keywords:` (below).                          |

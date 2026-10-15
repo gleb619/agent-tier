@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { DISCUSS_DISABLED_MSG, discussEnabled } from "../discuss-flag";
 import {
   hostSays,
   latestUnansweredQuestion,
@@ -35,7 +36,13 @@ function readGlobals(command: Command): Record<string, unknown> {
 export function registerDiscussCommand(program: Command): void {
   const discuss = program
     .command("discuss")
-    .description("Two-way agent<->host conversation channel (questions, answers, instructions, milestones)");
+    .description("[experimental, AT_DISCUSS=1] Agent<->orchestrator channel for compose two-agent runs (m2m)")
+    .hook("preAction", () => {
+      if (!discussEnabled()) {
+        console.error(DISCUSS_DISABLED_MSG);
+        process.exit(2);
+      }
+    });
 
   // ── ask ────────────────────────────────────────────────────────────────────
   discuss

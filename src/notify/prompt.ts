@@ -1,3 +1,4 @@
+import { discussEnabled } from "../discuss-flag";
 import type { NotifyAdapterContext } from "./types";
 
 /**
@@ -16,6 +17,7 @@ export const DISCUSS_INSTRUCTION =
  * so the wording stays in one place.
  */
 export function appendDiscussInstruction(existing: string): string {
+  if (!discussEnabled()) return existing;
   return existing ? `${existing}${DISCUSS_INSTRUCTION}` : DISCUSS_INSTRUCTION;
 }
 

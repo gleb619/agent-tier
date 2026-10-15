@@ -1,3 +1,4 @@
+import { discussEnabled } from "../../discuss-flag";
 import type { NotifyAdapter, NotifyAdapterContext, NotifyEvent } from "../types";
 
 const TEXT_LIMIT = 500;
@@ -34,6 +35,7 @@ function askFlags(ctx: NotifyAdapterContext): string {
 }
 
 function buildClineInstructions(ctx: NotifyAdapterContext): string {
+  if (!discussEnabled()) return "";
   const { runId, stateDir } = ctx;
   const base = atBase(ctx);
   return `Host channel: this run ID is ${runId}; state dir is ${stateDir}. Run the following command to ask the host a question and get an answer:
@@ -73,6 +75,7 @@ Check for new host instructions at milestones by running:
  * run id) and the cline-specific rules get ignored.
  */
 function clinePromptSuffix(ctx: NotifyAdapterContext): string {
+  if (!discussEnabled()) return "";
   const { runId, atBin, stateDir, hostChannelShim } = ctx;
   // Prefer the per-run shim when present: cline v3's hub daemon keeps a
   // stale env that ignores our spawn-time AT_STATE_DIR / AT_RUN_ID, so a

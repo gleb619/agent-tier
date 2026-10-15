@@ -37,7 +37,7 @@ export interface ComposeDeps {
   /** `at` state dir: run-store polling + discuss threads live here. */
   stateDir: string;
   /** Detached start: returns the child runId (parsed from the `at` report). */
-  startAt(tier: number, prompt: string, cwd: string): Promise<{ runId: string }>;
+  startAt(tier: number, prompt: string, cwd: string, opts?: { discuss?: boolean }): Promise<{ runId: string }>;
   /** Poll a run until done/failed, answering discuss questions along the way. */
   waitRun(runId: string, opts: WaitRunOptions): Promise<CommandResult>;
   /** Blocking tier-1 call that answers one question (first line of output). */
@@ -61,6 +61,8 @@ export interface ComposeOptions {
   maxQuestions?: number;
   /** Opt-in tier-1 PLAN + CHECK around tier-2 hands. Default: one implementer run + test gate. */
   twoAgents?: boolean;
+  /** EXPERIMENTAL: let implementer agents ask the tier-1 brain via `at discuss`. Two-agent mode only. */
+  discuss?: boolean;
   /** Tier of the single implementer (default 2). Ignored in two-agent mode. */
   tier?: number;
   /** Extra codegraph keywords; merged with the task's plan-file keywords. */
@@ -92,6 +94,7 @@ interface Ctx {
   cwd: string;
   maxNodes: number;
   maxQuestions: number;
+  discuss: boolean;
   state: ComposeState;
   mode: ComposeMode;
   tier: number;
@@ -168,7 +171,7 @@ async function meterRun(ctx: Ctx, runId: string): Promise<void> {
 }
 
 async function runAgent(ctx: Ctx, phase: ComposePhase, tier: number, prompt: string): Promise<void> {
-  const { runId } = await ctx.deps.startAt(tier, prompt, ctx.cwd);
+  const { runId } = await ctx.deps.startAt(tier, prompt, ctx.cwd, { discuss: ctx.discuss });
   const answers = { count: 0 };
   const res = await ctx.deps.waitRun(runId, { onQuestion: (q) => answerQuestion(ctx, answers, q) });
   await meterRun(ctx, runId);
@@ -217,6 +220,7 @@ async function implement(ctx: Ctx): Promise<void> {
       task: item.text,
       plan: planMd,
       workspaceDir: ws.goalDir,
+      discuss: ctx.discuss,
     });
     await runItemAgent(ctx, item.index, prompt);
     planMd = await readArtifact(ctx, PLAN_FILE, "IMPLEMENT");
@@ -239,7 +243,7 @@ async function runItemAgent(ctx: Ctx, itemIndex: number, prompt: string, tier = 
   if (saved) {
     runId = saved.runId;
   } else {
-    runId = (await ctx.deps.startAt(tier, prompt, ctx.cwd)).runId;
+    runId = (await ctx.deps.startAt(tier, prompt, ctx.cwd, { discuss: ctx.discuss })).runId;
     ctx.state = { ...ctx.state, runs: [...(ctx.state.runs ?? []), { phase: "IMPLEMENT", item: itemIndex, runId }] };
     await saveState(ws, ctx.state);
   }
@@ -336,13 +340,15 @@ export async function runCompose(opts: ComposeOptions, deps: ComposeDeps): Promi
   if (!goal) throw new Error("compose: either goal or task is required");
   // A saved state keeps its mode (pre-mode states are two-agent); only fresh runs read the option.
   const mode: ComposeMode = saved ? (saved.mode ?? "two") : opts.twoAgents ? "two" : "single";
+  const discuss = mode === "two" && opts.discuss === true;
   const keywords = [...new Set([...(opts.keywords ?? []), ...(opts.task ? await taskKeywords(opts.task) : [])])];
   const ctx: Ctx = {
     deps,
     cwd: opts.cwd ?? process.cwd(),
     maxNodes: opts.maxNodes ?? DEFAULT_MAX_NODES,
-    // Single mode never spends a tier-1 brain call; unanswered questions fall back to --default/timeout.
-    maxQuestions: mode === "single" ? 0 : (opts.maxQuestions ?? DEFAULT_MAX_QUESTIONS),
+    // Discuss is experimental, opt-in and two-agent only; otherwise no tier-1 brain call is ever spent.
+    discuss,
+    maxQuestions: discuss ? (opts.maxQuestions ?? DEFAULT_MAX_QUESTIONS) : 0,
     state: saved ?? createState(goal, { testCmd: opts.testCmd, maxRounds: opts.maxRounds, mode }),
     mode,
     tier: opts.tier ?? DEFAULT_SINGLE_TIER,

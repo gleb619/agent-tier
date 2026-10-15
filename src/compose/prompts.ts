@@ -13,6 +13,8 @@ export interface ImplementPromptInput {
   task: string;
   plan: string;
   workspaceDir: string;
+  /** Experimental discuss channel on: implementer may `at discuss ask` the orchestrator. */
+  discuss?: boolean;
 }
 
 export interface SingleImplementPromptInput {
@@ -95,8 +97,12 @@ export function buildImplementPrompt(input: ImplementPromptInput): string {
     `- The plan lives at ${planPath}. Do not edit it — do not tick checkboxes or add tasks; the orchestrator tracks that.`,
     "- Change only what this task needs. Follow the conventions already in the repo.",
     "- Run the tests that cover the files you touched before you finish.",
-    '- If you are blocked or the task is ambiguous, run `$AT_BIN discuss ask "<question>" -o A -o B`',
-    "  and follow the answer; do not guess.",
+    ...(input.discuss
+      ? [
+          '- If you are blocked or the task is ambiguous, run `$AT_BIN discuss ask "<question>" -o A -o B`',
+          "  and follow the answer; do not guess.",
+        ]
+      : ["- Do not ask questions: make the most reasonable assumption and state it in your final message."]),
   ].join("\n");
 }
 
