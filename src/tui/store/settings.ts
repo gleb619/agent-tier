@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createSignal } from "solid-js";
+import { type AgentDef, getAgentsByTier } from "../../agents/registry";
 import { getStateFilePath, resolveStateDir } from "../../state-dir";
 
 const [tier, setTier] = createSignal<1 | 2 | 3 | 4>(2);
@@ -10,12 +11,24 @@ const [retries, setRetries] = createSignal<number>(0);
 export { agent, mode, retries, tier };
 
 const TIERS: readonly [1, 2, 3, 4] = [1, 2, 3, 4];
+
+/** Cycle order: `auto` first, then the registry agents in registration order.
+ *  `auto` is the implicit "scheduler picks" sentinel — every other entry is a
+ *  real built-in from `src/agents/registry.ts`. The registry is the source of
+ *  truth so this list re-shapes whenever a new agent lands (no more stale
+ *  hardcoded list missing `devin` etc.). */
+function buildAgentListForTier(t: 1 | 2 | 3 | 4): string[] {
+  const names = getAgentsByTier(t).map((a: AgentDef) => a.name);
+  return ["auto", ...names];
+}
+
 const AGENTS_BY_TIER: Record<1 | 2 | 3 | 4, string[]> = {
-  1: ["auto", "glm-code", "codex", "kimi"],
-  2: ["auto", "mm-code", "opencode", "qwen", "pi", "cline"],
-  3: ["auto", "kilo", "agy", "kiro"],
-  4: ["auto", "mock", "mock-long"],
+  1: buildAgentListForTier(1),
+  2: buildAgentListForTier(2),
+  3: buildAgentListForTier(3),
+  4: buildAgentListForTier(4),
 };
+
 const RETRIES_CYCLE: readonly [0, 1, 2, 3, 4] = [0, 1, 2, 3, 4];
 
 export function cycleTier(): void {
@@ -56,8 +69,11 @@ export function loadSettings(): void {
     };
     const settings = data.tui?.settings;
     if (settings) {
-      if (typeof settings.tier === "number" && TIERS.includes(settings.tier as 1 | 2 | 3 | 4)) {
-        setTier(settings.tier as 1 | 2 | 3);
+      // Accept any in-range tier (1..4), not just 1..3 — the previous cast
+      // dropped tier 4 silently when reading a saved state file.
+      if (typeof settings.tier === "number") {
+        const value = settings.tier as 1 | 2 | 3 | 4;
+        if (TIERS.includes(value)) setTier(value);
       }
       if (typeof settings.agent === "string") {
         const agents = AGENTS_BY_TIER[tier()];
@@ -100,4 +116,10 @@ export function saveSettings(): void {
   } catch {
     // ignore write errors
   }
+}
+
+/** Snapshot of the agents-to-cycle for a given tier — test escape hatch so
+ *  the test file can assert the registry shape without re-deriving it. */
+export function agentsByTier(t: 1 | 2 | 3 | 4): readonly string[] {
+  return AGENTS_BY_TIER[t];
 }

@@ -2,6 +2,16 @@ import type { KeyEvent } from "@opentui/core";
 import { useKeyboard, useRenderer } from "@opentui/solid";
 import type { JSX } from "solid-js";
 import { createEffect, createMemo, For, onCleanup, onMount } from "solid-js";
+import { AGENTS } from "../agents/registry";
+import { resolveStatusDirs } from "../state-dir";
+import { buildStateReportFor } from "../status";
+import { findSelectedAgent, moveAgentsCursor } from "./components/Agents";
+import {
+  buildAgentGroups,
+  countRunsByAgent,
+  filterAgentGroupsByQuery,
+  toggleAgentEnabled,
+} from "./components/agents-model";
 import { MainView } from "./components/MainView";
 import { clampRow, SETTING_ACTIONS } from "./components/Settings";
 import { nextSidebarIndex, Sidebar } from "./components/Sidebar";
@@ -36,11 +46,13 @@ import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, loadSettings, mo
 import {
   type ActiveView,
   activeView,
+  agentsSelection,
   cycleZone,
   focusZone,
   goToView,
   isTextEntryFocused,
   mainZoneForView,
+  setAgentsSelection,
   setFocusZone,
   setSettingsRow,
   setShowPromptOverlay,
@@ -54,6 +66,7 @@ const _VIEW_LABELS: Record<ActiveView, string> = {
   dashboard: "dashboard",
   "new-task": "new task",
   "run-details": "run details",
+  agents: "agents",
   settings: "settings",
 };
 
@@ -173,6 +186,34 @@ export function App(): JSX.Element {
     }
   }
 
+  // Compute the displayed Agents groups for the cursor + header counters.
+  // Driven by the same signals as the Agents view (sessions + state report).
+  const stateDirs = resolveStatusDirs();
+  const agentGroups = createMemo(() => {
+    const runs = filteredSessions2();
+    return filterAgentGroupsByQuery(
+      buildAgentGroups(AGENTS, countRunsByAgent(runs), buildStateReportFor(stateDirs).agents),
+      sidebarFilter(),
+    );
+  });
+
+  /** Toggle the selected agent's enable flag via the same backend
+   *  `at enable|disable` uses (`setDeactivated`). Awaited silently: the next
+   *  auto-refresh tick will redraw with the new health entry. */
+  async function toggleSelectedAgent(): Promise<void> {
+    const target = findSelectedAgent(agentGroups());
+    if (!target) return;
+    setAgentsSelection(target.name);
+    await toggleAgentEnabled(target.name, !target.enabled);
+  }
+
+  /** Move the Agents cursor inside the keyboard handler, in sync with the
+   *  currently-rendered filter + groups. `moveAgentsCursor` clamps at the
+   *  end and lands on a fallback when the previous target fell off. */
+  function moveAgentsCursorApp(delta: 1 | -1): void {
+    moveAgentsCursor(delta, agentGroups());
+  }
+
   useKeyboard((key: KeyEvent) => {
     if (key.eventType !== "press") return;
 
@@ -240,9 +281,15 @@ export function App(): JSX.Element {
     // menu row so the highlight follows the hotkey. The menu row index is
     // dynamic — when the sidebar filter hides the target menu item, the
     // hotkey becomes a no-op for the sidebar cursor (the view still switches).
-    if (name === "1" || name === "2" || name === "3" || name === "4") {
-      const targetView: ActiveView =
-        name === "1" ? "dashboard" : name === "2" ? "new-task" : name === "3" ? "run-details" : "settings";
+    if (name === "1" || name === "2" || name === "3" || name === "4" || name === "5") {
+      const map: Record<string, ActiveView> = {
+        "1": "dashboard",
+        "2": "new-task",
+        "3": "run-details",
+        "4": "agents",
+        "5": "settings",
+      };
+      const targetView = map[name] ?? "dashboard";
       const rows = currentRows();
       const menuRowIndex = rows.findIndex((r) => r.kind === "menu" && r.view === targetView);
       jumpToView(targetView, menuRowIndex);
@@ -252,6 +299,13 @@ export function App(): JSX.Element {
       if (name === "up" || name === "k") setSettingsRow(clampRow(settingsRow() - 1));
       else if (name === "down" || name === "j") setSettingsRow(clampRow(settingsRow() + 1));
       else if (name === "return") applySettingsRow();
+    } else if (zone === "agents") {
+      // Agents cursor list: j/k Up/Down move, Enter or Space toggle enable.
+      // Cursor name is bound by `moveAgentsCursor` (sidebar filter changes
+      // jump back to the first visible row).
+      if (name === "down" || name === "j") moveAgentsCursorApp(1);
+      else if (name === "up" || name === "k") moveAgentsCursorApp(-1);
+      else if (name === "return" || name === "space") void toggleSelectedAgent();
     } else if (zone === "log") {
       // Doc §11.1 wants j/k to switch runs while §11.4 wants them to scroll the log;
       // scroll stays lowercase, run switching moves to Shift+J/K.
@@ -306,6 +360,18 @@ export function App(): JSX.Element {
       return fields;
     }
 
+    if (view === "agents") {
+      // Per-view header fields (docs/tui.md): agents count + disabled count.
+      // `agentGroups` reflects the live sidebar filter; use the full registry
+      // set so the counter shows totals, not just the visible ones.
+      const rows = agentGroups().flatMap((g) => g.agents);
+      const disabled = rows.filter((r) => !r.enabled).length;
+      fields.push(`view: ${view}`, `agents: ${rows.length}`, `disabled: ${disabled}`);
+      const sel = agentsSelection();
+      if (sel) fields.push(`selected: ${sel}`);
+      return fields;
+    }
+
     const runs = filteredSessions2();
     if (view === "dashboard") {
       const running = runs.filter((r) => r.status === "running").length;
@@ -320,7 +386,7 @@ export function App(): JSX.Element {
 
   const footerLine = createMemo((): string => {
     const view = activeView();
-    const common = "[1-4] views  [Tab] focus  [^R] refresh  [^Q] quit";
+    const common = "[1-5] views  [Tab] focus  [^R] refresh  [^Q] quit";
 
     if (view === "new-task") {
       return focusZone() === "prompt"
@@ -329,6 +395,9 @@ export function App(): JSX.Element {
     }
     if (view === "settings") {
       return `[↑/↓] select  [Enter] change  ${common}`;
+    }
+    if (view === "agents") {
+      return focusZone() === "agents" ? `[j/k] move  [Enter/Space] toggle  ${common}` : `[Tab] focus main  ${common}`;
     }
     if (view === "run-details") {
       const nav =

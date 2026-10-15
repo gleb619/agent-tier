@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { getAgentsByTier } from "../../../src/agents/registry";
 import {
   agent,
+  agentsByTier,
   cycleAgent,
   cycleMode,
   cycleRetries,
@@ -71,6 +73,9 @@ describe("settings store", () => {
   });
 
   describe("cycleAgent (tier 2)", () => {
+    // Tier-2 registry order (alphabetical): mm-code, opencode, qwen, cline.
+    // Cycle list is `auto` first then those names (`store/settings.ts` derives
+    // it from `getAgentsByTier` so a registry edit re-shapes this list).
     it("cycles auto → mm-code", () => {
       resetToKnown();
       cycleAgent();
@@ -92,18 +97,8 @@ describe("settings store", () => {
       expect(agent()).toBe("qwen");
     });
 
-    it("cycles qwen → pi", () => {
+    it("cycles qwen → cline", () => {
       resetToKnown();
-      cycleAgent();
-      cycleAgent();
-      cycleAgent();
-      cycleAgent();
-      expect(agent()).toBe("pi");
-    });
-
-    it("cycles pi → cline", () => {
-      resetToKnown();
-      cycleAgent();
       cycleAgent();
       cycleAgent();
       cycleAgent();
@@ -113,7 +108,6 @@ describe("settings store", () => {
 
     it("cycles cline → auto (wraps around)", () => {
       resetToKnown();
-      cycleAgent();
       cycleAgent();
       cycleAgent();
       cycleAgent();
@@ -178,5 +172,27 @@ describe("settings store", () => {
       cycleRetries();
       expect(retries()).toBe(0);
     });
+  });
+});
+
+describe("agentsByTier", () => {
+  // `agentsByTier` must stay in lockstep with the registry — if the cycle list
+  // drifts from `src/agents/registry.ts`, a user-visible agent is invisible
+  // to the settings cycle. These tests fail loudly when that happens.
+  it("starts with 'auto' followed by every registry agent for tier 2 (default)", () => {
+    const list = agentsByTier(2);
+    expect(list[0]).toBe("auto");
+    // Registry tier-2 names in registration order; remove the synthetic
+    // 'auto' sentinel before comparing.
+    const registry = getAgentsByTier(2).map((a) => a.name);
+    expect(list.slice(1)).toEqual(registry);
+  });
+
+  it("covers every tier with at least the 'auto' sentinel", () => {
+    for (const t of [1, 2, 3, 4] as const) {
+      const list = agentsByTier(t);
+      expect(list.length, `tier ${t}`).toBeGreaterThan(0);
+      expect(list[0]).toBe("auto");
+    }
   });
 });

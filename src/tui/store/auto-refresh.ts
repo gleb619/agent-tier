@@ -1,4 +1,4 @@
-import { createEffect } from "solid-js";
+import { createEffect, createSignal } from "solid-js";
 import { autoRefresh, refreshLog } from "./log";
 import { refreshSessions } from "./sessions";
 
@@ -9,6 +9,11 @@ import { refreshSessions } from "./sessions";
  * run lock (annotating dead/stuck processes) and tails the selected log.
  */
 export const SESSION_POLL_MS = 5000;
+
+/** Bumps on every poll; views whose data isn't part of `sessions()` (the
+ *  Agents view re-derives from `state.json` health) read this as a memo
+ *  dependency so they re-render in step with the run-list poll. */
+const [refreshTick, setRefreshTick] = createSignal(0);
 
 /**
  * Shared auto-refresh loop: while the log store's `autoRefresh` flag is on,
@@ -34,8 +39,11 @@ export function startSessionAutoRefresh(): () => void {
     timer = setInterval(() => {
       refreshSessions();
       refreshLog();
+      setRefreshTick((t) => t + 1);
     }, SESSION_POLL_MS);
   });
 
   return stop;
 }
+
+export { refreshTick };

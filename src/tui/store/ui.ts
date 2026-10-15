@@ -1,19 +1,24 @@
 import { createSignal } from "solid-js";
 
-export type ActiveView = "dashboard" | "new-task" | "settings" | "run-details";
+export type ActiveView = "dashboard" | "new-task" | "run-details" | "agents" | "settings";
 
 /**
  * Which zone owns keyboard input. Text-entry zones ('sidebar-filter',
- * 'prompt') swallow plain character keys, so global hotkeys (1-4, j/k, q)
- * stand down while the user is typing.
+ * 'prompt') swallow plain character keys, so global hotkeys (1-5, j/k, q)
+ * stand down while the user is typing. The 'agents' zone is the cursor list
+ * in the Agents view (docs/layout.md §5).
  */
-export type FocusZone = "sidebar-filter" | "sidebar-list" | "prompt" | "log" | "settings";
+export type FocusZone = "sidebar-filter" | "sidebar-list" | "prompt" | "log" | "settings" | "agents";
 
 const [activeView, setActiveView] = createSignal<ActiveView>("dashboard");
 const [sidebarFilter, setSidebarFilter] = createSignal<string>("");
 const [focusZone, setFocusZone] = createSignal<FocusZone>("sidebar-list");
 const [showPromptOverlay, setShowPromptOverlay] = createSignal<boolean>(false);
 const [settingsRow, setSettingsRow] = createSignal<number>(0);
+// Cursor over the Agents main pane (`components/Agents.tsx`). The selected
+// agent is a name rather than a numeric index so the cursor survives filter
+// changes that reshuffle the underlying list.
+const [agentsSelection, setAgentsSelection] = createSignal<string | null>(null);
 
 /**
  * Index into the flat sidebar row model (filter → menu → separator → runs).
@@ -24,8 +29,10 @@ const [sidebarIndex, setSidebarIndex] = createSignal<number>(0);
 
 export {
   activeView,
+  agentsSelection,
   focusZone,
   setActiveView,
+  setAgentsSelection,
   setFocusZone,
   setSettingsRow,
   setShowPromptOverlay,
@@ -48,6 +55,7 @@ const MAIN_ZONE: Record<ActiveView, FocusZone | null> = {
   dashboard: null,
   "new-task": "prompt",
   "run-details": "log",
+  agents: "agents",
   settings: "settings",
 };
 

@@ -35,16 +35,26 @@ const mockRun = (runId: string, overrides: Partial<RunRecord> = {}): RunRecord =
 
 describe("sidebar row model", () => {
   describe("buildRowModel", () => {
-    it("places filter, a separator, the four menu rows, and a second separator in that order", () => {
+    it("places filter, a separator, the five menu rows, and a second separator in that order", () => {
       const rows = buildRowModel({ groups: [], filter: "", activeView: "dashboard" });
-      // filter + sep + 4 menu + sep
-      expect(rows.map((r) => r.kind)).toEqual(["filter", "separator", "menu", "menu", "menu", "menu", "separator"]);
+      // filter + sep + 5 menu + sep
+      expect(rows.map((r) => r.kind)).toEqual([
+        "filter",
+        "separator",
+        "menu",
+        "menu",
+        "menu",
+        "menu",
+        "menu",
+        "separator",
+      ]);
     });
 
     it("marks the active menu row", () => {
       const rows = buildRowModel({ groups: [], filter: "", activeView: "run-details" });
       // Indices shifted by one (separator now sits before the menu block):
-      //   0 filter, 1 sep, 2..5 menu, 6 sep
+      //   0 filter, 1 sep, 2..6 menu, 7 sep
+      //   dashboard=2, new-task=3, run-details=4, agents=5, settings=6
       expect(rows[4]).toMatchObject({ kind: "menu", view: "run-details", active: true });
       expect((rows[2] as { active: boolean }).active).toBe(false);
     });
@@ -59,10 +69,11 @@ describe("sidebar row model", () => {
       const groups = groupRunsByDate(runs);
       const rows = buildRowModel({ groups, filter: "", activeView: "dashboard" });
 
-      // filter + sep + 4 menu + sep + (group-header + run + run)
+      // filter + sep + 5 menu + sep + (group-header + run + run)
       expect(rows.map((r) => r.kind)).toEqual([
         "filter",
         "separator",
+        "menu",
         "menu",
         "menu",
         "menu",
@@ -72,9 +83,9 @@ describe("sidebar row model", () => {
         "run",
         "run",
       ]);
-      expect(rows[7]).toMatchObject({ kind: "group-header", label: "Today" });
-      expect((rows[8] as { runId: string }).runId).toBe("r1");
-      expect((rows[9] as { runId: string }).runId).toBe("r2");
+      expect(rows[8]).toMatchObject({ kind: "group-header", label: "Today" });
+      expect((rows[9] as { runId: string }).runId).toBe("r1");
+      expect((rows[10] as { runId: string }).runId).toBe("r2");
     });
 
     it('keeps the placeholder "no runs" case compact', () => {
@@ -96,8 +107,8 @@ describe("sidebar row model", () => {
         filter: "",
         activeView: "dashboard",
       });
-      // 0..9; selectable = 0, 2, 3, 4, 5, 8, 9 (skip separators at 1, 6 and header at 7)
-      expect(selectableRowIndices(rows)).toEqual([0, 2, 3, 4, 5, 8, 9]);
+      // 5-menu layout: 0 filter, 1 sep, 2..6 menu, 7 sep, 8 header, 9 run r1, 10 run r2
+      expect(selectableRowIndices(rows)).toEqual([0, 2, 3, 4, 5, 6, 9, 10]);
     });
 
     it("is empty when only the filter row exists (no menu, no runs)", () => {
@@ -134,32 +145,32 @@ describe("sidebar row model", () => {
 
     it("starts the user on the first selectable row when current is -1", () => {
       expect(moveSelection(rows, -1, 1)).toBe(0); // filter row
-      expect(moveSelection(rows, -1, -1)).toBe(9); // last selectable (second run)
+      expect(moveSelection(rows, -1, -1)).toBe(10); // last selectable (second run)
     });
 
     it("moves down through selectable rows and skips separators/headers", () => {
       expect(moveSelection(rows, 0, 1)).toBe(2); // filter → first menu (skip sep at 1)
-      expect(moveSelection(rows, 5, 1)).toBe(8); // last menu → first run (skip sep + header)
-      expect(moveSelection(rows, 8, 1)).toBe(9); // run → run
+      expect(moveSelection(rows, 6, 1)).toBe(9); // last menu → first run (skip sep 7 + header 8)
+      expect(moveSelection(rows, 9, 1)).toBe(10); // run → run
     });
 
     it("moves up through selectable rows and skips separators/headers", () => {
-      expect(moveSelection(rows, 8, -1)).toBe(5); // first run → last menu (skip header + sep)
-      expect(moveSelection(rows, 2, -1)).toBe(0); // first menu → filter (skip sep)
-      expect(moveSelection(rows, 9, -1)).toBe(8); // last run → prev run
+      expect(moveSelection(rows, 9, -1)).toBe(6); // first run → last menu (skip header 8 + sep 7)
+      expect(moveSelection(rows, 2, -1)).toBe(0); // first menu → filter (skip sep 1)
+      expect(moveSelection(rows, 10, -1)).toBe(9); // last run → prev run
     });
 
     it("clamps at the ends of the selectable subset", () => {
-      expect(moveSelection(rows, 9, 1)).toBe(9); // last → last
+      expect(moveSelection(rows, 10, 1)).toBe(10); // last → last
       expect(moveSelection(rows, 0, -1)).toBe(0); // first → first
     });
 
     it("snaps an off-list current to the nearest selectable row", () => {
-      // Current points at the first separator (row 1) or the second separator (row 6)
-      // or the group header (row 7); delta doesn't matter — snap to first.
+      // Current points at a separator or the group header; delta doesn't
+      // matter — snap to first.
       expect(moveSelection(rows, 1, 1)).toBe(0);
-      expect(moveSelection(rows, 6, -1)).toBe(0);
-      expect(moveSelection(rows, 7, 1)).toBe(0);
+      expect(moveSelection(rows, 7, -1)).toBe(0);
+      expect(moveSelection(rows, 8, 1)).toBe(0);
     });
 
     it("returns -1 only when there are no selectable rows", () => {
@@ -169,7 +180,7 @@ describe("sidebar row model", () => {
   });
 
   describe("preserveSidebarIndex", () => {
-    /** rows: 0 filter, 1 sep, 2..5 menu, 6 sep, 7 header, 8 run r1, 9 run r2. */
+    /** rows: 0 filter, 1 sep, 2..6 menu, 7 sep, 8 header, 9 run r1, 10 run r2. */
     const rowsFor = (runs: RunRecord[]): Row[] =>
       buildRowModel({
         groups: groupRunsByDate(runs),
@@ -187,20 +198,19 @@ describe("sidebar row model", () => {
       // A poll that reads back identical data must not move the cursor — this
       // is what keeps the Sidebar effect silent between ticks.
       expect(preserveSidebarIndex(base, 2, base)).toBe(2);
-      expect(preserveSidebarIndex(base, 8, base)).toBe(8);
       expect(preserveSidebarIndex(base, 9, base)).toBe(9);
+      expect(preserveSidebarIndex(base, 10, base)).toBe(10);
     });
 
     it("follows a run row when a newer run is prepended above it", () => {
       const withNew = rowsFor([mockRun("r0", { startedAt: at(12) }), r1, r2]);
-      // r1 moved from 8 to 9, r2 from 9 to 10.
-      expect(preserveSidebarIndex(base, 8, withNew)).toBe(runRowIndex(withNew, "r1"));
-      expect(preserveSidebarIndex(base, 9, withNew)).toBe(runRowIndex(withNew, "r2"));
+      expect(preserveSidebarIndex(base, 9, withNew)).toBe(runRowIndex(withNew, "r1"));
+      expect(preserveSidebarIndex(base, 10, withNew)).toBe(runRowIndex(withNew, "r2"));
     });
 
     it("follows a run row when the rows shift by a new group header", () => {
       const withOtherDay = rowsFor([mockRun("r0", { startedAt: YEARS_AGO }), r1, r2]);
-      const next = preserveSidebarIndex(base, 9, withOtherDay);
+      const next = preserveSidebarIndex(base, 10, withOtherDay);
       expect(next).toBe(runRowIndex(withOtherDay, "r2"));
     });
 
@@ -211,16 +221,15 @@ describe("sidebar row model", () => {
     });
 
     it("falls back to the first selectable row when the run vanished", () => {
-      // The selected run was pruned/filtered away — snap to the top instead of
-      // leaving the cursor pointing at a different run.
       const withoutR2 = rowsFor([r1]);
-      expect(preserveSidebarIndex(base, 9, withoutR2)).toBe(selectableRowIndices(withoutR2)[0]);
+      expect(preserveSidebarIndex(base, 10, withoutR2)).toBe(selectableRowIndices(withoutR2)[0]);
     });
 
     it("falls back to the first selectable row when a menu row is filtered out", () => {
+      // 5-menu layout: filter "retries" hides everything except Settings (index 6).
       const filtered = buildRowModel({
         groups: groupRunsByDate([r1, r2]),
-        filter: "retries", // hides every menu row except Settings
+        filter: "retries",
         activeView: "dashboard",
       });
       expect(preserveSidebarIndex(base, 3, filtered)).toBe(selectableRowIndices(filtered)[0]);
@@ -234,7 +243,7 @@ describe("sidebar row model", () => {
 
     it("returns -1 when nothing is selectable", () => {
       const empty: Row[] = [{ kind: "separator" }];
-      expect(preserveSidebarIndex(base, 8, empty)).toBe(-1);
+      expect(preserveSidebarIndex(base, 9, empty)).toBe(-1);
     });
   });
 
@@ -242,14 +251,14 @@ describe("sidebar row model", () => {
     /** Collect just the menu rows, in display order. */
     const menuRows = (rows: Row[]) => rows.filter((r): r is Extract<Row, { kind: "menu" }> => r.kind === "menu");
 
-    it("keeps all four menu rows when the filter is empty", () => {
+    it("keeps all five menu rows when the filter is empty", () => {
       const rows = buildRowModel({ groups: [], filter: "", activeView: "dashboard" });
-      expect(menuRows(rows).map((m) => m.view)).toEqual(["dashboard", "new-task", "run-details", "settings"]);
+      expect(menuRows(rows).map((m) => m.view)).toEqual(["dashboard", "new-task", "run-details", "agents", "settings"]);
     });
 
-    it("keeps all four menu rows when the filter is whitespace only", () => {
+    it("keeps all five menu rows when the filter is whitespace only", () => {
       const rows = buildRowModel({ groups: [], filter: "   \t ", activeView: "dashboard" });
-      expect(menuRows(rows).map((m) => m.view)).toEqual(["dashboard", "new-task", "run-details", "settings"]);
+      expect(menuRows(rows).map((m) => m.view)).toEqual(["dashboard", "new-task", "run-details", "agents", "settings"]);
     });
 
     it("matches a substring of a menu label (case-insensitive)", () => {
@@ -267,9 +276,14 @@ describe("sidebar row model", () => {
       expect(menuRows(rows).map((m) => m.view)).toEqual(["settings"]);
     });
 
-    it("matches keywords for semantic queries (sandbox → Settings)", () => {
-      const rows = buildRowModel({ groups: [], filter: "sandbox", activeView: "dashboard" });
-      expect(menuRows(rows).map((m) => m.view)).toEqual(["settings"]);
+    it("matches keywords for semantic queries (tier → Agents or Settings)", () => {
+      // "tier" is shared by both Agents and Settings keywords (NAV_KEYWORDS).
+      const rows = buildRowModel({ groups: [], filter: "tier", activeView: "dashboard" });
+      expect(
+        menuRows(rows)
+          .map((m) => m.view)
+          .sort(),
+      ).toEqual(["agents", "settings"]);
     });
 
     it("multi-token query: every token must match somewhere (label or keywords)", () => {

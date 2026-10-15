@@ -35,7 +35,7 @@ describe("ui store", () => {
       expect(activeView()).toBe("dashboard");
     });
 
-    it.each<ActiveView>(["dashboard", "new-task", "run-details", "settings"])("switches to %s", (view) => {
+    it.each<ActiveView>(["dashboard", "new-task", "run-details", "agents", "settings"])("switches to %s", (view) => {
       setActiveView(view);
       expect(activeView()).toBe(view);
     });
@@ -101,12 +101,14 @@ describe("ui store", () => {
       expect(mainZoneForView("dashboard")).toBe("sidebar-list");
       expect(mainZoneForView("new-task")).toBe("prompt");
       expect(mainZoneForView("run-details")).toBe("log");
+      expect(mainZoneForView("agents")).toBe("agents");
       expect(mainZoneForView("settings")).toBe("settings");
     });
 
     it("only cycles through zones the active view owns", () => {
       expect(zonesForView("dashboard")).toEqual(["sidebar-filter", "sidebar-list"]);
       expect(zonesForView("run-details")).toEqual(["sidebar-filter", "sidebar-list", "log"]);
+      expect(zonesForView("agents")).toEqual(["sidebar-filter", "sidebar-list", "agents"]);
     });
 
     it("cycles forward and wraps around", () => {

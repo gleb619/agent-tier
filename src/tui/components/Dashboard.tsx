@@ -1,15 +1,19 @@
 import type { JSX } from "solid-js";
 import { createMemo, For, Show } from "solid-js";
+import { AGENTS } from "../../agents/registry";
 import type { RunRecord } from "../../run-store";
 import { resolveStatusDirs } from "../../state-dir";
 import { buildStateReportFor, type StateReport } from "../../status";
+import { AGENT_HEALTH_CONFIG, type AgentHealthState } from "../../ui-spec";
 import { summarizeUsage, type UsageSummary } from "../../usage/summary";
 import { formatDuration as fmtPlanDur, formatTokens } from "../../usage/units";
-import { durationMs, formatAgentRow, formatMs, formatRunRow, isToday, statusColor, TUI_COLORS } from "../format";
+import { durationMs, formatMs, formatRunRow, isToday, statusColor, TUI_COLORS } from "../format";
+import { refreshTick } from "../store/auto-refresh";
 import { filteredSessions2 } from "../store/filtered-sessions";
 import { autoRefresh } from "../store/log";
 import { taskBudgets } from "../store/sessions";
 import { agent, tier } from "../store/settings";
+import { buildAgentGroups, countRunsByAgent } from "./agents-model";
 
 const RECENT_LIMIT = 8;
 
@@ -44,6 +48,32 @@ export function computeStats(runs: RunRecord[]): DashStats {
     successRate: finished.length === 0 ? null : (ok / finished.length) * 100,
     avgDurationMs: finished.length === 0 ? 0 : finished.reduce((sum, r) => sum + durationMs(r), 0) / finished.length,
   };
+}
+
+// --- Agent panel (Dashboard mini-list) ---
+//
+// Shares the same vocabulary as the full Agents view: `AGENT_HEALTH_CONFIG`
+// glyphs + the same health derivation (`agents-model.ts`), so the panel reads
+// as the same data in compact form. `docs/layout.md` §2 fixes the panel
+// order: Overview → Active runs → Agents → Recent completions.
+
+/** "12 runs · 92%" / "0 runs · —". Driven by the row's pre-computed
+ *  `successRatePct` (rounded integer or `null` when no finished runs exist). */
+function dashboardGroupStats(runs: number, successRatePct: number | null): string {
+  if (runs === 0) return "0 runs · —";
+  const rate = successRatePct === null ? "—" : `${successRatePct}%`;
+  return `${runs} runs · ${rate}`;
+}
+
+function colorForHealth(health: AgentHealthState): string {
+  switch (health) {
+    case "ok":
+      return TUI_COLORS.ok;
+    case "disabled":
+      return TUI_COLORS.muted;
+    case "failing":
+      return TUI_COLORS.error;
+  }
 }
 
 // No helper imports below the imports block — everything `computeStats` and
@@ -91,7 +121,20 @@ export function Dashboard(): JSX.Element {
   });
   // Same reports `at status` prints — joined across project `.at/` + `~/.at/`
   // when the project has its own scope, so agent health matches the run list.
-  const health = createMemo((): StateReport => buildStateReportFor(stateDirs));
+  // `refreshTick` keeps the Agent panel in step with the 5-second poll (see
+  // store/auto-refresh.ts). Without it, the panel would only refresh on a
+  // run-list change.
+  const health = createMemo((): StateReport => {
+    refreshTick();
+    return buildStateReportFor(stateDirs);
+  });
+  const agentGroups = createMemo<ReturnType<typeof buildAgentGroups>>(() => {
+    refreshTick();
+    return buildAgentGroups(AGENTS, countRunsByAgent(filteredSessions2()), health().agents);
+  });
+  // Single flat list for the panel — preserves the spec-tier order (1..4)
+  // and alphabetical names within a tier.
+  const agentRows = createMemo(() => agentGroups().flatMap((g) => g.agents));
 
   return (
     <box
@@ -105,9 +148,9 @@ export function Dashboard(): JSX.Element {
     >
       <scrollbox flexGrow={1}>
         <box flexDirection="column" paddingX={1} paddingTop={1} gap={1}>
-          {/* Quick stats */}
+          {/* Overview */}
           <box>
-            <SectionHeader title="Quick stats" />
+            <SectionHeader title="Overview" />
             <box flexDirection="row" gap={3}>
               <text fg={TUI_COLORS.fg} content={`runs: ${stats().total}`} />
               <text fg={TUI_COLORS.ok} content={`active: ${stats().running.length}`} />
@@ -115,6 +158,12 @@ export function Dashboard(): JSX.Element {
               <text fg={TUI_COLORS.fg} content={`today: ${stats().today}`} />
               <text fg={TUI_COLORS.fg} content={successText()} />
               <text fg={TUI_COLORS.fg} content={`avg: ${formatMs(stats().avgDurationMs)}`} />
+            </box>
+            <box marginTop={1}>
+              <text
+                fg={TUI_COLORS.muted}
+                content={`  defaults: tier ${tier()} · agent ${agent()} · auto-refresh ${autoRefresh() ? "ON" : "OFF"}`}
+              />
             </box>
           </box>
 
@@ -136,6 +185,25 @@ export function Dashboard(): JSX.Element {
             </Show>
           </box>
 
+          {/* Agents (compact) — same health glyphs/vocab as the Agents view. */}
+          <box>
+            <SectionHeader title="Agents" />
+            <Show when={agentRows().length > 0} fallback={<EmptyState message="(no health records)" />}>
+              <box flexDirection="column">
+                <For each={agentRows()}>
+                  {(row) => (
+                    <box marginBottom={1}>
+                      <text
+                        fg={colorForHealth(row.health)}
+                        content={`  ${AGENT_HEALTH_CONFIG[row.health].glyph} ${row.name} ${dashboardGroupStats(row.runs, row.successRatePct)}`}
+                      />
+                    </box>
+                  )}
+                </For>
+              </box>
+            </Show>
+          </box>
+
           {/* Recent completions */}
           <box>
             <SectionHeader title="Recent completions" />
@@ -147,26 +215,6 @@ export function Dashboard(): JSX.Element {
                       fg={statusColor(r.status)}
                       content={`  ${formatRunRow(r, { status: true, exitCode: true })}`}
                     />
-                  )}
-                </For>
-              </box>
-            </Show>
-          </box>
-
-          {/* Agents */}
-          <box>
-            <SectionHeader title="Agents" />
-            <text
-              fg={TUI_COLORS.muted}
-              content={`  defaults: tier ${tier()} · agent ${agent()} · auto-refresh ${autoRefresh() ? "ON" : "OFF"}`}
-            />
-            <Show when={health().agents.length > 0} fallback={<EmptyState message="(no health records)" />}>
-              <box flexDirection="column">
-                <For each={health().agents}>
-                  {(a) => (
-                    <box marginBottom={a.deactivated ? 1 : 0}>
-                      <text fg={a.deactivated ? TUI_COLORS.error : TUI_COLORS.ok} content={`  ${formatAgentRow(a)}`} />
-                    </box>
                   )}
                 </For>
               </box>

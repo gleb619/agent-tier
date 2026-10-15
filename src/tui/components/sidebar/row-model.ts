@@ -1,6 +1,6 @@
 import type { RunRecord } from "../../../run-store";
 import { UNNAMED_PLACEHOLDER } from "../../../run-store";
-import { navMatchesQuery } from "../../../ui-spec";
+import { NAV_ITEMS, navMatchesQuery } from "../../../ui-spec";
 import { dateBucket } from "../../format";
 import type { ActiveView } from "../../store/ui";
 
@@ -46,13 +46,15 @@ export interface RunRow {
 
 export type Row = FilterRow | MenuRow | SeparatorRow | GroupHeaderRow | RunRow;
 
-/** Numeric hotkeys per design doc §11.6 — single source of truth for the menu. */
-export const SIDEBAR_MENU_ITEMS: ReadonlyArray<Omit<MenuRow, "active">> = [
-  { kind: "menu", view: "dashboard", key: "1", label: "Dashboard" },
-  { kind: "menu", view: "new-task", key: "2", label: "New Task" },
-  { kind: "menu", view: "run-details", key: "3", label: "Run Details" },
-  { kind: "menu", view: "settings", key: "4", label: "Settings" },
-];
+/** Numeric hotkeys per design doc §11.6 — derived from `NAV_ITEMS` in
+ *  `src/ui-spec.ts` so this menu tracks the spec (5 items: Dashboard, New
+ *  Task, Run Details, Agents, Settings) without re-declaring either. */
+export const SIDEBAR_MENU_ITEMS: ReadonlyArray<Omit<MenuRow, "active">> = NAV_ITEMS.map((item) => ({
+  kind: "menu" as const,
+  view: item.id,
+  key: String(item.shortcut),
+  label: item.label,
+}));
 
 /**
  * Per-view keyword aliases live in `NAV_KEYWORDS` (`src/ui-spec.ts`) so the TUI
@@ -102,7 +104,8 @@ export interface RowModelInput {
 
 /**
  * Build the flat row list in display order:
- * filter → separator → 4 menu → separator → group-header + runs (per group).
+ * filter → separator → menu rows (5, spec order) → separator →
+ *  group-header + runs (per group).
  *
  * Two visual separators: one between the filter and the menu so the filter
  * input never touches the first menu row, and one between the menu and the
