@@ -96,9 +96,12 @@ export function resolveShortcut(
  * (the event is consumed: default prevented); false to let it bubble.
  */
 export function handleKeydown(event: KeyboardEvent, handlers: KeyboardHandlers): boolean {
-  if (isFormField(event.target)) return false;
   const shortcut = resolveShortcut(event);
   if (!shortcut) return false;
+  // Ctrl+F reaches the filter even while typing (docs/layout.md §1.1); every other
+  // binding stays out of text fields — including the plain "/" that shares the
+  // focus-filter id, which must keep typing slashes.
+  if (isFormField(event.target) && !(event.ctrlKey && shortcut === "focus-filter")) return false;
   switch (shortcut) {
     case "dashboard":
     case "new-task":

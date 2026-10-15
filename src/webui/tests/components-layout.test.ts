@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { tick } from "svelte";
 import { get } from "svelte/store";
 import { beforeEach, describe, expect, it } from "vitest";
+import { NAV_WIDTH_PX } from "../../ui-spec";
 import MainLayout from "../components/layout/MainLayout.svelte";
 import AgentBadge from "../components/run/AgentBadge.svelte";
 import StatusBadge from "../components/run/StatusBadge.svelte";
@@ -83,6 +84,12 @@ describe("MainLayout shell", () => {
     expect(sidebar.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeTruthy();
     expect(filter.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     FILTER_PRECEDES_NAV; // keep reference for clarity
+  });
+
+  it("uses the spec sidebar width (NAV_WIDTH_PX)", () => {
+    render(MainLayout);
+    const sidebar = screen.getByRole("complementary", { name: /sidebar/i });
+    expect(sidebar.className).toContain(`w-[${NAV_WIDTH_PX}px]`);
   });
 
   it("hides nav items whose labels don't match the search query", async () => {

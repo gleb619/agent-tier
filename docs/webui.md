@@ -9,10 +9,11 @@ Browser UI for `at`, served by `at web`. Svelte 4 + Vite + Tailwind, source in
 ## Sidebar (parity with TUI)
 
 Order is fixed: **Filter (top) → Navigation → Run list** ([layout.md](layout.md) §1, §1.1). The single filter box
-(`/` or `Ctrl+F` focuses it) filters nav items (label + `NAV_KEYWORDS` from `src/ui-spec.ts`) *and* runs.
-Today `Sidebar.svelte` renders Navigation first and the filter lives inside `RunList`; nav has 4 items (no Agents).
-Target: `FilterInput` hoisted to the top of `layout/Sidebar.svelte`, `Navigation` consumes `NAV_ITEMS` + the shared
-matcher, Agents view added (`[4]`, Settings `[5]`), sidebar width 256px, status glyphs/tier colors per layout.md §7.
+(`/` when no text field has focus, `Ctrl+F` always) filters nav items (label + `NAV_KEYWORDS` from `src/ui-spec.ts`)
+*and* runs; `Esc` inside it blurs. `layout/Sidebar.svelte` hoists `FilterInput` above `Navigation` (hidden while the
+sidebar is collapsed) and `RunList` no longer owns it; `Navigation` renders `visibleNavItems`, number keys still work
+when a row is filtered out. Sidebar width is the spec's 256px (`NAV_WIDTH_PX`), nav still has 4 items (no Agents).
+Target: Agents view (`[4]`, Settings `[5]`), status glyphs/tier colors per layout.md §7.
 Work is delegated in steps: shared spec → WebUI sidebar → Agents view → TUI parity.
 
 ## Run

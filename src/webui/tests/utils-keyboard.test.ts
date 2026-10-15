@@ -126,6 +126,23 @@ describe("handleKeydown", () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
+  it("lets Ctrl+F reach the filter while typing, but not the plain /", () => {
+    const handlers = noopHandlers();
+    const input = document.createElement("input");
+
+    const ctrl = new KeyboardEvent("keydown", { key: "f", ctrlKey: true, cancelable: true });
+    Object.defineProperty(ctrl, "target", { value: input });
+    expect(handleKeydown(ctrl, handlers)).toBe(true);
+    expect(handlers.focusFilter).toHaveBeenCalledOnce();
+    expect(ctrl.defaultPrevented).toBe(true);
+
+    const slash = new KeyboardEvent("keydown", { key: "/", cancelable: true });
+    Object.defineProperty(slash, "target", { value: input });
+    expect(handleKeydown(slash, handlers)).toBe(false);
+    expect(handlers.focusFilter).toHaveBeenCalledOnce();
+    expect(slash.defaultPrevented).toBe(false);
+  });
+
   it("returns false for unmapped keys without preventing default", () => {
     const handlers = noopHandlers();
     const event = keyEvent("x");

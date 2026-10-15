@@ -107,6 +107,24 @@ describe("MainLayout keyboard shortcuts", () => {
     expect(get(selectedRunId)).toBeNull();
   });
 
+  it("focuses the filter with Ctrl+F even while typing in a textarea", async () => {
+    render(MainLayout);
+    const textarea = document.createElement("textarea");
+    document.body.appendChild(textarea);
+    textarea.focus();
+    await fireEvent.keyDown(textarea, { key: "f", ctrlKey: true });
+    expect(document.activeElement).toBe(document.querySelector("#run-filter"));
+    textarea.remove();
+  });
+
+  it("keeps slashes typed in the filter as text", async () => {
+    render(MainLayout);
+    const input = screen.getByLabelText("Filter runs");
+    input.focus();
+    await fireEvent.keyDown(input, { key: "/" });
+    expect(document.activeElement).toBe(input);
+  });
+
   it("emits a show-prompt event for the details view on p", async () => {
     const seen = vi.fn();
     window.addEventListener("at:run-prompt", seen);
