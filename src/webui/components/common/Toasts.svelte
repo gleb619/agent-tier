@@ -1,6 +1,6 @@
 <script lang="ts">
 import clsx from "clsx";
-import { dismissToast, toasts } from "$stores/toast";
+import { dismissToast, type Toast, toasts } from "$stores/toast";
 
 const kinds: Record<string, string> = {
   info: "border-gray-300 bg-white text-gray-700",
@@ -8,7 +8,7 @@ const kinds: Record<string, string> = {
   error: "border-red-300 bg-red-50 text-red-800",
 };
 
-function runAction(toast: ReturnType<typeof $toasts.valueOf>[number]): void {
+function runAction(toast: Toast): void {
   toast.action?.onClick();
   dismissToast(toast.id);
 }
