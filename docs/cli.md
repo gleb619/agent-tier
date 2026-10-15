@@ -161,6 +161,39 @@ All fields except `prompt` are optional. Extra fields: `promptFile` (path, used
 when `prompt` is absent), `callback` and `verify` (shell commands, same contract
 as the flags), `sse` (boolean) and `ssePort` (number, `0` = random).
 
+## Triage (`at triage`)
+
+Advises a route without spending an agent run: `single` (`at -s -t <tier> -p`) or `two-agents`
+(candidate for `at compose --two-agents`, which still needs the explicit opt-in). It never enables anything.
+
+```bash
+at triage -p "Design and migrate the auth schema"   # route=two-agents tier=1 signals=needsPlan,risky source=heuristic
+at triage --task T7 --json                          # board task (title + description + plan file)
+at triage -f prompt.md --provider openrouter
+```
+
+Heuristic (instant, free): five signals — `crossModule` (≥6 distinct file paths or "across the codebase"),
+`needsPlan`, `iterative`, `risky`, `backlog`. **≥2 signals → `two-agents`, else `single`**; `tier` = 1 when
+`risky`/`needsPlan`, else 2. Prompt length alone is not a signal.
+
+Optional model refinement (off by default; only called when the heuristic found ≥1 signal, so the common
+case costs nothing). Providers:
+
+| `AT_TRIAGE_PROVIDER` / `--provider` | Backend | Needs |
+|---|---|---|
+| `local-ollama` (or legacy `AT_TRIAGE_TEV1=1`) | tev1 via Ollama `/v1/systemone` at `localhost:11434` | `ollama pull tev1:0.8b` |
+| `remote-ollama` | same API on another host | `AT_TRIAGE_URL`; optional `AT_TRIAGE_API_KEY` (bearer) |
+| `openrouter` | chat completions, JSON probabilities | `AT_TRIAGE_API_KEY` or `OPENROUTER_API_KEY`; `AT_TRIAGE_MODEL` (default `meta-llama/llama-3.2-3b-instruct`) |
+
+Other env: `AT_TRIAGE_MODEL` (default `tev1:0.8b` for ollama), `AT_TRIAGE_URL`, `AT_TRIAGE_TIMEOUT_MS`
+(hard abort, default 1500), `AT_TRIAGE_TTL_MS` (breaker, default 300000). The model answers five yes/no
+probabilities; a heuristic hit is dropped only if the model says < 0.4, a model-only signal needs ≥ 0.85.
+
+**Never blocks or breaks triage:** every failure (down, hung, model missing, bad JSON, bad config) falls
+back to the heuristic verdict with a `note=`. A failure opens a TTL **circuit breaker**
+(`<stateDir>/triage-tev1.json`): for `AT_TRIAGE_TTL_MS` later calls skip the model without any network
+wait, then it is retried; one success closes it.
+
 ## Compose (single run by default; two-agent opt-in)
 
 `at compose` runs one goal through a state machine with a **test gate**. Two modes:

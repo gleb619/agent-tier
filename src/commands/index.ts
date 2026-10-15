@@ -18,6 +18,7 @@ import { registerNotifyCommand } from "./notify";
 import { registerServeCommand } from "./serve";
 import { registerStatusCommand } from "./status";
 import { registerStopCommand } from "./stop";
+import { registerTriageCommand } from "./triage";
 import { registerWebCommand } from "./web";
 
 export function registerCommands(program: Command): void {
@@ -32,6 +33,7 @@ export function registerCommands(program: Command): void {
   registerHealthCommands(program);
   registerCodegraphCommand(program);
   registerComposeCommand(program);
+  registerTriageCommand(program);
   registerMcpCommand(program);
   registerFeedbackCommand(program);
   registerNotifyCommand(program);
