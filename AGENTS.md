@@ -47,7 +47,7 @@ git worktree prune
 - If `git merge --ff-only` refuses (main moved on), `git rebase main` inside the worktree, re-run guardrails, then re-attempt the ff merge.
 - Never `git stash` / `git reset` — preserve all working-tree state.
 - Touching `.github/workflows/`, `scripts/ci-check.sh`, or the `ci:check` script requires `pnpm run ci:check` to pass in the worktree before merge (step 3 guardrail).
-- Working tree at end of session: clean on `main`, no stale worktrees, no stale local branches (the merged feature branch is deleted in step 6).
+- Working tree at end of session: clean on `main`, no stale worktrees, no stale local branches (the merged feature branch is deleted in step 6). Post-merge touching `src/cli.ts`: rebuild `bin/at` via `bun build --compile src/cli.ts --outfile bin/at` (gitignored, not produced by `pnpm run build`, so `~/.local/bin/at` wrapper goes stale otherwise).
 
 ## Features
 
