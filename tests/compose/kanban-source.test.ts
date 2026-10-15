@@ -132,6 +132,16 @@ describe("kanban source — claim", () => {
 
     expect(task?.planFile).toBe(path.join(dir, "docs", "plans", "t1.md"));
   });
+
+  it("exposes plan-file keywords on the claimed task", async () => {
+    boardFile = writeBoard(dir, [row("T1", "Backlog", "one", { plan: "plans/t1.md" })]);
+    mkdirSync(path.join(dir, "docs", "plans"), { recursive: true });
+    writeFileSync(path.join(dir, "docs", "plans", "t1.md"), "# T1\n\nKeywords: kanban, claim lease\n");
+
+    const task = await sourceFor(boardFile).claim();
+
+    expect(task?.keywords).toEqual(["kanban", "claim lease"]);
+  });
 });
 
 describe("kanban source — per-task claim lease", () => {

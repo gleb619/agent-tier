@@ -161,10 +161,21 @@ All fields except `prompt` are optional. Extra fields: `promptFile` (path, used
 when `prompt` is absent), `callback` and `verify` (shell commands, same contract
 as the flags), `sse` (boolean) and `ssePort` (number, `0` = random).
 
-## Compose (plan → implement → check)
+## Compose (single run by default; two-agent opt-in)
 
-`at compose` runs one goal through a fixed state machine instead of a single agent call.
-Tier 1 plans and judges; tier 2 only implements.
+`at compose` runs one goal through a state machine with a **test gate**. Two modes:
+
+| Mode | Enabled by | Agent runs | Phases |
+|------|-----------|-----------|--------|
+| **single** (default) | — | 1 tier-2 implementer (more only on red tests, ≤ `--max-rounds`) | INVESTIGATE → IMPLEMENT → CHECK (`--test-cmd`) → DONE\|FAILED |
+| **two-agent** | `--two-agents` flag **or** `AT_TWO_AGENTS=1` | ≥3: tier-1 PLAN + tier-2 per item + tier-1 CHECK, + brain answers | INVESTIGATE → PLAN → IMPLEMENT → CHECK → DONE\|FAILED |
+
+Single mode is the cheap path: the goal (title + description + the kanban **plan file** content, when
+`--task` has one) is the spec, the one implementer follows it, and `--test-cmd` decides pass/fail. Red
+tests re-run the implementer with the test output (round + 1) until `--max-rounds`. No tier-1 brain calls:
+unanswered discuss questions fall back to the asker's `--default`/timeout (the prompt tells it not to ask).
+Use two-agent mode only for large, risky, plan-first work. The mode is stored in `state.json` (`mode`);
+a saved state keeps its mode on resume, and states without one are `two`.
 
 ```bash
 at compose -p "add retry to the resolver" --test-cmd 'npm test'
@@ -188,8 +199,22 @@ at compose --loop --stop-on-fail          # drain the board until nothing is exe
 | `--max-rounds <n>`     | Re-plan rounds before FAILED (default 3).                                                                     |
 | `--max-nodes <n>`      | Max codegraph nodes in the PLAN context (default 30).                                                         |
 | `--resume <id>`        | Resume a saved goal by id (continues from its `state.json`).                                                   |
+| `--two-agents`         | Opt in to tier-1 PLAN + CHECK around tier-2 hands (also `AT_TWO_AGENTS=1\|true\|yes\|on`). Fresh runs only.     |
+| `--tier <n>`           | Tier of the single implementer (default 2). Two-agent mode keeps tier 1 plan/check, tier 2 hands.             |
+| `--keywords <a,b>`     | Codegraph keywords for INVESTIGATE; merged with the plan file's `keywords:` (below).                          |
 
-### State machine
+### Keywords → INVESTIGATE context
+
+A kanban plan file may carry keywords/labels in its first 30 lines — YAML front matter
+(`keywords: [auth, jwt, src/auth/login.ts]`) or a plain `Keywords: a, b` line (`labels:`/`tags:` also
+accepted, max 12). INVESTIGATE then queries `codegraph context` with the keywords **instead of the goal
+text** (the goal may embed a whole plan, a noisy query) and records them at the top of `context.md`.
+`--keywords` adds more for `-p` goals.
+
+### State machine (two-agent mode)
+
+Single mode skips PLAN and replaces the tier-1 CHECK with the bare test gate: green → DONE, red →
+IMPLEMENT again (round + 1) until `--max-rounds`, then FAILED.
 
 ```
               FAIL verdict, round < --max-rounds

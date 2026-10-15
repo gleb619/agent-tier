@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type ComposeCliOptions, registerComposeCommand, runBoardTasks } from "../../src/compose/cli";
+import { type ComposeCliOptions, registerComposeCommand, runBoardTasks, twoAgentsEnabled } from "../../src/compose/cli";
 import type { ComposeTask } from "../../src/compose/task-source";
 import { loadBoard, toTasks } from "../../src/kanban/board";
 import { cleanupTmpDirs, makeTmpDir, row, writeBoard } from "../kanban/helpers";
@@ -53,8 +53,34 @@ describe("compose command — option parsing", () => {
       maxRounds: 3,
       maxNodes: 30,
       maxQuestions: 5,
+      twoAgents: false,
+      tier: undefined,
+      keywords: undefined,
     });
     expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it("--two-agents, --tier and --keywords reach the run dep", async () => {
+    let seen: ComposeCliOptions | undefined;
+    vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    const { program } = build(async (opts) => {
+      seen = opts;
+      return 0;
+    });
+
+    await parse(program, ["-p", "g", "--two-agents", "--tier", "1", "--keywords", "auth, jwt,,"]);
+
+    expect(seen?.twoAgents).toBe(true);
+    expect(seen?.tier).toBe(1);
+    expect(seen?.keywords).toEqual(["auth", "jwt"]);
+  });
+
+  it("twoAgentsEnabled: flag or AT_TWO_AGENTS truthy only", () => {
+    expect(twoAgentsEnabled(false, {})).toBe(false);
+    expect(twoAgentsEnabled(undefined, { AT_TWO_AGENTS: "0" })).toBe(false);
+    expect(twoAgentsEnabled(undefined, { AT_TWO_AGENTS: "" })).toBe(false);
+    expect(twoAgentsEnabled(true, {})).toBe(true);
+    for (const v of ["1", "true", "YES", "on"]) expect(twoAgentsEnabled(undefined, { AT_TWO_AGENTS: v })).toBe(true);
   });
 
   it("accepts --goal as an alias for --prompt", async () => {

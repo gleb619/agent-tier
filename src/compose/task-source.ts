@@ -8,6 +8,8 @@ export interface ComposeTask {
   description: string;
   /** Optional human/LLM-written plan to seed the compose run. */
   planFile?: string;
+  /** Plan-file keywords/labels: seed the codegraph query in INVESTIGATE instead of the whole goal text. */
+  keywords?: string[];
 }
 
 export interface TaskFinishInfo {
@@ -39,4 +41,37 @@ export async function taskGoal(task: ComposeTask): Promise<string> {
     }
   }
   return goal;
+}
+
+const KEYWORD_KEYS = new Set(["keywords", "labels", "tags"]);
+const KEYWORD_SCAN_LINES = 30;
+const MAX_KEYWORDS = 12;
+
+/**
+ * Keywords/labels from a plan file's head: a `keywords:` / `labels:` / `tags:` line
+ * (YAML front matter or a plain `Keywords: a, b` line), comma-separated, optional `[...]`.
+ */
+export function parsePlanKeywords(plan: string): string[] {
+  for (const line of plan.split("\n").slice(0, KEYWORD_SCAN_LINES)) {
+    const m = /^\s*(?:[-*]\s+)?(?:\*\*)?([A-Za-z]+)(?:\*\*)?\s*:\s*(?:\*\*)?\s*(.+?)\s*$/.exec(line);
+    if (!m || !KEYWORD_KEYS.has(m[1].toLowerCase())) continue;
+    const words = m[2]
+      .replace(/^\[|\]$/g, "")
+      .split(",")
+      .map((w) => w.replace(/[`"']/g, "").trim())
+      .filter((w) => w.length > 0);
+    return [...new Set(words)].slice(0, MAX_KEYWORDS);
+  }
+  return [];
+}
+
+/** Keywords of the task's plan file; empty when unset, unreadable or absent (hint only). */
+export async function taskKeywords(task: ComposeTask): Promise<string[]> {
+  if (task.keywords?.length) return task.keywords;
+  if (!task.planFile) return [];
+  try {
+    return parsePlanKeywords(await fs.readFile(task.planFile, "utf8"));
+  } catch {
+    return [];
+  }
 }

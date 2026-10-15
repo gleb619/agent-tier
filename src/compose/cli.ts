@@ -27,6 +27,12 @@ export interface ComposeCliOptions {
   maxRounds: number;
   maxNodes: number;
   maxQuestions: number;
+  /** Opt-in tier-1 PLAN + CHECK around the tier-2 implementer (flag or AT_TWO_AGENTS). */
+  twoAgents?: boolean;
+  /** Tier of the single implementer (default 2). */
+  tier?: number;
+  /** Codegraph keywords for INVESTIGATE (merged with plan-file keywords). */
+  keywords?: string[];
   /** Set when composing a kanban task (goal text is derived from it). */
   task?: ComposeTask;
   /** Kanban source: machine fires onPhase/onFinish against the board. */
@@ -52,6 +58,22 @@ interface ComposeCliArgs {
   maxNodes: number;
   maxQuestions: number;
   resume?: string;
+  twoAgents?: boolean;
+  tier?: number;
+  keywords?: string;
+}
+
+/** `AT_TWO_AGENTS=1|true|yes|on` enables two-agent mode without the flag. */
+export function twoAgentsEnabled(flag: boolean | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  return flag === true || /^(1|true|yes|on)$/i.test((env.AT_TWO_AGENTS ?? "").trim());
+}
+
+function parseKeywords(raw: string | undefined): string[] | undefined {
+  const kw = (raw ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+  return kw.length > 0 ? kw : undefined;
 }
 
 export interface BoardTasksOptions {
@@ -78,7 +100,10 @@ function isTerminalPhase(state: string | undefined): state is "DONE" | "FAILED" 
  * repeat while `loop`. Exit code: 0 when no task FAILED, else 1.
  */
 export async function runBoardTasks(
-  params: Pick<ComposeCliOptions, "testCmd" | "maxRounds" | "maxNodes" | "maxQuestions">,
+  params: Pick<
+    ComposeCliOptions,
+    "testCmd" | "maxRounds" | "maxNodes" | "maxQuestions" | "twoAgents" | "tier" | "keywords"
+  >,
   opts: BoardTasksOptions,
 ): Promise<number> {
   const workspaceFor = opts.workspaceFor ?? ((id: string) => new ComposeWorkspace(id));
@@ -221,6 +246,9 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
           maxRounds: opts.maxRounds,
           maxNodes: opts.maxNodes,
           maxQuestions: opts.maxQuestions,
+          twoAgents: opts.twoAgents,
+          tier: opts.tier,
+          keywords: opts.keywords,
           cwd: process.cwd(),
         },
         createComposeDeps(workspace),
@@ -231,13 +259,22 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
 
   program
     .command("compose")
-    .description("Plan (tier 1) -> implement (tier 2) -> check (tier 1) state machine for one goal")
+    .description(
+      "Goal runner: one tier-2 implementer + test gate (default); --two-agents / AT_TWO_AGENTS=1 adds tier-1 plan + check",
+    )
     .option("-p, --prompt <text>", "Goal prompt")
     .option("--goal <text>", "Alias for --prompt")
     .option("--test-cmd <cmd>", "Test command run during CHECK", DEFAULT_TEST_CMD)
     .option("--max-rounds <number>", "Re-plan rounds before FAILED", (v) => parseInt(v, 10), DEFAULT_MAX_ROUNDS)
     .option("--max-nodes <number>", "Max codegraph nodes in PLAN context", (v) => parseInt(v, 10), DEFAULT_MAX_NODES)
     .option("--max-questions <number>", "Max brain answers per agent run during IMPLEMENT", (v) => parseInt(v, 10), 5)
+    .option(
+      "--two-agents",
+      "Opt in to tier-1 PLAN + CHECK around the implementer (3+ agent runs; also AT_TWO_AGENTS=1)",
+      false,
+    )
+    .option("--tier <number>", "Tier of the single implementer (default 2)", (v) => parseInt(v, 10))
+    .option("--keywords <list>", "Comma-separated codegraph keywords for INVESTIGATE (plan-file keywords are merged)")
     .option("--resume <id>", "Resume a saved goal by id (continues from state.json)")
     .option("--task <id>", "Compose one kanban task by id (claims and marks it In Progress)")
     .option("--loop", "Claim and compose board tasks until none are executable", false)
@@ -259,6 +296,9 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
                 maxRounds: args.maxRounds,
                 maxNodes: args.maxNodes,
                 maxQuestions: args.maxQuestions,
+                twoAgents: twoAgentsEnabled(args.twoAgents),
+                tier: args.tier,
+                keywords: parseKeywords(args.keywords),
               },
               {
                 board: args.board,
@@ -294,6 +334,9 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
             maxRounds: args.maxRounds,
             maxNodes: args.maxNodes,
             maxQuestions: args.maxQuestions,
+            twoAgents: twoAgentsEnabled(args.twoAgents),
+            tier: args.tier,
+            keywords: parseKeywords(args.keywords),
           }),
         );
       } catch (err) {

@@ -15,6 +15,14 @@ export interface ImplementPromptInput {
   workspaceDir: string;
 }
 
+export interface SingleImplementPromptInput {
+  goal: string;
+  context: string;
+  workspaceDir: string;
+  /** Test output of the previous round (set on a fix round). */
+  findings?: string;
+}
+
 export interface CheckPromptInput {
   goal: string;
   plan: string;
@@ -90,6 +98,31 @@ export function buildImplementPrompt(input: ImplementPromptInput): string {
     '- If you are blocked or the task is ambiguous, run `$AT_BIN discuss ask "<question>" -o A -o B`',
     "  and follow the answer; do not guess.",
   ].join("\n");
+}
+
+/** One-agent prompt: the goal (with any existing plan file embedded) is the spec; follow it end to end. */
+export function buildSingleImplementPrompt(input: SingleImplementPromptInput): string {
+  const sections = [
+    "You are the implementer. Complete the whole goal in this single run.",
+    "",
+    "## Goal",
+    input.goal,
+    "",
+    "## Codebase context",
+    input.context.trim() || "(no context gathered)",
+    "",
+  ];
+  if (input.findings) {
+    sections.push("## Previous attempt — tests FAILED, fix these", input.findings.trim(), "");
+  }
+  sections.push(
+    "## Rules",
+    "- If the goal contains an `## Existing plan`, follow it in order; do not re-plan or widen scope.",
+    "- Follow the conventions already in the repo. Change only what the goal needs.",
+    "- Run the tests that cover the files you touched before you finish; fix failures yourself.",
+    `- Scratch notes, if any, go under ${input.workspaceDir}. Do not ask questions: make the most reasonable assumption and state it in your final message.`,
+  );
+  return sections.join("\n");
 }
 
 export function buildCheckPrompt(input: CheckPromptInput): string {

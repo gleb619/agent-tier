@@ -10,8 +10,13 @@ export interface ComposeRunRef {
   runId: string;
 }
 
+/** `single`: one implementer run + test gate (default). `two`: tier-1 PLAN/CHECK around tier-2 hands. */
+export type ComposeMode = "single" | "two";
+
 export interface ComposeState {
   goal: string;
+  /** Absent in states saved before single mode existed — those are `two`. */
+  mode?: ComposeMode;
   state: ComposePhase;
   round: number;
   testCmd: string;
@@ -49,6 +54,9 @@ function parseState(raw: unknown, ws: ComposeWorkspace): ComposeState {
   if (!isPositiveInt(s.maxRounds)) {
     throw corruptState(ws, '"maxRounds" must be a positive integer');
   }
+  if (s.mode !== undefined && s.mode !== "single" && s.mode !== "two") {
+    throw corruptState(ws, `unknown mode ${JSON.stringify(s.mode)}`);
+  }
   if (typeof s.testCmd !== "string") throw corruptState(ws, '"testCmd" must be a string');
   if (s.runs !== undefined) {
     if (!Array.isArray(s.runs)) throw corruptState(ws, '"runs" must be an array');
@@ -67,9 +75,13 @@ function parseState(raw: unknown, ws: ComposeWorkspace): ComposeState {
   return s as unknown as ComposeState;
 }
 
-export function createState(goal: string, opts: { testCmd?: string; maxRounds?: number } = {}): ComposeState {
+export function createState(
+  goal: string,
+  opts: { testCmd?: string; maxRounds?: number; mode?: ComposeMode } = {},
+): ComposeState {
   return {
     goal,
+    mode: opts.mode ?? "single",
     state: "INVESTIGATE",
     round: 1,
     testCmd: opts.testCmd ?? DEFAULT_TEST_CMD,

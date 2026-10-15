@@ -3,9 +3,23 @@ import path from "node:path";
 import type { DiscussEntry } from "../notify/types";
 import { loadRuns } from "../run-store";
 import { parseVerdict, pendingItems, setChecked } from "./md-state";
-import { buildBrainPrompt, buildCheckPrompt, buildImplementPrompt, buildPlanPrompt } from "./prompts";
-import { type ComposePhase, type ComposeState, createState, DEFAULT_MAX_NODES, loadState, saveState } from "./state";
-import { type ComposeTask, type TaskSource, taskGoal } from "./task-source";
+import {
+  buildBrainPrompt,
+  buildCheckPrompt,
+  buildImplementPrompt,
+  buildPlanPrompt,
+  buildSingleImplementPrompt,
+} from "./prompts";
+import {
+  type ComposeMode,
+  type ComposePhase,
+  type ComposeState,
+  createState,
+  DEFAULT_MAX_NODES,
+  loadState,
+  saveState,
+} from "./state";
+import { type ComposeTask, type TaskSource, taskGoal, taskKeywords } from "./task-source";
 import { CONTEXT_FILE, type ComposeWorkspace, PLAN_FILE, VERDICT_FILE } from "./workspace";
 
 export interface CommandResult {
@@ -43,6 +57,12 @@ export interface ComposeOptions {
   maxNodes?: number;
   /** Max brain answers per agent run (default 5). */
   maxQuestions?: number;
+  /** Opt-in tier-1 PLAN + CHECK around tier-2 hands. Default: one implementer run + test gate. */
+  twoAgents?: boolean;
+  /** Tier of the single implementer (default 2). Ignored in two-agent mode. */
+  tier?: number;
+  /** Extra codegraph keywords; merged with the task's plan-file keywords. */
+  keywords?: string[];
   /** The claimed task being composed (paired with `source`). */
   task?: ComposeTask;
   /** Hook surface for external task queues; hook errors never abort the run. */
@@ -71,12 +91,16 @@ interface Ctx {
   maxNodes: number;
   maxQuestions: number;
   state: ComposeState;
+  mode: ComposeMode;
+  tier: number;
+  keywords: string[];
 }
 
 const MAX_TEST_OUTPUT = 4000;
 const MAX_DIFF = 8000;
 const MAX_AGENT_ERROR = 500;
 const DEFAULT_MAX_QUESTIONS = 5;
+const DEFAULT_SINGLE_TIER = 2;
 
 function isTerminal(phase: ComposePhase): boolean {
   return phase === "DONE" || phase === "FAILED";
@@ -147,8 +171,10 @@ async function readArtifact(ctx: Ctx, name: string, phase: ComposePhase): Promis
 async function investigate(ctx: Ctx): Promise<void> {
   if (!(await hasCodegraphIndex(ctx.cwd))) await ctx.deps.runCmd("at index init", ctx.cwd);
   await ctx.deps.runCmd("at index sync", ctx.cwd);
-  const context = await ctx.deps.codegraph(ctx.state.goal, ctx.maxNodes);
-  await ctx.deps.workspace.write(CONTEXT_FILE, context);
+  // Keywords (plan-file labels) are a sharper query than the goal text, which may embed a whole plan.
+  const kw = ctx.keywords;
+  const context = await ctx.deps.codegraph(kw.length > 0 ? kw.join(" ") : ctx.state.goal, ctx.maxNodes);
+  await ctx.deps.workspace.write(CONTEXT_FILE, kw.length > 0 ? `Keywords: ${kw.join(", ")}\n\n${context}` : context);
 }
 
 async function plan(ctx: Ctx): Promise<void> {
@@ -188,7 +214,7 @@ async function implement(ctx: Ctx): Promise<void> {
  * persisted into state.json BEFORE the agent starts, so a crashed compose can
  * resume by waiting on the in-flight run instead of spawning a duplicate.
  */
-async function runItemAgent(ctx: Ctx, itemIndex: number, prompt: string): Promise<void> {
+async function runItemAgent(ctx: Ctx, itemIndex: number, prompt: string, tier = 2): Promise<void> {
   const ws = ctx.deps.workspace;
   const saved = (ctx.state.runs ?? []).find(
     (r) => r.phase === "IMPLEMENT" && r.item === itemIndex && isRunInFlight(ctx, r.runId),
@@ -198,7 +224,7 @@ async function runItemAgent(ctx: Ctx, itemIndex: number, prompt: string): Promis
   if (saved) {
     runId = saved.runId;
   } else {
-    runId = (await ctx.deps.startAt(2, prompt, ctx.cwd)).runId;
+    runId = (await ctx.deps.startAt(tier, prompt, ctx.cwd)).runId;
     ctx.state = { ...ctx.state, runs: [...(ctx.state.runs ?? []), { phase: "IMPLEMENT", item: itemIndex, runId }] };
     await saveState(ws, ctx.state);
   }
@@ -206,12 +232,36 @@ async function runItemAgent(ctx: Ctx, itemIndex: number, prompt: string): Promis
   const answers = { count: 0 };
   const res = await ctx.deps.waitRun(runId, { onQuestion: (q) => answerQuestion(ctx, answers, q) });
   if (res.code !== 0) {
-    await fail(ctx, "IMPLEMENT", `tier 2 agent exited ${res.code}: ${tail(res.output, MAX_AGENT_ERROR)}`);
+    await fail(ctx, "IMPLEMENT", `tier ${tier} agent exited ${res.code}: ${tail(res.output, MAX_AGENT_ERROR)}`);
   }
 
   const remaining = (ctx.state.runs ?? []).filter((r) => r.runId !== runId);
   ctx.state = { ...ctx.state, runs: remaining.length > 0 ? remaining : undefined };
   await saveState(ws, ctx.state);
+}
+
+/** Single mode: the one implementer run. On a fix round the previous test output rides along. */
+async function implementSingle(ctx: Ctx): Promise<void> {
+  const ws = ctx.deps.workspace;
+  const context = (await ws.exists(CONTEXT_FILE)) ? await ws.read(CONTEXT_FILE) : "";
+  const findings = ctx.state.round > 1 && (await ws.exists(VERDICT_FILE)) ? await ws.read(VERDICT_FILE) : undefined;
+  const prompt = buildSingleImplementPrompt({ goal: ctx.state.goal, context, workspaceDir: ws.goalDir, findings });
+  await runItemAgent(ctx, 0, prompt, ctx.tier);
+}
+
+/** Single mode CHECK: no reviewer agent — the test command is the gate. FAIL re-runs the implementer. */
+async function checkSingle(ctx: Ctx): Promise<ComposeState> {
+  const ws = ctx.deps.workspace;
+  const { state } = ctx;
+  await ws.remove(VERDICT_FILE);
+  const test = await ctx.deps.runCmd(state.testCmd, ctx.cwd);
+  if (test.code === 0) return { ...state, state: "DONE" };
+  await ws.write(
+    VERDICT_FILE,
+    `FAIL\n\ncommand: ${state.testCmd}\nexit code: ${test.code}\n\n\`\`\`\n${tail(test.output, MAX_TEST_OUTPUT)}\n\`\`\`\n`,
+  );
+  if (state.round >= state.maxRounds) return { ...state, state: "FAILED" };
+  return { ...state, state: "IMPLEMENT", round: state.round + 1 };
 }
 
 async function check(ctx: Ctx): Promise<ComposeState> {
@@ -257,8 +307,10 @@ async function check(ctx: Ctx): Promise<ComposeState> {
 }
 
 /**
- * Fixed transition loop: INVESTIGATE → PLAN → IMPLEMENT → CHECK → DONE|FAILED.
- * A FAIL verdict under maxRounds loops back to PLAN with the findings attached.
+ * Single (default): INVESTIGATE → IMPLEMENT (one agent) → CHECK (test gate) → DONE|FAILED;
+ * a failing gate under maxRounds loops back to IMPLEMENT with the test output attached.
+ * Two-agent (opt-in): INVESTIGATE → PLAN → IMPLEMENT → CHECK → DONE|FAILED;
+ * a FAIL verdict under maxRounds loops back to PLAN with the findings attached.
  */
 export async function runCompose(opts: ComposeOptions, deps: ComposeDeps): Promise<ComposeResult> {
   const ws = deps.workspace;
@@ -266,12 +318,19 @@ export async function runCompose(opts: ComposeOptions, deps: ComposeDeps): Promi
   const saved = await loadState(ws);
   const goal = opts.goal ?? (opts.task ? await taskGoal(opts.task) : undefined);
   if (!goal) throw new Error("compose: either goal or task is required");
+  // A saved state keeps its mode (pre-mode states are two-agent); only fresh runs read the option.
+  const mode: ComposeMode = saved ? (saved.mode ?? "two") : opts.twoAgents ? "two" : "single";
+  const keywords = [...new Set([...(opts.keywords ?? []), ...(opts.task ? await taskKeywords(opts.task) : [])])];
   const ctx: Ctx = {
     deps,
     cwd: opts.cwd ?? process.cwd(),
     maxNodes: opts.maxNodes ?? DEFAULT_MAX_NODES,
-    maxQuestions: opts.maxQuestions ?? DEFAULT_MAX_QUESTIONS,
-    state: saved ?? createState(goal, { testCmd: opts.testCmd, maxRounds: opts.maxRounds }),
+    // Single mode never spends a tier-1 brain call; unanswered questions fall back to --default/timeout.
+    maxQuestions: mode === "single" ? 0 : (opts.maxQuestions ?? DEFAULT_MAX_QUESTIONS),
+    state: saved ?? createState(goal, { testCmd: opts.testCmd, maxRounds: opts.maxRounds, mode }),
+    mode,
+    tier: opts.tier ?? DEFAULT_SINGLE_TIER,
+    keywords,
   };
 
   const { task, source } = opts;
@@ -316,18 +375,18 @@ export async function runCompose(opts: ComposeOptions, deps: ComposeDeps): Promi
     switch (ctx.state.state) {
       case "INVESTIGATE":
         await investigate(ctx);
-        await advance("PLAN");
+        await advance(ctx.mode === "single" ? "IMPLEMENT" : "PLAN");
         break;
       case "PLAN":
         await plan(ctx);
         await advance("IMPLEMENT");
         break;
       case "IMPLEMENT":
-        await implement(ctx);
+        await (ctx.mode === "single" ? implementSingle(ctx) : implement(ctx));
         await advance("CHECK");
         break;
       case "CHECK": {
-        const next = await check(ctx);
+        const next = await (ctx.mode === "single" ? checkSingle(ctx) : check(ctx));
         await advance(next.state, next.round);
         break;
       }

@@ -173,7 +173,7 @@ afterEach(async () => {
 describe("runCompose — happy path", () => {
   it("walks INVESTIGATE → PLAN → IMPLEMENT → CHECK → DONE", async () => {
     const f = makeDeps(ws);
-    const res = await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("DONE");
     expect(res.round).toBe(1);
@@ -186,7 +186,7 @@ describe("runCompose — happy path", () => {
 
   it("writes context.md from codegraph and ticks every task", async () => {
     const f = makeDeps(ws, { codegraph: async (goal, maxNodes) => `ctx for ${goal} @${maxNodes}` });
-    await runCompose({ goal: "add retry", cwd: projectDir, maxNodes: 7 }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir, maxNodes: 7 }, f.deps);
 
     expect(await ws.read("context.md")).toBe("ctx for add retry @7");
     expect(allDone(await ws.read("plan.md"))).toBe(true);
@@ -194,10 +194,11 @@ describe("runCompose — happy path", () => {
 
   it("saves state.json after every transition", async () => {
     const f = makeDeps(ws);
-    await runCompose({ goal: "add retry", cwd: projectDir, testCmd: "npm run check" }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir, testCmd: "npm run check" }, f.deps);
 
     expect(await loadState(ws)).toEqual({
       goal: "add retry",
+      mode: "two",
       state: "DONE",
       round: 1,
       testCmd: "npm run check",
@@ -207,7 +208,7 @@ describe("runCompose — happy path", () => {
 
   it("runs at and local commands in the project cwd", async () => {
     const f = makeDeps(ws);
-    await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect(f.calls.every((c) => c.cwd === projectDir)).toBe(true);
   });
@@ -216,21 +217,21 @@ describe("runCompose — happy path", () => {
     const bare = path.join(base, "bare");
     await mkdir(bare, { recursive: true });
     const f = makeDeps(ws);
-    await runCompose({ goal: "add retry", cwd: bare }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: bare }, f.deps);
 
     expect(f.cmds().slice(0, 2)).toEqual(["at index init", "at index sync"]);
   });
 
   it("skips index init when .codegraph exists", async () => {
     const f = makeDeps(ws);
-    await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect(f.cmds()).not.toContain("at index init");
   });
 
   it("feeds plan, git diff and test output to the CHECK prompt", async () => {
     const f = makeDeps(ws);
-    await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     const check = f.checkPrompts()[0];
     expect(check).toContain("Add resolver retry");
@@ -244,7 +245,7 @@ describe("runCompose — FAIL then re-plan then PASS", () => {
 
   it("re-plans with the previous verdict findings and finishes DONE in round 2", async () => {
     const f = makeDeps(ws, opts);
-    const res = await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("DONE");
     expect(res.round).toBe(2);
@@ -258,7 +259,7 @@ describe("runCompose — FAIL then re-plan then PASS", () => {
 
   it("only implements the tasks the re-plan appended", async () => {
     const f = makeDeps(ws, opts);
-    await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     const devTasks = f
       .at()
@@ -270,7 +271,7 @@ describe("runCompose — FAIL then re-plan then PASS", () => {
 
   it("persists the round counter across the loop", async () => {
     const f = makeDeps(ws, opts);
-    await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect((await loadState(ws))?.round).toBe(2);
   });
@@ -279,7 +280,7 @@ describe("runCompose — FAIL then re-plan then PASS", () => {
 describe("runCompose — exhausted rounds", () => {
   it("ends FAILED after maxRounds FAIL verdicts", async () => {
     const f = makeDeps(ws, { verdicts: [FAIL_VERDICT] });
-    const res = await runCompose({ goal: "add retry", cwd: projectDir, maxRounds: 3 }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir, maxRounds: 3 }, f.deps);
 
     expect(res.state).toBe("FAILED");
     expect(res.round).toBe(3);
@@ -290,7 +291,7 @@ describe("runCompose — exhausted rounds", () => {
 
   it("respects a lower --max-rounds", async () => {
     const f = makeDeps(ws, { verdicts: ["FAIL\n"] });
-    const res = await runCompose({ goal: "add retry", cwd: projectDir, maxRounds: 1 }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir, maxRounds: 1 }, f.deps);
 
     expect(res.state).toBe("FAILED");
     expect(f.checkPrompts()).toHaveLength(1);
@@ -299,7 +300,7 @@ describe("runCompose — exhausted rounds", () => {
 
   it("treats an unparsable verdict as FAIL", async () => {
     const f = makeDeps(ws, { verdicts: ["looks good overall, probably fine\n"] });
-    const res = await runCompose({ goal: "add retry", cwd: projectDir, maxRounds: 1 }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir, maxRounds: 1 }, f.deps);
 
     expect(res.state).toBe("FAILED");
   });
@@ -311,7 +312,7 @@ describe("runCompose — discuss questions reach the brain", () => {
       questions: [makeQuestion("Which retry count?", ["3", "5"])],
       brain: () => "Use 5 retries\n(because transient errors)",
     });
-    const res = await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("DONE");
     expect(f.answered).toHaveLength(2); // one question per IMPLEMENT item run
@@ -331,7 +332,7 @@ describe("runCompose — discuss questions reach the brain", () => {
         throw new Error("tier-1 down");
       },
     });
-    const res = await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("DONE");
     expect(f.answered[0].ans).toBeUndefined();
@@ -341,7 +342,7 @@ describe("runCompose — discuss questions reach the brain", () => {
     const f = makeDeps(ws, {
       questions: [makeQuestion("q1"), makeQuestion("q2")],
     });
-    await runCompose({ goal: "add retry", cwd: projectDir, maxQuestions: 1 }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir, maxQuestions: 1 }, f.deps);
 
     const forFirstRun = f.answered.slice(0, 2);
     expect(forFirstRun[0].ans).toBe("brain answer");
@@ -355,7 +356,7 @@ describe("runCompose — CHECK forces FAIL when tests fail", () => {
       verdicts: ["PASS\n\nall good\n"],
       cmd: async (cmd) => (cmd === "git diff" ? { code: 0, output: "diff" } : { code: 1, output: "FAIL 3 tests" }),
     });
-    const res = await runCompose({ goal: "add retry", cwd: projectDir, maxRounds: 1 }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir, maxRounds: 1 }, f.deps);
 
     expect(res.state).toBe("FAILED");
     const verdict = await ws.read("verdict.md");
@@ -369,7 +370,7 @@ describe("runCompose — CHECK forces FAIL when tests fail", () => {
     const f = makeDeps(ws, {
       cmd: async (cmd) => (cmd === "git diff" ? { code: 0, output: "diff" } : { code: 1, output: "FAIL 3 tests" }),
     });
-    await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect(f.checkPrompts()[0]).toContain("exit code: 1");
   });
@@ -381,7 +382,7 @@ describe("runCompose — resume", () => {
     await saveState(ws, { goal: "saved goal", state: "IMPLEMENT", round: 1, testCmd: "npm test", maxRounds: 3 });
 
     const f = makeDeps(ws);
-    const res = await runCompose({ goal: "ignored on resume", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "ignored on resume", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("DONE");
     expect(res.round).toBe(1);
@@ -424,7 +425,7 @@ describe("runCompose — resume", () => {
     expect(loadRuns(stateDir).find((r) => r.runId === "abc")?.status).toBe("running");
 
     const f = makeDeps(ws);
-    const res = await runCompose({ goal: "ignored", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "ignored", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("DONE");
     expect(f.waitRunIds).toContain("abc");
@@ -467,7 +468,7 @@ describe("runCompose — resume", () => {
     });
 
     const f = makeDeps(ws);
-    const res = await runCompose({ goal: "ignored", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "ignored", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("DONE");
     expect(f.starts.filter((s) => s.tier === 2)).toHaveLength(2);
@@ -478,7 +479,7 @@ describe("runCompose — resume", () => {
     await saveState(ws, { goal: "g", state: "CHECK", round: 2, testCmd: "make check", maxRounds: 5 });
 
     const f = makeDeps(ws, { verdicts: [FAIL_VERDICT] });
-    const res = await runCompose({ goal: "g", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "g", cwd: projectDir }, f.deps);
 
     expect(f.cmds()).toContain("make check");
     expect(f.cmds()).not.toContain("npm test");
@@ -491,7 +492,7 @@ describe("runCompose — resume", () => {
     await saveState(ws, { goal: "g", state: "DONE", round: 1, testCmd: "npm test", maxRounds: 3 });
 
     const f = makeDeps(ws);
-    const res = await runCompose({ goal: "g", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "g", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("DONE");
     expect(f.calls).toHaveLength(0);
@@ -502,7 +503,9 @@ describe("runCompose — failures", () => {
   it("stops at the first failing IMPLEMENT task and names the state", async () => {
     const f = makeDeps(ws, { devCode: 1 });
 
-    await expect(runCompose({ goal: "add retry", cwd: projectDir }, f.deps)).rejects.toThrow(/IMPLEMENT/);
+    await expect(runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps)).rejects.toThrow(
+      /IMPLEMENT/,
+    );
     expect(f.at().filter((c) => c.tier === 2)).toHaveLength(1);
     expect(f.checkPrompts()).toHaveLength(0);
     expect((await loadState(ws))?.state).toBe("IMPLEMENT");
@@ -512,21 +515,21 @@ describe("runCompose — failures", () => {
   it("throws when PLAN produces no plan.md", async () => {
     const f = makeDeps(ws, { at: async () => ({ code: 0, output: "no files written" }) });
 
-    await expect(runCompose({ goal: "add retry", cwd: projectDir }, f.deps)).rejects.toThrow(/PLAN/);
+    await expect(runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps)).rejects.toThrow(/PLAN/);
     expect((await loadState(ws))?.state).toBe("PLAN");
   });
 
   it("throws when the PLAN agent exits non-zero", async () => {
     const f = makeDeps(ws, { at: async () => ({ code: 2, output: "tier 1 unavailable" }) });
 
-    await expect(runCompose({ goal: "add retry", cwd: projectDir }, f.deps)).rejects.toThrow(/PLAN/);
+    await expect(runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps)).rejects.toThrow(/PLAN/);
     expect((await loadState(ws))?.state).toBe("PLAN");
   });
 
   it("throws when CHECK produces no verdict.md", async () => {
     const f = makeDeps(ws, { writeVerdict: false });
 
-    await expect(runCompose({ goal: "add retry", cwd: projectDir }, f.deps)).rejects.toThrow(/CHECK/);
+    await expect(runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps)).rejects.toThrow(/CHECK/);
     expect((await loadState(ws))?.state).toBe("CHECK");
   });
 
@@ -535,7 +538,7 @@ describe("runCompose — failures", () => {
       cmd: async (cmd) => (cmd === "git diff" ? { code: 0, output: "diff" } : { code: 1, output: "FAIL 3 tests" }),
       verdicts: ["FAIL\n\n- 3 tests failing\n"],
     });
-    const res = await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    const res = await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     expect(res.state).toBe("FAILED");
     expect(f.checkPrompts()[0]).toContain("exit code: 1");
@@ -546,7 +549,7 @@ describe("runCompose — failures", () => {
     const big = "x".repeat(50000);
     const f = makeDeps(ws, { cmd: async () => ({ code: 0, output: big }) });
 
-    await runCompose({ goal: "add retry", cwd: projectDir }, f.deps);
+    await runCompose({ twoAgents: true, goal: "add retry", cwd: projectDir }, f.deps);
 
     const check = f.checkPrompts()[0];
     expect(check.length).toBeLessThan(big.length);

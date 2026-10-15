@@ -51,6 +51,7 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T55 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 | T56 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 | T57 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
+| T58 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 
 ## Compose + Kanban
 
@@ -65,6 +66,12 @@ at compose --loop --stop-on-fail     # stop the loop after the first FAILED run
 at compose --loop --board <file>     # use a non-default board
 ```
 
+* **Default = one implementer run**: the plan file is the spec, so there is no tier-1 PLAN/CHECK — the
+  implementer follows it and `--test-cmd` gates DONE. Opt in to the tier-1 pipeline with `--two-agents` /
+  `AT_TWO_AGENTS=1` (see [cli.md](cli.md#compose-single-run-by-default-two-agent-opt-in)).
+* **Plan-file keywords:** put `keywords: a, b` (front matter) or a `Keywords: a, b` line (also `labels:` /
+  `tags:`) in the first 30 lines of the plan file. INVESTIGATE feeds them to `codegraph context` as the
+  query (instead of the whole goal text) to bootstrap `context.md`. The board schema is unchanged.
 * Goal text comes from the task's Title + Description (+ `Plan File` content when set).
 * goalId is the task id lowercased (`T7` -> `~/.at/compose/t7/`), so re-running is an
   implicit `--resume`: a non-terminal `state.json` continues, a terminal one is skipped.

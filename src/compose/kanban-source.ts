@@ -8,7 +8,7 @@ import { backlogCandidates } from "../kanban/select";
 import { blank, IN_PROGRESS, type Task } from "../kanban/types";
 import { acquireLock, getLockDir, type LockInfo, pathToLockName, releaseLock } from "../lock";
 import { isPidAlive } from "../process-utils";
-import type { ComposeTask, TaskSource } from "./task-source";
+import { type ComposeTask, parsePlanKeywords, type TaskSource } from "./task-source";
 
 /**
  * The only compose module that imports kanban. The board is human-edited, so
@@ -105,13 +105,25 @@ function noopResult(data: unknown = null): OpResult {
   return { messages: [], warnings: [], changed: false, data };
 }
 
+/** Plan-file keywords for the INVESTIGATE query; a missing/unreadable plan just means none. */
+function planKeywords(planFile: string): string[] | undefined {
+  try {
+    const kw = parsePlanKeywords(readFileSync(planFile, "utf8"));
+    return kw.length > 0 ? kw : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function toComposeTask(doc: BoardDoc, task: Task): ComposeTask {
   const planRaw = (task["Plan File"] ?? "").replace(/`/g, "").trim();
+  const planFile = blank(planRaw) ? undefined : resolvePlanPath(doc.file, planRaw);
   return {
     id: task.ID,
     title: task.Title ?? "",
     description: blank(task.Description) ? "" : task.Description,
-    planFile: blank(planRaw) ? undefined : resolvePlanPath(doc.file, planRaw),
+    planFile,
+    keywords: planFile ? planKeywords(planFile) : undefined,
   };
 }
 

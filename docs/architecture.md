@@ -15,7 +15,7 @@ src/agents/registry.ts  AgentDef[] — name, tier, bin(), buildArgs(), buildEnv(
 src/agents/generic-loader.ts  discover plugins from ~/.at/*/generic.js
 src/config.ts            load ~/.at/config.json with HMAC verification
 src/atomic-write.ts      writeFileAtomic(Sync): temp file + same-dir rename (no half-written reads)
-src/compose/task-source.ts   TaskSource iface (claim/onPhase/onFinish) + taskGoal() for external queues
+src/compose/task-source.ts   TaskSource iface (claim/onPhase/onFinish) + taskGoal() + plan-file keywords for external queues
 src/compose/kanban-source.ts kanban-backed TaskSource: claim/finish the board via mutateBoard
 src/feedback-store.ts  feedback.jsonl CRUD, autoclean, and file locking
 src/commands/feedback.ts  `at feedback` subcommands: add, list, show, update, resolve, rm, clear, prune
