@@ -55,6 +55,52 @@ export const NAV_ITEMS = [
   { id: "settings", label: "Settings", shortcut: 5 },
 ] as const satisfies ReadonlyArray<NavItem>;
 
+/** Per-view keyword aliases for the sidebar filter (`docs/layout.md` §1.1).
+ *  A nav item matches a query when every whitespace-separated token is a
+ *  substring of its label or of one of these keywords. */
+export const NAV_KEYWORDS: Record<ViewId, readonly string[]> = {
+  dashboard: ["runs", "history", "status", "overview", "dashboard"],
+  "new-task": ["task", "new", "prompt", "run", "create", "submit"],
+  "run-details": ["log", "detail", "output", "run", "prompt", "meta"],
+  agents: ["agent", "agents", "health", "tier", "enable", "disable"],
+  settings: ["config", "setting", "retry", "retries", "sandbox", "timeout", "line", "tier"],
+};
+
+/** Lower-cased query tokens. A blank query yields no tokens, i.e. matches all. */
+function queryTokens(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+/** AND across tokens: every token must hit the corpus somewhere. */
+function everyTokenMatches(tokens: readonly string[], corpus: readonly string[]): boolean {
+  return tokens.every((token) => corpus.some((entry) => entry.includes(token)));
+}
+
+/** Does `query` narrow in on the nav item `id`/`label`? See `NAV_KEYWORDS`. */
+export function navMatchesQuery(id: ViewId, label: string, query: string): boolean {
+  const tokens = queryTokens(query);
+  if (tokens.length === 0) return true;
+  const corpus = [label, ...NAV_KEYWORDS[id]].map((entry) => entry.toLowerCase());
+  return everyTokenMatches(tokens, corpus);
+}
+
+/**
+ * Does `query` match a run? Tokens are ANDed, each one a case-insensitive
+ * substring of the run id, name, agent or prompt (`name` is optional because
+ * it only exists once the namer has resolved one).
+ */
+export function runMatchesQuery(
+  run: { runId: string; name?: string; agent: string; prompt: string },
+  query: string,
+): boolean {
+  const tokens = queryTokens(query);
+  if (tokens.length === 0) return true;
+  const corpus = [run.runId, run.name, run.agent, run.prompt]
+    .filter((entry): entry is string => Boolean(entry))
+    .map((entry) => entry.toLowerCase());
+  return everyTokenMatches(tokens, corpus);
+}
+
 /** Per-view section lists. Order is the render order in both UIs. */
 export const SECTIONS = {
   dashboard: [

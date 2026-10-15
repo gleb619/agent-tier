@@ -1,19 +1,16 @@
 import type { RunRecord } from "../../run-store";
+import { runMatchesQuery } from "../../ui-spec";
 import { sessions } from "./sessions";
 import { sidebarFilter } from "./ui";
 
 /**
- * Pure filter: case-insensitive substring match on run id, agent, or prompt.
+ * Pure filter: keeps the runs that `runMatchesQuery` matches — whitespace
+ * tokens ANDed, each a case-insensitive substring of run id, name, agent or
+ * prompt. Input order preserved; a blank filter passes everything through.
  */
 export function filterRuns(runs: RunRecord[], filter: string): RunRecord[] {
-  const needle = filter.trim().toLowerCase();
-  if (!needle) return runs;
-  return runs.filter(
-    (r) =>
-      r.runId.toLowerCase().includes(needle) ||
-      r.agent.toLowerCase().includes(needle) ||
-      r.prompt.toLowerCase().includes(needle),
-  );
+  if (!filter.trim()) return runs;
+  return runs.filter((r) => runMatchesQuery(r, filter));
 }
 
 /**

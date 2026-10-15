@@ -4,9 +4,12 @@ import {
   AGENT_HEALTH_STATES,
   BREAKPOINTS,
   NAV_ITEMS,
+  NAV_KEYWORDS,
   NAV_WIDTH_COLS,
   NAV_WIDTH_PX,
+  navMatchesQuery,
   RUN_STATUSES,
+  runMatchesQuery,
   SECTIONS,
   STATUS_CONFIG,
   TIER_CONFIG,
@@ -93,5 +96,94 @@ describe("ui-spec", () => {
     for (const state of AGENT_HEALTH_STATES) {
       expect(AGENT_HEALTH_CONFIG[state], `health ${state}`).toBeDefined();
     }
+  });
+});
+
+describe("navMatchesQuery", () => {
+  it("covers every view with keyword aliases", () => {
+    for (const view of VIEWS) {
+      expect(NAV_KEYWORDS[view.id], `keywords for ${view.id}`).toBeDefined();
+      expect(NAV_KEYWORDS[view.id].length, `keywords for ${view.id}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("matches everything on a blank or whitespace-only query", () => {
+    for (const item of NAV_ITEMS) {
+      expect(navMatchesQuery(item.id, item.label, "")).toBe(true);
+      expect(navMatchesQuery(item.id, item.label, "   \t ")).toBe(true);
+    }
+  });
+
+  it("matches a substring of the label, case-insensitively", () => {
+    expect(navMatchesQuery("dashboard", "Dashboard", "dash")).toBe(true);
+    expect(navMatchesQuery("dashboard", "Dashboard", "DASH")).toBe(true);
+    expect(navMatchesQuery("dashboard", "Dashboard", "setting")).toBe(false);
+  });
+
+  it("matches a keyword alias rather than the label", () => {
+    expect(navMatchesQuery("settings", "Settings", "retries")).toBe(true);
+    expect(navMatchesQuery("settings", "Settings", "sandbox")).toBe(true);
+    expect(navMatchesQuery("dashboard", "Dashboard", "history")).toBe(true);
+    expect(navMatchesQuery("run-details", "Run Details", "log")).toBe(true);
+    expect(navMatchesQuery("new-task", "New Task", "submit")).toBe(true);
+  });
+
+  it("gives the agents view its own aliases", () => {
+    expect(navMatchesQuery("agents", "Agents", "health")).toBe(true);
+    expect(navMatchesQuery("agents", "Agents", "enable")).toBe(true);
+    expect(navMatchesQuery("agents", "Agents", "disable")).toBe(true);
+    expect(navMatchesQuery("agents", "Agents", "tier")).toBe(true);
+    expect(navMatchesQuery("agents", "Agents", "sandbox")).toBe(false);
+  });
+
+  it("ANDs multi-token queries across tokens", () => {
+    // "new task" — both tokens hit the New Task label.
+    expect(navMatchesQuery("new-task", "New Task", "new task")).toBe(true);
+    expect(navMatchesQuery("dashboard", "Dashboard", "new task")).toBe(false);
+    // Tokens may land on different fields of the same item (label + keyword).
+    expect(navMatchesQuery("settings", "Settings", "setting timeout")).toBe(true);
+    expect(navMatchesQuery("settings", "Settings", "setting runs")).toBe(false);
+    // Extra whitespace between tokens is ignored.
+    expect(navMatchesQuery("new-task", "New Task", "  new   task  ")).toBe(true);
+  });
+});
+
+describe("runMatchesQuery", () => {
+  const run = {
+    runId: "8f3a12",
+    name: "fix-auth",
+    agent: "kimi",
+    prompt: "fix the flaky test",
+  };
+
+  it("matches everything on a blank or whitespace-only query", () => {
+    expect(runMatchesQuery(run, "")).toBe(true);
+    expect(runMatchesQuery(run, "  \t ")).toBe(true);
+  });
+
+  it("matches on run id, name, agent or prompt", () => {
+    expect(runMatchesQuery(run, "8f3a")).toBe(true);
+    expect(runMatchesQuery(run, "auth")).toBe(true);
+    expect(runMatchesQuery(run, "kim")).toBe(true);
+    expect(runMatchesQuery(run, "flaky")).toBe(true);
+    expect(runMatchesQuery(run, "nope")).toBe(false);
+  });
+
+  it("is case-insensitive", () => {
+    expect(runMatchesQuery(run, "KIMI")).toBe(true);
+    expect(runMatchesQuery(run, "Fix The")).toBe(true);
+  });
+
+  it("ANDs multi-token queries, each token free to hit a different field", () => {
+    expect(runMatchesQuery(run, "kimi flaky")).toBe(true);
+    expect(runMatchesQuery(run, "8f3a fix-auth kimi flaky")).toBe(true);
+    expect(runMatchesQuery(run, "kimi kanban")).toBe(false);
+  });
+
+  it("tolerates a run without a resolved name", () => {
+    const unnamed = { runId: "abc", agent: "qwen", prompt: "retry me" };
+    expect(runMatchesQuery(unnamed, "abc")).toBe(true);
+    expect(runMatchesQuery(unnamed, "qwen retry")).toBe(true);
+    expect(runMatchesQuery(unnamed, "name")).toBe(false);
   });
 });

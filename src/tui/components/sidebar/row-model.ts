@@ -1,5 +1,6 @@
 import type { RunRecord } from "../../../run-store";
 import { UNNAMED_PLACEHOLDER } from "../../../run-store";
+import { navMatchesQuery } from "../../../ui-spec";
 import { dateBucket } from "../../format";
 import type { ActiveView } from "../../store/ui";
 
@@ -54,33 +55,11 @@ export const SIDEBAR_MENU_ITEMS: ReadonlyArray<Omit<MenuRow, "active">> = [
 ];
 
 /**
- * Per-view keyword/keyword aliases for the sidebar filter. The filter matches
- * a menu item when the query is a substring of the item's label OR of any of
- * its keywords. Lower-cased before comparison.
- */
-export const MENU_KEYWORDS: Record<ActiveView, readonly string[]> = {
-  dashboard: ["runs", "history", "status", "overview", "dashboard"],
-  "new-task": ["task", "new", "prompt", "run", "create", "submit"],
-  "run-details": ["log", "detail", "output", "run", "prompt", "meta"],
-  settings: ["config", "setting", "retry", "retries", "sandbox", "timeout", "line", "tier"],
-};
-
-/** All label/keyword strings for a menu item, lower-cased. */
-function menuSearchCorpus(item: Omit<MenuRow, "active">): string[] {
-  return [item.label.toLowerCase(), ...MENU_KEYWORDS[item.view].map((k) => k.toLowerCase())];
-}
-
-/**
- * Does `query` match this menu item? Empty/whitespace → matches all. A single
- * token must hit the corpus somewhere; multi-token queries (split on
- * whitespace) must hit everywhere (AND across tokens).
+ * Per-view keyword aliases live in `NAV_KEYWORDS` (`src/ui-spec.ts`) so the TUI
+ * and the WebUI filter the same way.
  */
 export function menuMatchesQuery(item: Omit<MenuRow, "active">, query: string): boolean {
-  const trimmed = query.trim().toLowerCase();
-  if (!trimmed) return true;
-  const tokens = trimmed.split(/\s+/);
-  const corpus = menuSearchCorpus(item);
-  return tokens.every((t) => corpus.some((entry) => entry.includes(t)));
+  return navMatchesQuery(item.view, item.label, query);
 }
 
 export interface RunGroup {
