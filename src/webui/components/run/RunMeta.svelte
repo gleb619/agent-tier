@@ -1,7 +1,9 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
+import { refreshUsage, usage } from "$stores/usage";
 import type { ApiRun } from "$types/api";
 import { formatDuration, runDurationSeconds } from "$utils/formatters";
+import { BUDGET_CLASS, runUsageLines } from "$utils/usage";
 import AgentBadge from "./AgentBadge.svelte";
 import StatusBadge from "./StatusBadge.svelte";
 import TierBadge from "./TierBadge.svelte";
@@ -12,6 +14,7 @@ let now = Date.now();
 let timer: ReturnType<typeof setInterval> | null = null;
 
 onMount(() => {
+  void refreshUsage();
   timer = setInterval(() => (now = Date.now()), 1000);
 });
 onDestroy(() => {
@@ -19,6 +22,10 @@ onDestroy(() => {
 });
 
 $: duration = formatDuration(runDurationSeconds(run, new Date(now)));
+
+$: budget = run.taskId ? ($usage?.budgets.find((b) => b.taskId === run.taskId) ?? null) : null;
+// Same rows as the TUI; nothing shown for legacy runs that were never metered.
+$: usageLines = run.usage || budget ? runUsageLines(run, budget) : [];
 
 function fmt(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString() : "—";
@@ -54,5 +61,11 @@ function fmt(iso: string | null): string {
       <dt class="text-xs text-gray-500">Finished</dt>
       <dd>{fmt(run.finishedAt)}</dd>
     </div>
+    {#each usageLines as line (line.label)}
+      <div data-testid="run-usage-row">
+        <dt class="text-xs text-gray-500">{line.label}</dt>
+        <dd class={`tabular-nums ${BUDGET_CLASS[line.state]}`}>{line.value}</dd>
+      </div>
+    {/each}
   </dl>
 </div>

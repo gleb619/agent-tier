@@ -1,3 +1,4 @@
+import type { TaskBudget, UsageSummary } from "../../usage/model";
 /**
  * DTOs matching what `at web` (web-server/internal/api) actually returns.
  * These are the wire shapes — keep in sync with src/run-store.ts (RunRecord),
@@ -19,6 +20,16 @@ export interface ApiRun {
   name: string;
   /** Present when the run list joins several state dirs (project `.at/` + `~/.at/`). */
   scope?: string;
+  /** Token usage captured when the run finished (reported by the agent or estimated). */
+  usage?: { tokensIn: number; tokensOut: number; source: "reported" | "estimated" };
+  /** Kanban task this run worked on. */
+  taskId?: string;
+}
+
+/** GET /api/usage — consumed totals + kanban planned-vs-consumed (shapes live in src/usage/model.ts). */
+export interface ApiUsage {
+  summary: UsageSummary;
+  budgets: TaskBudget[];
 }
 
 export interface ApiAgent {

@@ -2,10 +2,12 @@
 import { onMount } from "svelte";
 import { agents, dashboardError, refreshDashboard, stats } from "$stores/dashboard";
 import { lastEventTime } from "$stores/sse";
+import { refreshUsage } from "$stores/usage";
 import ActiveRuns from "./ActiveRuns.svelte";
 import AgentsPanel from "./AgentsPanel.svelte";
 import QuickStats from "./QuickStats.svelte";
 import RecentCompletions from "./RecentCompletions.svelte";
+import UsagePanel from "./UsagePanel.svelte";
 
 /** Min interval between SSE-triggered refetches (hub events can be bursty). */
 const REFETCH_THROTTLE_MS = 2000;
@@ -16,7 +18,7 @@ async function refreshIfStale(force = false): Promise<void> {
   const now = Date.now();
   if (!force && now - lastRefresh < REFETCH_THROTTLE_MS) return;
   lastRefresh = now;
-  await refreshDashboard();
+  await Promise.all([refreshDashboard(), refreshUsage()]);
 }
 
 onMount(() => {
@@ -35,6 +37,8 @@ $: if ($lastEventTime) void refreshIfStale();
   {:else}
     <p class="text-sm text-gray-500">Loading dashboard…</p>
   {/if}
+
+  <UsagePanel />
 
   <div class="grid gap-4 lg:grid-cols-2">
     <ActiveRuns />

@@ -5,6 +5,7 @@ import type {
   ApiRunLog,
   ApiSettings,
   ApiStats,
+  ApiUsage,
   CreateRunInput,
   PostDiscussInput,
 } from "$types/api";
@@ -104,6 +105,10 @@ export class ApiClient {
 
   getStats(): Promise<ApiStats> {
     return this.request("GET", "/api/stats");
+  }
+
+  getUsage(): Promise<ApiUsage> {
+    return this.request("GET", "/api/usage");
   }
 
   getSettings(): Promise<ApiSettings> {

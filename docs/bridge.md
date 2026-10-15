@@ -186,6 +186,14 @@ Discuss entry wire shape:
 
 Payload matches `at status --json` state section: `{ scheduler, maxEntries, agents }`.
 
+### `usage`
+
+| Verb      | stdin params       | data payload |
+| :-------- | :----------------- | :----------- |
+| `summary` | `{ board?: string }` | `{ summary, budgets }` — `summary`: consumed time/tokens over finished runs + budget health (`tasksOverBudget`, `timeRatio`, `tokenRatio`); `budgets`: per metered kanban task `{ taskId, estMs, estTokens, actualMs, actualTokens, runs, estimated, timeState, tokenState }` |
+
+`runs list|get` also carry `usage` (`{ tokensIn, tokensOut, source: reported|estimated }`) and `taskId` once a run has finished.
+
 ## Adding a resource
 
 1. Create `src/bridge/<name>.ts` exporting a `BridgeResource`

@@ -52,6 +52,27 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T56 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 | T57 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 | T58 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
+| T59 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
+
+## Estimates + consumption
+
+Two optional trailing columns, `Est Time` and `Est Tokens`, plan the cost of a task; `-` = unset.
+Boards that predate them keep working — the first `at kanban add --est-*` appends the columns
+(every other row gets `-`). `at kanban init` templates include them.
+
+```bash
+at kanban add --id T60 --title "x" --est-time 45m --est-tokens 120k   # 45m, 2h, 1h30m · 900, 120k, 1.5M
+```
+
+Consumption is **not** written to the board (it stays small and diff-friendly). Instead:
+
+* Every finished run records `usage` in `runs.jsonl` — real numbers when the agent log reports them
+  (cline `run_result`, opencode `step-finish`, codex/qwen `usage`), else a chars/4 estimate flagged `estimated`.
+* Compose (`--task` / `--loop`) copies each finished run (retries included) to the durable
+  `<stateDir>/task-metrics.jsonl` (`runs.jsonl` is pruned at 24h/30 runs), keyed by task id, and tags the run with `taskId`.
+* Run Details shows the run's time + tokens and the task's consumed-vs-planned (green ≤ plan, yellow ≤ +25%, red above);
+  the Dashboard shows totals, over-budget task count and consumed÷planned ratios.
+  WebUI reads `GET /api/usage` (`at bridge usage summary`).
 
 ## Compose + Kanban
 
