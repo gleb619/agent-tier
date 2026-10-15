@@ -4,6 +4,7 @@ import { AGENTS } from "../../agents/registry";
 import { resolveStatusDirs } from "../../state-dir";
 import { type AgentHealthEntry, buildStateReportFor } from "../../status";
 import { AGENT_HEALTH_CONFIG, type AgentHealthState } from "../../ui-spec";
+import { tierColor } from "../format";
 import { refreshTick } from "../store/auto-refresh";
 import { filteredSessions2 } from "../store/filtered-sessions";
 import { agentsSelection, focusZone, setAgentsSelection, sidebarFilter } from "../store/ui";
@@ -16,16 +17,6 @@ import {
 } from "./agents-model";
 
 const stateDirs = resolveStatusDirs();
-
-/** Tier hues for headings (docs/layout.md §7: 1 purple · 2 blue · 3 amber ·
- *  4 gray). Inline hex keeps `format.ts` as the single source for TUI
- *  colours; mirrors the WebUI's tier hues. */
-const TIER_HEADING_COLORS = {
-  1: "#a371f7",
-  2: "#58a6ff",
-  3: "#d29922",
-  4: "#8b949e",
-} as const;
 
 /** Same vocabulary as the WebUI `formatAgentRunStats`. Success rate uses
  *  the model's pre-computed 0-100 integer (or `null` for "—"). */
@@ -131,7 +122,7 @@ export function Agents(props: { focused: boolean }): JSX.Element {
                 <Show when={group.agents.length > 0}>
                   <box flexDirection="column">
                     <box marginBottom={1}>
-                      <text fg={TIER_HEADING_COLORS[group.tier]} content={group.heading} />
+                      <text fg={tierColor(group.tier)} content={group.heading} />
                     </box>
                     <box flexDirection="column">
                       <For each={group.agents}>{(agent) => <AgentCard agent={agent} />}</For>
@@ -154,7 +145,7 @@ function AgentCard(props: { agent: AgentRow }): JSX.Element {
       <text fg={selected() ? "#58a6ff" : "#8b949e"}>{selected() ? "▶ " : "  "}</text>
       <text fg={healthColor(props.agent.health)}>{AGENT_HEALTH_CONFIG[props.agent.health].glyph}</text>
       <text fg={selected() ? "#c9d1d9" : "#c9d1d9"}>{`${props.agent.name}`.padEnd(11)}</text>
-      <text fg="#58a6ff">{`t${props.agent.tier}`}</text>
+      <text fg={tierColor(props.agent.tier)}>{`t${props.agent.tier}`}</text>
       <text fg="#8b949e">{`${formatRunStats(props.agent.runs, props.agent.successRatePct)}`.padEnd(16)}</text>
       <text fg={props.agent.enabled ? "#3fb950" : "#f85149"}>
         {props.agent.enabled ? "[x] Enabled" : "[ ] Enabled"}

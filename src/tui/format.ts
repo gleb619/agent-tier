@@ -1,4 +1,5 @@
 import type { RunRecord } from "../run-store";
+import { STATUS_CONFIG } from "../ui-spec";
 
 /** Shared palette for the TUI. Single source of truth. */
 export const TUI_COLORS = {
@@ -20,30 +21,42 @@ export const RUN_COL = {
   STATUS: 8,
 } as const;
 
+/** Glyph per run status, from the shared spec (docs/layout.md §7). */
 export function statusIcon(status: RunRecord["status"]): string {
-  switch (status) {
-    case "running":
-      return "●";
-    case "done":
-      return "✓";
-    case "failed":
-      return "✗";
-    case "stuck":
-      return "⚠";
-  }
+  return STATUS_CONFIG[status].glyph;
 }
 
+/** Status hues (docs/layout.md §7): running yellow · done green · failed red · stuck amber · stopped gray. */
+export const STATUS_COLORS = {
+  running: "#e3b341",
+  done: "#3fb950",
+  failed: "#f85149",
+  stuck: "#d29922",
+  stopped: "#8b949e",
+} as const;
+
 export function statusColor(status: RunRecord["status"]): string {
-  switch (status) {
-    case "running":
-      return "#3fb950";
-    case "done":
-      return "#388bfd";
-    case "failed":
-      return "#f85149";
-    case "stuck":
-      return "#d29922";
-  }
+  return STATUS_COLORS[status];
+}
+
+/** Tier hues (docs/layout.md §7): 1 purple · 2 blue · 3 green · 4 amber. */
+export const TIER_COLORS = {
+  1: "#a371f7",
+  2: "#58a6ff",
+  3: "#3fb950",
+  4: "#d29922",
+} as const;
+
+export function tierColor(tier: number): string {
+  return TIER_COLORS[tier as 1 | 2 | 3 | 4] ?? TUI_COLORS.muted;
+}
+
+/** Success-rate band (docs/layout.md §2): >=80 green, 50-79 amber, <50 red; null = neutral. */
+export function successRateColor(pct: number | null): string {
+  if (pct === null) return TUI_COLORS.fg;
+  if (pct >= 80) return TUI_COLORS.ok;
+  if (pct >= 50) return TUI_COLORS.warn;
+  return TUI_COLORS.error;
 }
 
 /** Wall-clock run length in ms; running rounds report as long as they have been alive. */
@@ -155,4 +168,10 @@ export function dateBucket(startedAt: string): string {
 
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${date.getDate()} ${months[date.getMonth()]}`;
+}
+
+/** Left side of the StatusBar (docs/layout.md §1): "● connected · N active · M runs". */
+export function statusBarText(runs: Pick<RunRecord, "status">[]): string {
+  const active = runs.filter((r) => r.status === "running").length;
+  return `● connected · ${active} active · ${runs.length} runs`;
 }

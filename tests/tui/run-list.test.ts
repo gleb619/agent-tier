@@ -176,7 +176,7 @@ describe("format helpers", () => {
     expect(statusIcon("running")).toBe("●");
     expect(statusIcon("done")).toBe("✓");
     expect(statusIcon("failed")).toBe("✗");
-    expect(statusIcon("stuck")).toBe("⚠");
+    expect(statusIcon("stuck")).toBe("!");
     expect(statusColor("failed")).toBe("#f85149");
   });
 
@@ -233,5 +233,17 @@ describe("format helpers", () => {
     expect(down.startsWith("✗ opencode")).toBe(true);
     expect(down).toContain("failures 3");
     expect(down).toContain("(disabled)");
+  });
+});
+
+describe("spec parity helpers", () => {
+  it("tier and success-rate colours follow docs/layout.md", async () => {
+    const { tierColor, successRateColor, statusBarText } = await import("../../src/tui/format");
+    expect([1, 2, 3, 4].map(tierColor)).toEqual(["#a371f7", "#58a6ff", "#3fb950", "#d29922"]);
+    expect(successRateColor(80)).toBe("#3fb950");
+    expect(successRateColor(79)).toBe("#d29922");
+    expect(successRateColor(49)).toBe("#f85149");
+    expect(successRateColor(null)).toBe("#c9d1d9");
+    expect(statusBarText([{ status: "running" }, { status: "done" }])).toBe("● connected · 1 active · 2 runs");
   });
 });

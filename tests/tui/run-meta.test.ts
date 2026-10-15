@@ -90,7 +90,7 @@ describe("run meta rows", () => {
 
   it("colours the status with the shared palette", () => {
     const status = byLabel(fieldRows(session)[1]).status;
-    expect(status.color).toBe("#388bfd");
+    expect(status.color).toBe("#3fb950");
     expect(status.value).toContain("done");
   });
 

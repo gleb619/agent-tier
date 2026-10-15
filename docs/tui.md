@@ -250,13 +250,14 @@ items too (layout.md §1.1). Related board task: T50 (TUI layout parity).
 
 | Spec | TUI today | Needed |
 | ---- | --------- | ------ |
-| Header `[conn ●] [theme] [?]`, StatusBar `● connected · N active · M runs` | header fields + hint footer | footer left = status, right = hints; conn dot |
-| Dashboard: 4 overview cards, success-rate bands (≥80 green, 50–79 amber, <50 red), panel order Overview → Active → Agents → Recent | one-line stats, color only on success card | add Overview cards + reorder Recent/Agents |
-| Status glyph/color: `stuck` `!`, `done` green, `stopped` `■` | `⚠`, blue, none | use `STATUS_CONFIG` |
-| Tier hues purple/blue/green/amber | plain `tN` | color tier tags |
+| Header `[conn ●] [theme] [?]` | header fields; StatusBar left side (`● connected · N active · M runs`) done | conn dot / theme / help overlay in header |
+| Dashboard: 4 overview cards, panel order Overview → Active → Agents → Recent | order and success-rate color bands done; stats still one line | render 4 cards |
 | Run Details: Retry / Kill / Discuss, Discuss panel, follow toggle | hotkeys only, no Discuss | add Discuss panel (`at discuss list/answer`) + follow toggle |
 | New Task: Cancel / Run | `Enter` only | add `Esc`=Cancel, visible `[Run ⏎]` |
 | Settings: tier, mode, retries, timeout, Reset / Save | cycle rows, autosave | add timeout row, Reset/Save |
+
+Done: status glyphs/colors and tier hues come from `ui-spec` / layout.md §7 (`format.ts`: `statusIcon`, `statusColor`,
+`tierColor`, `successRateColor`, `statusBarText`). WebUI `StatusBadge` still maps `running` to blue; layout.md says yellow — fix on the WebUI side.
 
 Other rough edges (independent of parity):
 

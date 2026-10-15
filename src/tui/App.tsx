@@ -16,7 +16,7 @@ import { MainView } from "./components/MainView";
 import { clampRow, SETTING_ACTIONS } from "./components/Settings";
 import { nextSidebarIndex, Sidebar } from "./components/Sidebar";
 import { buildRowModel, groupRunsByDate, type Row } from "./components/sidebar/row-model";
-import { formatClock, truncate } from "./format";
+import { formatClock, statusBarText, TUI_COLORS, truncate } from "./format";
 import { isFilterHotkey } from "./hotkeys";
 import { startSessionAutoRefresh } from "./store/auto-refresh";
 import { filteredSessions2 } from "./store/filtered-sessions";
@@ -40,6 +40,7 @@ import {
   retrySession,
   selectedRunId,
   selectedSession,
+  sessions,
   setSelectedRunId,
 } from "./store/sessions";
 import { agent, cycleAgent, cycleMode, cycleRetries, cycleTier, loadSettings, mode, tier } from "./store/settings";
@@ -434,7 +435,8 @@ export function App(): JSX.Element {
         </box>
       </box>
 
-      <box flexDirection="row" paddingX={1} flexShrink={0}>
+      <box flexDirection="row" paddingX={1} gap={2} flexShrink={0}>
+        <text content={statusBarText(sessions())} fg={TUI_COLORS.ok} />
         <text content={footerLine()} fg="#484f58" />
       </box>
     </box>

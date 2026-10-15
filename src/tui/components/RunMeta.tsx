@@ -4,7 +4,15 @@ import type { RunRecord } from "../../run-store";
 import { UNNAMED_PLACEHOLDER } from "../../run-store";
 import { runUsageLines, type TaskBudget } from "../../usage/summary";
 import type { Budget } from "../../usage/units";
-import { formatClockRange, formatDuration, formatExitCode, statusColor, statusIcon, truncate } from "../format";
+import {
+  formatClockRange,
+  formatDuration,
+  formatExitCode,
+  statusColor,
+  statusIcon,
+  tierColor,
+  truncate,
+} from "../format";
 import { runLabel } from "./sidebar/row-model";
 
 /**
@@ -117,7 +125,7 @@ export function runMetaRows(session: RunRecord, budget: TaskBudget | null = null
       kind: "fields",
       fields: [
         { label: "agent", value: session.agent },
-        { label: "tier", value: `t${session.tier}` },
+        { label: "tier", value: `t${session.tier}`, color: tierColor(session.tier) },
         { label: "pid", value: String(session.pid) },
       ],
     },

@@ -7,7 +7,7 @@ import { buildStateReportFor, type StateReport } from "../../status";
 import { AGENT_HEALTH_CONFIG, type AgentHealthState } from "../../ui-spec";
 import { summarizeUsage, type UsageSummary } from "../../usage/summary";
 import { formatDuration as fmtPlanDur, formatTokens } from "../../usage/units";
-import { durationMs, formatMs, formatRunRow, isToday, statusColor, TUI_COLORS } from "../format";
+import { durationMs, formatMs, formatRunRow, isToday, statusColor, successRateColor, TUI_COLORS } from "../format";
 import { refreshTick } from "../store/auto-refresh";
 import { filteredSessions2 } from "../store/filtered-sessions";
 import { autoRefresh } from "../store/log";
@@ -156,7 +156,7 @@ export function Dashboard(): JSX.Element {
               <text fg={TUI_COLORS.ok} content={`active: ${stats().running.length}`} />
               <text fg={TUI_COLORS.warn} content={`stuck: ${stats().stuck}`} />
               <text fg={TUI_COLORS.fg} content={`today: ${stats().today}`} />
-              <text fg={TUI_COLORS.fg} content={successText()} />
+              <text fg={successRateColor(stats().successRate)} content={successText()} />
               <text fg={TUI_COLORS.fg} content={`avg: ${formatMs(stats().avgDurationMs)}`} />
             </box>
             <box marginTop={1}>
