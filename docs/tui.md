@@ -115,7 +115,7 @@ filter → separator → menu rows (1-4) → separator → [group-header → run
 
 - `Row = filter | menu | separator | group-header | run`. Only filter/menu/run are selectable
   (`selectableRowIndices`, `moveSelection` skip visual rows and clamp at the ends).
-- **Filter row** doubles as menu filter: menu items hide unless the query hits label or `MENU_KEYWORDS`
+- **Filter row** doubles as menu filter: menu items hide unless the query hits label or `NAV_KEYWORDS` (from `src/ui-spec.ts`)
   (multi-token = AND). Run filter (`filterRuns`): case-insensitive substring on run id, agent, prompt.
   Editing mounts an `<input>` (`<Show>` on `focusZone === "sidebar-filter"`).
 - **Run rows**: two lines — `▶? <icon> <name ≤18>` and `agent tN · duration`. Name = namer output or run id
@@ -217,7 +217,6 @@ items too (layout.md §1.1). Related board task: T50 (TUI layout parity).
 
 | Spec | TUI today | Needed |
 | ---- | --------- | ------ |
-| Filter filters nav + runs, `NAV_KEYWORDS` shared in `ui-spec.ts` | filter hides menu rows via local `MENU_KEYWORDS` in `row-model.ts` | move keywords to `ui-spec.ts`, import from both UIs |
 | 5 nav items, `[4] Agents`, `[5] Settings` | 4 items, Settings `[4]` | add Agents view + key `5`; drive menu from `NAV_ITEMS` |
 | Agents view (tier groups, health glyph, enable toggle) | only a Dashboard panel | new `components/Agents.tsx` (`at enable/disable` or bridge) |
 | Header `[conn ●] [theme] [?]`, StatusBar `● connected · N active · M runs` | header fields + hint footer | footer left = status, right = hints; conn dot |
