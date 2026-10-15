@@ -8,6 +8,7 @@
  * entirely instead of paying the timeout again.
  */
 
+import { spawn } from "node:child_process";
 import { readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { writeFileAtomicSync } from "../atomic-write";
@@ -20,7 +21,9 @@ export const DEFAULT_TEV1_URL = "http://localhost:11434";
 export const DEFAULT_TEV1_MODEL = "tev1:0.8b";
 export const DEFAULT_OPENROUTER_URL = "https://openrouter.ai/api/v1";
 export const DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.2-3b-instruct";
-export const DEFAULT_TEV1_TIMEOUT_MS = 1500;
+export const DEFAULT_TEV1_TIMEOUT_MS = 3000;
+/** A timeout is usually a cold model load, not an outage: retry soon, and warm the model meanwhile. */
+export const TIMEOUT_BREAKER_MS = 30_000;
 export const DEFAULT_TEV1_TTL_MS = 5 * 60_000;
 /** tev1 runs with ~2k tokens of context: only the head of the prompt is sent. */
 export const TEV1_STATE_MAX_CHARS = 1800;
@@ -36,6 +39,8 @@ export interface Tev1Options {
   /** How long a failure keeps the model skipped. */
   ttlMs?: number;
   stateDir: string;
+  /** Test seam: fire-and-forget model warm-up after a timeout. Default: detached child process. */
+  warm?: (target: { url: string; model: string; apiKey?: string }) => void;
   fetchImpl?: typeof fetch;
   now?: () => number;
 }
@@ -104,6 +109,23 @@ export function resolveModelConfig(
   return { opts: { ...base, url: env.AT_TRIAGE_URL || DEFAULT_OPENROUTER_URL, apiKey } };
 }
 
+/**
+ * Aborting a request cancels Ollama's model load, so a cold model would time out forever. Load it
+ * from a detached child that outlives this CLI process (keep_alive keeps it resident afterwards).
+ */
+function spawnWarmUp({ url, model, apiKey }: { url: string; model: string; apiKey?: string }): void {
+  const script = `fetch(process.argv[1] + "/api/generate", { method: "POST", headers: JSON.parse(process.argv[3]), body: JSON.stringify({ model: process.argv[2], keep_alive: "10m" }), signal: AbortSignal.timeout(120000) }).catch(() => {});`;
+  const headers = JSON.stringify({
+    "Content-Type": "application/json",
+    ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+  });
+  try {
+    spawn(process.execPath, ["-e", script, url, model, headers], { detached: true, stdio: "ignore" }).unref();
+  } catch {
+    // warm-up is best effort
+  }
+}
+
 export type Tev1Probabilities = Partial<Record<Signal, number>>;
 
 export type Tev1Outcome = { ok: true; probs: Tev1Probabilities } | { ok: false; reason: string };
@@ -156,8 +178,13 @@ export async function askTev1(prompt: string, opts: Tev1Options): Promise<Tev1Ou
     closeBreaker(opts.stateDir);
     return { ok: true, probs };
   } catch (err) {
-    const reason = controller.signal.aborted ? "timeout" : err instanceof Error ? err.message : String(err);
-    openBreaker(opts.stateDir, now() + (opts.ttlMs ?? DEFAULT_TEV1_TTL_MS), reason);
+    const timedOut = controller.signal.aborted;
+    const reason = timedOut ? "timeout" : err instanceof Error ? err.message : String(err);
+    const ttl = opts.ttlMs ?? DEFAULT_TEV1_TTL_MS;
+    openBreaker(opts.stateDir, now() + (timedOut ? Math.min(ttl, TIMEOUT_BREAKER_MS) : ttl), reason);
+    if (timedOut && opts.provider !== "openrouter") {
+      (opts.warm ?? spawnWarmUp)({ url: base, model: opts.model ?? DEFAULT_TEV1_MODEL, apiKey: opts.apiKey });
+    }
     return { ok: false, reason: `model unavailable: ${reason}` };
   } finally {
     clearTimeout(timer);

@@ -186,13 +186,14 @@ case costs nothing). Providers:
 | `openrouter` | chat completions, JSON probabilities | `AT_TRIAGE_API_KEY` or `OPENROUTER_API_KEY`; `AT_TRIAGE_MODEL` (default `meta-llama/llama-3.2-3b-instruct`) |
 
 Other env: `AT_TRIAGE_MODEL` (default `tev1:0.8b` for ollama), `AT_TRIAGE_URL`, `AT_TRIAGE_TIMEOUT_MS`
-(hard abort, default 1500), `AT_TRIAGE_TTL_MS` (breaker, default 300000). The model answers five yes/no
+(hard abort, default 3000), `AT_TRIAGE_TTL_MS` (breaker, default 300000). The model answers five yes/no
 probabilities; the model is **veto-only**: a heuristic hit is dropped when the model says < 0.4, and it never adds signals (tev1:0.8b measured poorly calibrated: 0.65–0.95 `crossModule` on plain one-file tasks).
 
 **Never blocks or breaks triage:** every failure (down, hung, model missing, bad JSON, bad config) falls
 back to the heuristic verdict with a `note=`. A failure opens a TTL **circuit breaker**
 (`<stateDir>/triage-tev1.json`): for `AT_TRIAGE_TTL_MS` later calls skip the model without any network
-wait, then it is retried; one success closes it.
+wait, then it is retried; one success closes it. A **timeout** is treated as a likely cold model load (aborting cancels Ollama's load): the breaker is
+only 30 s and a detached warm-up request (`/api/generate`, `keep_alive 10m`) loads the model so the next call is fast.
 
 ## Compose (single run by default; two-agent opt-in)
 

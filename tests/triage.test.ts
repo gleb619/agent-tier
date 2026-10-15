@@ -118,10 +118,18 @@ describe("askTev1 providers", () => {
       return new Promise((_res, rej) => init.signal?.addEventListener("abort", () => rej(new Error("aborted"))));
     }) as typeof fetch;
     const t0 = Date.now();
-    const r1 = await askTev1("p", { stateDir: dir, timeoutMs: 50, ttlMs: 60_000, fetchImpl: hang });
+    const warmed: unknown[] = [];
+    const r1 = await askTev1("p", {
+      stateDir: dir,
+      timeoutMs: 50,
+      ttlMs: 60_000,
+      fetchImpl: hang,
+      warm: (t) => warmed.push(t),
+    });
     expect(Date.now() - t0).toBeLessThan(1000);
     expect(r1).toEqual({ ok: false, reason: "model unavailable: timeout" });
     expect(breakerDownUntil(dir)).toBeGreaterThan(Date.now());
+    expect(warmed).toEqual([{ url: "http://localhost:11434", model: "tev1:0.8b", apiKey: undefined }]);
     const r2 = await askTev1("p", { stateDir: dir, timeoutMs: 50, fetchImpl: hang });
     expect(calls).toBe(1);
     expect(r2.ok).toBe(false);
@@ -242,4 +250,44 @@ it("breaker file is valid JSON", async () => {
     fetchImpl: (async () => json({}, 500)) as unknown as typeof fetch,
   });
   expect(JSON.parse(readFileSync(path.join(dir, "triage-tev1.json"), "utf8")).downUntil).toBeGreaterThan(1);
+});
+
+describe("timeout vs hard failure breaker", () => {
+  const hang = ((_u: string, init: RequestInit) =>
+    new Promise((_res, rej) =>
+      init.signal?.addEventListener("abort", () => rej(new Error("aborted"))),
+    )) as typeof fetch;
+
+  it("timeout → short breaker + warm-up; hard error → full ttl, no warm-up; openrouter never warms", async () => {
+    let warms = 0;
+    const warm = () => {
+      warms++;
+    };
+    await askTev1("p", { stateDir: dir, timeoutMs: 20, ttlMs: 300_000, now: () => 0, fetchImpl: hang, warm });
+    expect(breakerDownUntil(dir)).toBe(30_000);
+    expect(warms).toBe(1);
+    rmSync(path.join(dir, "triage-tev1.json"));
+
+    await askTev1("p", {
+      stateDir: dir,
+      ttlMs: 300_000,
+      now: () => 0,
+      warm,
+      fetchImpl: (async () => json({}, 500)) as unknown as typeof fetch,
+    });
+    expect(breakerDownUntil(dir)).toBe(300_000);
+    expect(warms).toBe(1);
+    rmSync(path.join(dir, "triage-tev1.json"));
+
+    await askTev1("p", {
+      provider: "openrouter",
+      apiKey: "k",
+      stateDir: dir,
+      timeoutMs: 20,
+      now: () => 0,
+      fetchImpl: hang,
+      warm,
+    });
+    expect(warms).toBe(1);
+  });
 });
