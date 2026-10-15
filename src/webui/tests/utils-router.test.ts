@@ -27,6 +27,7 @@ describe("parsePath", () => {
     ["/", { view: "dashboard" }],
     ["/index.html", { view: "dashboard" }],
     ["/new", { view: "new-task" }],
+    ["/agents", { view: "agents" }],
     ["/settings", { view: "settings" }],
     ["/runs/abc", { view: "run-details", runId: "abc" }],
     ["/runs/foo%20bar", { view: "run-details", runId: "foo bar" }],
@@ -41,6 +42,7 @@ describe("formatPath", () => {
   it("round-trips known routes", () => {
     expect(formatPath({ view: "dashboard" })).toBe("/");
     expect(formatPath({ view: "new-task" })).toBe("/new");
+    expect(formatPath({ view: "agents" })).toBe("/agents");
     expect(formatPath({ view: "settings" })).toBe("/settings");
     expect(formatPath({ view: "run-details", runId: "abc" })).toBe("/runs/abc");
     expect(formatPath({ view: "run-details", runId: "foo bar" })).toBe("/runs/foo%20bar");
@@ -60,6 +62,7 @@ describe("titles", () => {
     ["dashboard", "Dashboard — at"],
     ["new-task", "New Task — at"],
     ["run-details", "Run Details — at"],
+    ["agents", "Agents — at"],
     ["settings", "Settings — at"],
     ["not-found", "Not Found — at"],
   ] as const)("title for %s", (view, title) => {

@@ -1,4 +1,4 @@
-export type ViewType = "dashboard" | "new-task" | "run-details" | "settings";
+export type ViewType = "dashboard" | "new-task" | "run-details" | "agents" | "settings";
 
 export type RouteView = ViewType | "not-found";
 

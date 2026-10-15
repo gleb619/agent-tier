@@ -5,6 +5,7 @@ export type ShortcutId =
   | "dashboard"
   | "new-task"
   | "run-details"
+  | "agents"
   | "settings"
   | "next-run"
   | "prev-run"
@@ -35,7 +36,8 @@ export const keyboardShortcuts: { id: ShortcutId; keys: string; description: str
   { id: "dashboard", keys: "1", description: "Go to Dashboard" },
   { id: "new-task", keys: "2", description: "Go to New Task" },
   { id: "run-details", keys: "3", description: "Go to Run Details" },
-  { id: "settings", keys: "4", description: "Go to Settings" },
+  { id: "agents", keys: "4", description: "Go to Agents" },
+  { id: "settings", keys: "5", description: "Go to Settings" },
   { id: "next-run", keys: "j", description: "Select next run" },
   { id: "prev-run", keys: "k", description: "Select previous run" },
   { id: "open-run", keys: "Enter", description: "Open selected run" },
@@ -51,7 +53,8 @@ const VIEW_KEYS: Record<string, ViewType> = {
   "1": "dashboard",
   "2": "new-task",
   "3": "run-details",
-  "4": "settings",
+  "4": "agents",
+  "5": "settings",
 };
 
 const PLAIN_KEYS: Record<string, ShortcutId> = {
@@ -106,6 +109,7 @@ export function handleKeydown(event: KeyboardEvent, handlers: KeyboardHandlers):
     case "dashboard":
     case "new-task":
     case "run-details":
+    case "agents":
     case "settings":
       handlers.navigateTo(shortcut);
       break;

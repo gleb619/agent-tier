@@ -12,9 +12,10 @@ Order is fixed: **Filter (top) → Navigation → Run list** ([layout.md](layout
 (`/` when no text field has focus, `Ctrl+F` always) filters nav items (label + `NAV_KEYWORDS` from `src/ui-spec.ts`)
 *and* runs; `Esc` inside it blurs. `layout/Sidebar.svelte` hoists `FilterInput` above `Navigation` (hidden while the
 sidebar is collapsed) and `RunList` no longer owns it; `Navigation` renders `visibleNavItems`, number keys still work
-when a row is filtered out. Sidebar width is the spec's 256px (`NAV_WIDTH_PX`), nav still has 4 items (no Agents).
-Target: Agents view (`[4]`, Settings `[5]`), status glyphs/tier colors per layout.md §7.
-Work is delegated in steps: shared spec → WebUI sidebar → Agents view → TUI parity.
+when a row is filtered out. Sidebar width is the spec's 256px (`NAV_WIDTH_PX`), nav has 5 items: `[1]` Dashboard,
+`[2]` New Task, `[3]` Run Details, `[4]` Agents, `[5]` Settings — order, labels and shortcuts come from `NAV_ITEMS`.
+Status glyphs/tier colors per layout.md §7. Remaining parity gap: the TUI still has 4 nav items (no Agents view);
+drive its menu from `NAV_ITEMS` and add the view.
 
 ## Run
 

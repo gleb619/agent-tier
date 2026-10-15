@@ -31,9 +31,9 @@ describe("MainLayout shell", () => {
     expect(screen.getByRole("heading", { name: "New Task" })).toBeInTheDocument();
   });
 
-  it("shows shortcut badges 1-4 in navigation", () => {
+  it("shows shortcut badges 1-5 in navigation", () => {
     render(MainLayout);
-    for (const key of ["1", "2", "3", "4"]) {
+    for (const key of ["1", "2", "3", "4", "5"]) {
       expect(screen.getByText(key)).toBeInTheDocument();
     }
   });
@@ -44,10 +44,18 @@ describe("MainLayout shell", () => {
     expect(get(currentView)).toBe("run-details");
     expect(screen.getByRole("heading", { name: "Run Details" })).toBeInTheDocument();
 
+    await fireEvent.keyDown(window, { key: "4" });
+    expect(get(currentView)).toBe("agents");
+    expect(screen.getByRole("heading", { name: "Agents" })).toBeInTheDocument();
+
+    await fireEvent.keyDown(window, { key: "5" });
+    expect(get(currentView)).toBe("settings");
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+
     const input = document.createElement("input");
     document.body.appendChild(input);
     await fireEvent.keyDown(input, { key: "4" });
-    expect(get(currentView)).toBe("run-details"); // unchanged: typing in a field
+    expect(get(currentView)).toBe("settings"); // unchanged: typing in a field
     input.remove();
   });
 
@@ -99,6 +107,7 @@ describe("MainLayout shell", () => {
     expect(screen.queryByRole("button", { name: /Dashboard/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /New Task/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Run Details/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Agents/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Settings/ })).not.toBeInTheDocument();
     // number keys still navigate even though every nav row is hidden
     await fireEvent.keyDown(window, { key: "1" });

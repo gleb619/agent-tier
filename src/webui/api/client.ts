@@ -36,13 +36,23 @@ export class ApiClient {
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const res = await this.fetchImpl(`${this.baseUrl}${path}`, {
+    const res = await this.send(method, path, body);
+    if (!res.ok) throw new ApiError(res.status, await errorMessage(res));
+    return (await res.json()) as T;
+  }
+
+  /** Same as `request` for endpoints that answer 2xx with no JSON body. */
+  private async requestEmpty(method: string, path: string): Promise<void> {
+    const res = await this.send(method, path);
+    if (!res.ok) throw new ApiError(res.status, await errorMessage(res));
+  }
+
+  private send(method: string, path: string, body?: unknown): Promise<Response> {
+    return this.fetchImpl(`${this.baseUrl}${path}`, {
       method,
       headers: body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (!res.ok) throw new ApiError(res.status, await errorMessage(res));
-    return (await res.json()) as T;
   }
 
   getRuns(): Promise<ApiRun[]> {
@@ -85,6 +95,11 @@ export class ApiClient {
 
   getAgents(): Promise<ApiAgent[]> {
     return this.request("GET", "/api/agents");
+  }
+
+  /** `PUT /api/agents/:name/enable|disable` — 202, empty body (`at` shim). */
+  setAgentEnabled(name: string, enabled: boolean): Promise<void> {
+    return this.requestEmpty("PUT", `/api/agents/${encodeURIComponent(name)}/${enabled ? "enable" : "disable"}`);
   }
 
   getStats(): Promise<ApiStats> {

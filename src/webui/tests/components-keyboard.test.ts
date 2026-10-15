@@ -166,8 +166,8 @@ describe("MainLayout keyboard shortcuts", () => {
 describe("MainLayout a11y", () => {
   it("gives navigation and run-item buttons a visible focus ring", () => {
     render(MainLayout);
-    const navButtons = screen.getAllByRole("button", { name: /Dashboard|New Task|Run Details|Settings/ });
-    expect(navButtons.length).toBeGreaterThanOrEqual(4);
+    const navButtons = screen.getAllByRole("button", { name: /Dashboard|New Task|Run Details|Agents|Settings/ });
+    expect(navButtons.length).toBeGreaterThanOrEqual(5);
     for (const button of navButtons) expect(button.className).toMatch(/focus-visible:ring-2/);
   });
 

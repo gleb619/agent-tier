@@ -1,9 +1,20 @@
 <script lang="ts">
 import clsx from "clsx";
+import { createEventDispatcher } from "svelte";
 
 export let label: string;
 export let checked = false;
 export let disabled = false;
+
+const dispatch = createEventDispatcher<{ change: boolean }>();
+
+function onClick(): void {
+  checked = !checked;
+  // Consumers that need to persist the new state (e.g. the Agents view
+  // calling the enable/disable API) listen for `change`; plain two-way
+  // bindings (`bind:checked`) keep working as before.
+  dispatch("change", checked);
+}
 </script>
 
 <button
@@ -13,7 +24,7 @@ export let disabled = false;
   aria-label={label}
   {disabled}
   class="inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-  on:click={() => (checked = !checked)}
+  on:click={onClick}
 >
   <span
     class={clsx(

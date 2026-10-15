@@ -51,11 +51,12 @@ describe("isFormField", () => {
 });
 
 describe("resolveShortcut", () => {
-  it("maps 1-4 to the four views", () => {
+  it("maps 1-5 to the five views", () => {
     expect(resolveShortcut(keyEvent("1"))).toBe("dashboard");
     expect(resolveShortcut(keyEvent("2"))).toBe("new-task");
     expect(resolveShortcut(keyEvent("3"))).toBe("run-details");
-    expect(resolveShortcut(keyEvent("4"))).toBe("settings");
+    expect(resolveShortcut(keyEvent("4"))).toBe("agents");
+    expect(resolveShortcut(keyEvent("5"))).toBe("settings");
   });
 
   it("maps j/k/Enter to run navigation", () => {
@@ -94,10 +95,11 @@ describe("handleKeydown", () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  it("routes 1-4, Enter, actions and globals to their handlers", () => {
+  it("routes 1-5, Enter, actions and globals to their handlers", () => {
     for (const [key, mods, method, arg] of [
       ["2", {}, "navigateTo", "new-task"],
-      ["4", {}, "navigateTo", "settings"],
+      ["4", {}, "navigateTo", "agents"],
+      ["5", {}, "navigateTo", "settings"],
       ["Enter", {}, "openSelectedRun", undefined],
       ["r", {}, "retrySelectedRun", undefined],
       ["k", { ctrl: true }, "killSelectedRun", undefined],
@@ -187,6 +189,7 @@ describe("keyboardShortcuts", () => {
       "dashboard",
       "new-task",
       "run-details",
+      "agents",
       "settings",
       "next-run",
       "prev-run",

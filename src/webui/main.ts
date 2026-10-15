@@ -15,6 +15,6 @@ startRouter();
 registerServiceWorker();
 
 // Warm lazy view chunks at low priority once the app is interactive.
-prefetchViewsOnIdle(["dashboard", "new-task", "run-details", "settings"] satisfies ViewType[]);
+prefetchViewsOnIdle(["dashboard", "new-task", "run-details", "agents", "settings"] satisfies ViewType[]);
 
 export default app;

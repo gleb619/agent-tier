@@ -3,15 +3,14 @@ import Card from "$components/common/Card.svelte";
 import Toggle from "$components/common/Toggle.svelte";
 import TierBadge from "$components/run/TierBadge.svelte";
 import type { ApiAgent } from "$types/api";
+import { isAgentEnabled } from "$utils/agents";
 
 export let agents: ApiAgent[];
 
-/** The web API exposes agent health read-only; enable/disable lives in the `at` CLI. */
-const TOGGLE_TITLE = "Enable/disable agents via `at enable` / `at disable` (not exposed by the web API)";
-
-function isEnabled(agent: ApiAgent): boolean {
-  return !agent.deactivated && agent.disabledTo === null;
-}
+/** The dashboard panel is read-only by design: enabling/disabling an agent
+ *  writes state (`PUT /api/agents/:name/enable|disable`), so that lives in the
+ *  Agents view where the whole effect is visible. */
+const TOGGLE_TITLE = "Enable or disable agents in the Agents view";
 
 function byTierThenName(a: ApiAgent, b: ApiAgent): number {
   return a.tier - b.tier || a.name.localeCompare(b.name);
@@ -38,7 +37,7 @@ $: rows = agents.slice().sort(byTierThenName);
             {agent.failures > 0 ? `${agent.failures} fails` : "ok"}
           </span>
           <span class="shrink-0" title={TOGGLE_TITLE}>
-            <Toggle label={agent.name} checked={isEnabled(agent)} disabled={true} />
+            <Toggle label={agent.name} checked={isAgentEnabled(agent)} disabled={true} />
           </span>
         </li>
       {/each}

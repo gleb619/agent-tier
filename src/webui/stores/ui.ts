@@ -1,7 +1,7 @@
 import { writable } from "svelte/store";
 import type { RouteView, ViewType } from "$types/index";
 
-const VIEWS: ViewType[] = ["dashboard", "new-task", "run-details", "settings"];
+const VIEWS: ViewType[] = ["dashboard", "new-task", "run-details", "agents", "settings"];
 
 export const currentView = writable<RouteView>(readPref<RouteView>("webui.currentView", "dashboard", isViewOrNotFound));
 export const sidebarOpen = writable(readPref("webui.sidebarOpen", true, isBoolean));

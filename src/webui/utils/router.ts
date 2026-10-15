@@ -13,6 +13,7 @@ const TITLES: Record<RouteView, string> = {
   dashboard: "Dashboard — at",
   "new-task": "New Task — at",
   "run-details": "Run Details — at",
+  agents: "Agents — at",
   settings: "Settings — at",
   "not-found": "Not Found — at",
 };
@@ -24,6 +25,9 @@ export function parsePath(input: string): Route {
   }
   if (trimmed === "/new") {
     return { view: "new-task" };
+  }
+  if (trimmed === "/agents") {
+    return { view: "agents" };
   }
   if (trimmed === "/settings") {
     return { view: "settings" };
@@ -44,6 +48,8 @@ export function formatPath(route: Route): string | null {
       return "/";
     case "new-task":
       return "/new";
+    case "agents":
+      return "/agents";
     case "settings":
       return "/settings";
     case "run-details": {
@@ -67,6 +73,7 @@ export const viewModules: Record<ViewType, () => Promise<{ default: ComponentTyp
   dashboard: () => import("$components/dashboard/DashboardView.svelte"),
   "new-task": () => import("$components/newtask/NewTaskView.svelte"),
   "run-details": () => import("$components/run/RunDetailsView.svelte"),
+  agents: () => import("$components/agents/AgentsView.svelte"),
   settings: () => import("$components/settings/SettingsView.svelte"),
 };
 
