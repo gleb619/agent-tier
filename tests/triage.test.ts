@@ -159,7 +159,13 @@ describe("triage()", () => {
   it("no heuristic hit → model never called", async () => {
     let called = false;
     const r = await triage("fix typo in src/a.ts", {
-      model: { stateDir: dir, fetchImpl: (async () => ((called = true), sysOne(1))) as unknown as typeof fetch },
+      model: {
+        stateDir: dir,
+        fetchImpl: (async () => {
+          called = true;
+          return sysOne(1);
+        }) as unknown as typeof fetch,
+      },
     });
     expect(called).toBe(false);
     expect(r.route).toBe("single");
