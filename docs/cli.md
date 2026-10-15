@@ -187,7 +187,7 @@ case costs nothing). Providers:
 
 Other env: `AT_TRIAGE_MODEL` (default `tev1:0.8b` for ollama), `AT_TRIAGE_URL`, `AT_TRIAGE_TIMEOUT_MS`
 (hard abort, default 1500), `AT_TRIAGE_TTL_MS` (breaker, default 300000). The model answers five yes/no
-probabilities; a heuristic hit is dropped only if the model says < 0.4, a model-only signal needs ≥ 0.85.
+probabilities; the model is **veto-only**: a heuristic hit is dropped when the model says < 0.4, and it never adds signals (tev1:0.8b measured poorly calibrated: 0.65–0.95 `crossModule` on plain one-file tasks).
 
 **Never blocks or breaks triage:** every failure (down, hung, model missing, bad JSON, bad config) falls
 back to the heuristic verdict with a `note=`. A failure opens a TTL **circuit breaker**

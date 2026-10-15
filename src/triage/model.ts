@@ -191,14 +191,13 @@ function parseChatProbs(body: Record<string, unknown>): Tev1Probabilities {
   return probs;
 }
 
-/** A heuristic hit survives when tev1 does not strongly disagree; tev1 alone needs high confidence. */
+/**
+ * A heuristic hit survives unless the model strongly disagrees. The model never ADDS signals: tev1:0.8b
+ * is poorly calibrated (measured 0.65–0.95 for crossModule on plain one-file tasks), so model-only
+ * signals would escalate simple work — the exact cost this triage exists to avoid.
+ */
 export const KEEP_MIN_P = 0.4;
-export const ADD_MIN_P = 0.85;
 
 export function refineSignals(heuristic: Signal[], probs: Tev1Probabilities): Signal[] {
-  return SIGNALS.filter((s) => {
-    const p = probs[s];
-    if (heuristic.includes(s)) return p === undefined || p >= KEEP_MIN_P;
-    return p !== undefined && p >= ADD_MIN_P;
-  });
+  return heuristic.filter((s) => (probs[s] ?? 1) >= KEEP_MIN_P);
 }

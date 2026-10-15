@@ -51,10 +51,11 @@ describe("heuristic", () => {
 });
 
 describe("refineSignals", () => {
-  it("keeps heuristic hit unless model strongly disagrees; adds only at high confidence", () => {
-    expect(refineSignals(["risky", "needsPlan"], { risky: 0.1, needsPlan: 0.6, backlog: 0.9, iterative: 0.5 })).toEqual(
-      ["needsPlan", "backlog"],
-    );
+  it("vetoes heuristic hits the model strongly disagrees with; never adds model-only signals", () => {
+    expect(
+      refineSignals(["risky", "needsPlan"], { risky: 0.1, needsPlan: 0.6, backlog: 0.99, iterative: 0.9 }),
+    ).toEqual(["needsPlan"]);
+    expect(refineSignals(["risky"], {})).toEqual(["risky"]);
   });
 });
 
