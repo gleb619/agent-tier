@@ -12,6 +12,11 @@ export const COLUMNS = [
 
 export type Column = (typeof COLUMNS)[number];
 
+/** Estimate columns: appended by `at kanban add --est-*` on boards that predate them. */
+export const COL_EST_TIME = "Est Time";
+export const COL_EST_TOKENS = "Est Tokens";
+export const ESTIMATE_COLUMNS = [COL_EST_TIME, COL_EST_TOKENS] as const;
+
 export interface Task {
   [key: string]: string;
 }

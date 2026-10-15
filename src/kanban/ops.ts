@@ -4,8 +4,11 @@ import type { TableRow } from "mdast";
 import { type BoardDoc, dataRows, findRowById, headerIndex, toTasks } from "./board";
 import { cellText, makeCell, setCellText } from "./parse";
 import { nextExecutable } from "./select";
+import { parseDuration, parseTokens } from "../usage/units";
 import {
   blank,
+  COL_EST_TIME,
+  COL_EST_TOKENS,
   DEFAULT_OWNER,
   DEFAULT_PRIORITY,
   DEFAULT_STATUS,
@@ -43,6 +46,15 @@ function requireRow(doc: BoardDoc, id: string): number {
   const rowIdx = findRowById(doc, id);
   if (rowIdx === -1) throw new Error(`Task ${id} not found`);
   return rowIdx;
+}
+
+/** Append `name` as a trailing column (header + `-` in every row) when the board lacks it. */
+export function ensureColumn(doc: BoardDoc, name: string): void {
+  if (doc.headers.includes(name)) return;
+  doc.headers.push(name);
+  doc.table.children.forEach((row, i) => {
+    row.children.push(makeCell(i === 0 ? name : SENTINEL));
+  });
 }
 
 function nextId(doc: BoardDoc): string {
@@ -126,6 +138,8 @@ export function opShow(doc: BoardDoc, id: string, opts: ShowOptions = {}): OpRes
   field("Blocks:", task.Blocks);
   field("Blocked By:", task["Blocked By"]);
   field("Plan File:", task["Plan File"]);
+  if (COL_EST_TIME in task) field("Est Time:", task[COL_EST_TIME]);
+  if (COL_EST_TOKENS in task) field("Est Tokens:", task[COL_EST_TOKENS]);
 
   if (!opts.withPlan || blank(task["Plan File"])) return r;
 
@@ -154,6 +168,10 @@ export interface AddOptions {
   plan?: string;
   isIgnored?: (planPath: string, cwd: string) => boolean;
   description?: string;
+  /** Planned wall time, e.g. `45m`, `1h30m`. */
+  estTime?: string;
+  /** Planned token budget, e.g. `120k`. */
+  estTokens?: string;
 }
 
 export function opAdd(doc: BoardDoc, opts: AddOptions): OpResult {
@@ -161,7 +179,16 @@ export function opAdd(doc: BoardDoc, opts: AddOptions): OpResult {
     throw new Error(`Invalid priority "${opts.priority}". Allowed: ${VALID_PRIORITIES.join(", ")}`);
   }
 
+  if (opts.estTime !== undefined && opts.estTime !== SENTINEL && parseDuration(opts.estTime) === null) {
+    throw new Error(`Invalid --est-time "${opts.estTime}". Use e.g. 45m, 2h, 1h30m`);
+  }
+  if (opts.estTokens !== undefined && opts.estTokens !== SENTINEL && parseTokens(opts.estTokens) === null) {
+    throw new Error(`Invalid --est-tokens "${opts.estTokens}". Use e.g. 900, 120k, 1.5M`);
+  }
+
   const r = op();
+  if (opts.estTime !== undefined) ensureColumn(doc, COL_EST_TIME);
+  if (opts.estTokens !== undefined) ensureColumn(doc, COL_EST_TOKENS);
 
   const idIdx = requireIndex(doc, "ID");
   const id = opts.id?.trim() || nextId(doc);
@@ -198,6 +225,8 @@ export function opAdd(doc: BoardDoc, opts: AddOptions): OpResult {
   values["Blocked By"] = opts.blockedBy || existing?.["Blocked By"] || SENTINEL;
   values["Plan File"] = opts.plan || existing?.["Plan File"] || SENTINEL;
   values.Description = existing?.Description || SENTINEL;
+  if (opts.estTime !== undefined) values[COL_EST_TIME] = opts.estTime.trim() || SENTINEL;
+  if (opts.estTokens !== undefined) values[COL_EST_TOKENS] = opts.estTokens.trim() || SENTINEL;
 
   if (opts.description !== undefined) {
     // Code points, not UTF-16 units: emoji and CJK must count as one and never split a surrogate.

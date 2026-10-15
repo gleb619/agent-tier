@@ -520,15 +520,53 @@ describe("pipe escaping through the mutator (I12)", () => {
 });
 
 describe("initBoardText", () => {
-  it("parses as a board with the 9-column contract and passes lint", () => {
+  it("parses as a board with the 11-column contract (9 core + Est Time/Est Tokens) and passes lint", () => {
     const dir = makeTmpDir();
     const file = path.join(dir, "docs", "kanban.md");
     writeText(file, initBoardText());
 
     const doc = loadBoard(file);
-    expect(doc.headers).toHaveLength(9);
+    expect(doc.headers).toHaveLength(11);
     expect(toTasks(doc)).toEqual([]);
     expect(doc.statuses).toEqual(["Backlog", "In Progress", "Blocked", "Done"]);
     expect(lintBoard(readBoard(file), dir).violations).toEqual([]);
+  });
+});
+
+describe("opAdd estimates", () => {
+  it("adds Est columns to a legacy board and fills the row", () => {
+    const { file } = fresh();
+    const doc = loadBoard(file);
+    const r = opAdd(doc, { id: "T3", estTime: "45m", estTokens: "120k" });
+    expect(r.changed).toBe(true);
+    saveBoard(doc);
+    const reloaded = loadBoard(file);
+    expect(reloaded.headers.slice(-2)).toEqual(["Est Time", "Est Tokens"]);
+    const tasks = toTasks(reloaded);
+    expect(tasks.find((t) => t.ID === "T3")).toMatchObject({ "Est Time": "45m", "Est Tokens": "120k" });
+    expect(tasks.find((t) => t.ID === "T1")).toMatchObject({ "Est Time": "-", "Est Tokens": "-" });
+    expect(lintBoard(readBoard(file), path.dirname(file)).violations).toEqual([]);
+  });
+
+  it("keeps existing estimates when later updates omit them", () => {
+    const { file } = fresh();
+    const doc = loadBoard(file);
+    opAdd(doc, { id: "T3", estTime: "1h" });
+    saveBoard(doc);
+    const doc2 = loadBoard(file);
+    opAdd(doc2, { id: "T3", title: "renamed", estTokens: "9k" });
+    saveBoard(doc2);
+    const t = toTasks(loadBoard(file)).find((x) => x.ID === "T3");
+    expect(t).toMatchObject({ Title: "renamed", "Est Time": "1h", "Est Tokens": "9k" });
+  });
+
+  it("rejects malformed estimates", () => {
+    const { file } = fresh();
+    expect(() => opAdd(loadBoard(file), { estTime: "soon" })).toThrow(/est-time/);
+    expect(() => opAdd(loadBoard(file), { estTokens: "lots" })).toThrow(/est-tokens/);
+  });
+
+  it("init template carries Est columns", () => {
+    expect(initBoardText()).toContain("| Est Time | Est Tokens |");
   });
 });

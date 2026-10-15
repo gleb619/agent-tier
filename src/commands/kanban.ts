@@ -143,6 +143,8 @@ export function registerKanbanCommand(program: Command): void {
     .option("--blocked-by <ids>", "comma-separated blocker IDs")
     .option("--plan <path>", "path to the plan file")
     .option("--description <text>", `short description (max ${MAX_DESC} chars, trimmed not rejected)`)
+    .option("--est-time <duration>", "planned wall time, e.g. 45m, 1h30m (adds Est Time column when missing)")
+    .option("--est-tokens <count>", "planned token budget, e.g. 120k (adds Est Tokens column when missing)")
     .option("--json", "emit JSON instead of text")
     .action(
       (
@@ -156,6 +158,8 @@ export function registerKanbanCommand(program: Command): void {
           blockedBy?: string;
           plan?: string;
           description?: string;
+          estTime?: string;
+          estTokens?: string;
         },
       ) => {
         runAsync(async () => {
@@ -169,6 +173,8 @@ export function registerKanbanCommand(program: Command): void {
             blockedBy: opts.blockedBy,
             plan: opts.plan,
             description: opts.description,
+            estTime: opts.estTime,
+            estTokens: opts.estTokens,
             isIgnored: gitIgnored,
           };
           const r = await mutateBoard(p, (doc) => opAdd(doc, addOpts));
