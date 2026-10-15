@@ -44,6 +44,8 @@ export interface ComposeDeps {
   askBrain(prompt: string): Promise<string>;
   runCmd(cmd: string, cwd: string): Promise<CommandResult>;
   codegraph(goal: string, maxNodes: number): Promise<string>;
+  /** Optional: meter a finished run against a kanban task (time + tokens). Best-effort. */
+  recordRun?(runId: string, taskId: string): Promise<void>;
   /** Optional log sink for non-fatal warnings (e.g. task-source hook errors). */
   log?(msg: string): void;
 }
@@ -94,6 +96,8 @@ interface Ctx {
   mode: ComposeMode;
   tier: number;
   keywords: string[];
+  /** Kanban task id when running under `--task`/`--loop`: finished runs are metered against it. */
+  taskId?: string;
 }
 
 const MAX_TEST_OUTPUT = 4000;
@@ -153,10 +157,21 @@ async function answerQuestion(ctx: Ctx, counter: { count: number }, q: DiscussEn
 }
 
 /** startAt + waitRun so phase callers stay simple. */
+/** Best-effort: usage metering must never fail or stall a compose run. */
+async function meterRun(ctx: Ctx, runId: string): Promise<void> {
+  if (!ctx.taskId || !ctx.deps.recordRun) return;
+  try {
+    await ctx.deps.recordRun(runId, ctx.taskId);
+  } catch (err) {
+    ctx.deps.log?.(`[compose] usage metering error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
 async function runAgent(ctx: Ctx, phase: ComposePhase, tier: number, prompt: string): Promise<void> {
   const { runId } = await ctx.deps.startAt(tier, prompt, ctx.cwd);
   const answers = { count: 0 };
   const res = await ctx.deps.waitRun(runId, { onQuestion: (q) => answerQuestion(ctx, answers, q) });
+  await meterRun(ctx, runId);
   if (res.code !== 0) {
     await fail(ctx, phase, `tier ${tier} agent exited ${res.code}: ${tail(res.output, MAX_AGENT_ERROR)}`);
   }
@@ -231,6 +246,7 @@ async function runItemAgent(ctx: Ctx, itemIndex: number, prompt: string, tier = 
 
   const answers = { count: 0 };
   const res = await ctx.deps.waitRun(runId, { onQuestion: (q) => answerQuestion(ctx, answers, q) });
+  await meterRun(ctx, runId);
   if (res.code !== 0) {
     await fail(ctx, "IMPLEMENT", `tier ${tier} agent exited ${res.code}: ${tail(res.output, MAX_AGENT_ERROR)}`);
   }
@@ -331,6 +347,7 @@ export async function runCompose(opts: ComposeOptions, deps: ComposeDeps): Promi
     mode,
     tier: opts.tier ?? DEFAULT_SINGLE_TIER,
     keywords,
+    taskId: opts.task?.id,
   };
 
   const { task, source } = opts;
