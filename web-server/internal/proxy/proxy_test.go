@@ -30,6 +30,7 @@ import (
 //	events tail                    → canned array
 //	ping ping                      → { version: "test-9.9.9" }
 //	health get                     → canned scheduler state block
+//	usage summary                  → canned usage summary + budgets
 //	anything else                  → usage envelope + exit 2
 func makeFakeBridgeAt(t *testing.T, dir string) string {
 	t.Helper()
@@ -67,6 +68,9 @@ case "$res:$verb" in
     ;;
   health:get)
     printf '{"ok":true,"data":{"scheduler":"round-robin","maxEntries":24,"agents":[]}}'
+    ;;
+  usage:summary)
+    printf '{"ok":true,"data":{"summary":{"runs":1,"tokens":200,"tasksOverBudget":0},"budgets":[{"taskId":"T1","actualMs":1000}]}}'
     ;;
   *)
     printf '{"error":{"code":"USAGE","message":"unknown verb %s"}}' "$verb"
@@ -160,6 +164,29 @@ func TestServerDispatchStats(t *testing.T) {
 	}
 	if total, _ := stats["total"].(float64); total != 0 {
 		t.Fatalf("total = %v, want 0", stats["total"])
+	}
+}
+
+func TestServerDispatchUsage(t *testing.T) {
+	shim := makeFakeBridgeAt(t, t.TempDir())
+	srv := &Server{AtBin: shim, SpawnAt: func(...string) error { return nil }}
+
+	res := doGET(srv, "/api/usage")
+	if res.code != 200 {
+		t.Fatalf("status = %d (body %s)", res.code, res.body)
+	}
+	var out struct {
+		Summary map[string]any   `json:"summary"`
+		Budgets []map[string]any `json:"budgets"`
+	}
+	if err := json.Unmarshal([]byte(res.body), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if tokens, _ := out.Summary["tokens"].(float64); tokens != 200 {
+		t.Fatalf("summary.tokens = %v, want 200", out.Summary["tokens"])
+	}
+	if len(out.Budgets) != 1 || out.Budgets[0]["taskId"] != "T1" {
+		t.Fatalf("budgets = %v", out.Budgets)
 	}
 }
 
