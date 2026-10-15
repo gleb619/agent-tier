@@ -15,14 +15,15 @@ Related: [webui.md](webui.md) · [architecture.md](architecture.md) · [progress
 +-------------------+------------------------------------------------------------+
 | SIDEBAR           | MAIN VIEW                                                  |
 |                   |                                                            |
-| Navigation        |   (one of: Dashboard / New Task / Run Details /            |
-|  [1] Dashboard    |    Agents / Settings)                                      |
+| / Filter: [_____] |   (one of: Dashboard / New Task / Run Details /            |
+|                   |    Agents / Settings)                                      |
+| Navigation        |                                                            |
+|  [1] Dashboard    |                                                            |
 |  [2] New Task     |                                                            |
 |  [3] Run Details  |                                                            |
 |  [4] Agents       |                                                            |
 |  [5] Settings     |                                                            |
 |                   |                                                            |
-| Filter: [_______] |                                                            |
 | Runs              |                                                            |
 |  ● run-name   t2  |                                                            |
 |  ✓ run-name   t1  |                                                            |
@@ -32,10 +33,27 @@ Related: [webui.md](webui.md) · [architecture.md](architecture.md) · [progress
 +--------------------------------------------------------------------------------+
 ```
 
-* Sidebar = Navigation (top) + Filter + Run list (scrolls, date-grouped, bulk-select in WebUI).
+* Sidebar order is fixed: **Filter (top) → Navigation → Run list** (scrolls, date-grouped, bulk-select in WebUI).
+  The filter sits above everything it filters; see §1.1.
 * Sidebar width: TUI ~28 cols; WebUI 256px, collapses to a drawer below `md`.
 * Nav shortcuts are identical in both UIs: `1` Dashboard, `2` New Task, `3` Run Details,
-  `4` Agents, `5` Settings. Focus zones: sidebar ⇄ main (`Tab`).
+  `4` Agents, `5` Settings. Focus zones: sidebar filter → sidebar list → main (`Tab` / `Shift+Tab`).
+* Header and StatusBar exist in both UIs. TUI: header = title + auto-refresh + view fields, footer = StatusBar
+  (connection/active/runs on the left, key hints on the right). WebUI: `Header.svelte`, `StatusBar.svelte`.
+
+### 1.1 Sidebar filter
+
+One query box, always the first sidebar row, filters **both** the navigation items and the run list.
+
+* Nav item matches when every whitespace-separated token is a substring of its label or one of its keywords
+  (`NAV_KEYWORDS` in `src/ui-spec.ts`, shared by both UIs). Empty query shows all nav items.
+* Run matches when every token is a substring of run id, name, agent or prompt (case-insensitive).
+* Non-matching rows are hidden, not dimmed. Group headers with no runs are hidden. Filter row never hides.
+* If a hidden nav item is the active view, the view stays; only the sidebar entry is hidden.
+* Number shortcuts (`1`–`5`) keep working regardless of the filter.
+* Focus: `/` (when no text field has focus) or `Ctrl+F` (always) focuses the filter in the TUI;
+  WebUI binds `/` and `Ctrl+F` the same way. `Esc` clears focus (first press), then leaves the field.
+* `Enter` in the filter with one visible nav item opens it; with none and one visible run opens that run.
 
 ## 2. Dashboard
 
@@ -122,13 +140,14 @@ Success-rate card color: ≥80% green, 50–79% amber, <50% red.
 
 | Concept | Values | TUI | WebUI |
 | ------- | ------ | --- | ----- |
-| Status | running / done / failed / stuck / stopped | `●` yellow / `✓` green / `✗` red / `!` amber / `■` gray | same glyph + badge color |
+| Status | running / done / failed / stuck / stopped | `●` yellow / `✓` green / `✗` red / `!` amber / `■` gray (TUI used `⚠` and blue `done`; must match this row) | same glyph + badge color |
 | Tier | 1 architect · 2 dev/QA · 3 experimental · 4 mock | purple / blue / green / amber | same hues (design tokens) |
 | Agent health | ok / disabled / failing | `●` `○` `✗` | badge + toggle |
 
 ## 8. Parity rules
 
 * Same nav items, order, shortcuts and panel order (sections 1–6).
+* Same sidebar order and filter semantics (§1, §1.1): filter on top, filters nav and runs.
 * Same status/tier colors and glyphs (section 7).
 * WebUI-only extras (drawer, hover tooltips, bulk select, PWA) must not change structure.
 * TUI-only constraints (no pointer, fixed grid) may drop decoration, never a section.

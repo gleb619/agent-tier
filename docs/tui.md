@@ -4,7 +4,8 @@ Interactive terminal UI for `at`. Launched by no-arg `at` on a TTY. Built on
 [opentui](https://github.com/sst/opentui) + Solid (`@opentui/solid`), runs under **Bun**.
 Source: [`src/tui`](../src/tui).
 
-> Canonical layout shared with the WebUI: [layout.md](layout.md). WebUI counterpart: [webui.md](webui.md).
+> Canonical layout shared with the WebUI: [layout.md](layout.md) — **that file wins**; this doc describes
+> the TUI implementation and its remaining gaps (last section). WebUI counterpart: [webui.md](webui.md).
 > Architecture overview: [architecture.md](architecture.md).
 
 ## Launch
@@ -60,7 +61,8 @@ Footer (`footerLine` memo) swaps hints by view and focus zone.
 
 ## Views
 
-`ActiveView = "dashboard" | "new-task" | "run-details" | "settings"` (`store/ui.ts`).
+Target `ActiveView` = the five `ViewId`s of `src/ui-spec.ts` (dashboard, new-task, run-details, agents, settings).
+Today `store/ui.ts` has four (no `agents`) — see sync work below.
 `MainView.tsx` is a `<Switch>` over `activeView()`.
 
 ### Dashboard (`components/Dashboard.tsx`)
@@ -207,33 +209,32 @@ Status glyphs (`statusIcon` / `statusColor`):
 | `layout-structure.test.ts` | layout structure |
 | `tui-entry.test.ts` | entry resolution / spawn |
 
-## Parity gaps vs [layout.md](layout.md) / `src/ui-spec.ts`
+## Sync work (TUI ⇄ WebUI)
 
-Spec lists 5 views and a header/status bar; TUI is behind in places. Candidates for follow-up:
+Goal: TUI and WebUI look and behave alike ([layout.md](layout.md) §8). Sidebar order is already
+**Filter → Navigation → Runs** in the TUI; the WebUI must adopt it (see [webui.md](webui.md)). Both must filter nav
+items too (layout.md §1.1). Related board task: T50 (TUI layout parity).
 
-| Spec | TUI today |
-| ---- | --------- |
-| Nav `[4] Agents`, `[5] Settings` | no Agents view; Settings is `[4]`; 4 menu items. Agents only as a Dashboard panel |
-| Header with `[conn ●] [theme] [?]` | text-field header, no connection indicator or help overlay |
-| StatusBar `● connected · N active · M runs` | footer is key hints only |
-| Dashboard overview as 4 cards (+ success-rate color bands) | one-line quick stats, no ≥80/50–79/<50 coloring; layout puts Agents last, spec order is Active → Agents → Recent |
-| New Task: Agent and Mode as dropdowns, Cancel/Run buttons | cycle selectors; `Enter` submits, no Cancel |
-| Run Details: Retry/Kill/Discuss buttons, Discuss panel, follow toggle | `r` / `^K` hotkeys; **no Discuss panel**; auto-tail only while running |
-| Status `stopped` `■`; `stuck` `!` | `stuck` is `⚠`; no `stopped`; `done` is blue not green |
-| Tier hues purple/blue/green/amber | tiers shown as plain `tN` text, no color |
-| Settings: default tier/mode, retries, timeout, Reset/Save | cycle rows, saved immediately; no timeout row, no Reset |
-| Spec consumed from `src/ui-spec.ts` | TUI does not import it; nav/menu hardcoded in `row-model.ts` |
+| Spec | TUI today | Needed |
+| ---- | --------- | ------ |
+| Filter filters nav + runs, `NAV_KEYWORDS` shared in `ui-spec.ts` | filter hides menu rows via local `MENU_KEYWORDS` in `row-model.ts` | move keywords to `ui-spec.ts`, import from both UIs |
+| 5 nav items, `[4] Agents`, `[5] Settings` | 4 items, Settings `[4]` | add Agents view + key `5`; drive menu from `NAV_ITEMS` |
+| Agents view (tier groups, health glyph, enable toggle) | only a Dashboard panel | new `components/Agents.tsx` (`at enable/disable` or bridge) |
+| Header `[conn ●] [theme] [?]`, StatusBar `● connected · N active · M runs` | header fields + hint footer | footer left = status, right = hints; conn dot |
+| Dashboard: 4 overview cards, success-rate bands (≥80 green, 50–79 amber, <50 red), panel order Overview → Active → Agents → Recent | one-line stats, Agents last | reorder + color |
+| Status glyph/color: `stuck` `!`, `done` green, `stopped` `■` | `⚠`, blue, none | use `STATUS_CONFIG` |
+| Tier hues purple/blue/green/amber | plain `tN` | color tier tags |
+| Run Details: Retry / Kill / Discuss, Discuss panel, follow toggle | hotkeys only, no Discuss | add Discuss panel (`at discuss list/answer`) + follow toggle |
+| New Task: Cancel / Run | `Enter` only | add `Esc`=Cancel, visible `[Run ⏎]` |
+| Settings: tier, mode, retries, timeout, Reset / Save | cycle rows, autosave | add timeout row, Reset/Save |
 
-Other known rough edges:
+Other rough edges (independent of parity):
 
-- `AGENTS_BY_TIER` in `store/settings.ts` is hardcoded and stale vs. the registry (e.g. `pi` listed in tier 2,
-  now tier 3; `devin` missing). Should read from `src/agents/registry.ts`.
-- `loadSettings` casts a tier `4` as `1 | 2 | 3`.
-- `retrySession` spawns `at -s -p <prompt>` with `stdio: inherit`, which writes into the raw-mode TUI; it also
-  drops the original agent/tier.
-- `killSession` sends `SIGKILL` straight to the stored pid (not `at stop`), no confirmation.
-- `sessions.ts` still exports unused `filteredSessions`, `showDashboard`, `toggleDashboard` (superseded by
-  `filteredSessions2` / `ui.ts`); `log.ts` has unused `showPrompt`.
-- Direct state-file reads/polling (5 s) rather than the daemon / `at bridge` path the WebUI uses.
-- Log is re-read whole on each poll; window is a fixed 20 lines, not terminal-height aware.
+- `AGENTS_BY_TIER` in `store/settings.ts` is hardcoded and stale (`pi` in tier 2, `devin` missing) — read the registry.
+- `loadSettings` casts tier `4` as `1 | 2 | 3`.
+- `retrySession` spawns `at -s -p <prompt>` with `stdio: inherit` (garbles raw-mode TUI) and drops agent/tier.
+- `killSession` sends raw `SIGKILL` to the pid, no confirmation; prefer `at stop`.
+- Unused exports: `filteredSessions`, `showDashboard`, `toggleDashboard` (sessions.ts), `showPrompt` (log.ts).
+- Polls state files every 5 s instead of the daemon / `at bridge` path.
+- Log window fixed at 20 lines, not terminal-height aware; whole log re-read per poll.
 - `/tmp/at-logs` hardcoded for stream-mode logs.

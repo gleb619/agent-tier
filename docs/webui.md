@@ -6,6 +6,15 @@ Browser UI for `at`, served by `at web`. Svelte 4 + Vite + Tailwind, source in
 
 > Layout (shared with the TUI): see [layout.md](layout.md). Architecture overview: [docs/architecture.md](architecture.md).
 
+## Sidebar (parity with TUI)
+
+Order is fixed: **Filter (top) → Navigation → Run list** ([layout.md](layout.md) §1, §1.1). The single filter box
+(`/` or `Ctrl+F` focuses it) filters nav items (label + `NAV_KEYWORDS` from `src/ui-spec.ts`) *and* runs.
+Today `Sidebar.svelte` renders Navigation first and the filter lives inside `RunList`; nav has 4 items (no Agents).
+Target: `FilterInput` hoisted to the top of `layout/Sidebar.svelte`, `Navigation` consumes `NAV_ITEMS` + the shared
+matcher, Agents view added (`[4]`, Settings `[5]`), sidebar width 256px, status glyphs/tier colors per layout.md §7.
+Work is delegated in steps: shared spec → WebUI sidebar → Agents view → TUI parity.
+
 ## Run
 
 ```bash
