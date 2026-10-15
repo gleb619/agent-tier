@@ -11,6 +11,7 @@ import { runsResource } from "./runs";
 import { statusResource } from "./status";
 import type { BridgeContext, BridgeParams } from "./types";
 import { BridgeError } from "./types";
+import { usageResource } from "./usage";
 
 /**
  * Resource registry: one entry per file in src/bridge/. To add a resource,
@@ -30,6 +31,7 @@ const RESOURCES: Record<string, typeof pingResource> = {
   events: eventsResource,
   discuss: discussResource,
   health: healthResource,
+  usage: usageResource,
 };
 
 export function listBridgeResources(): string[] {

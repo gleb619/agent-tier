@@ -3,6 +3,9 @@ import path from "node:path";
 import { withLock } from "../lock";
 import { loadRuns, updateRun } from "../run-store";
 import { type RunUsage, usageForRun } from "./extract";
+import type { TaskTotals } from "./model";
+
+export type { TaskTotals } from "./model";
 
 /**
  * Durable per-task actuals. `runs.jsonl` is pruned (24h / 30 runs), so each finished
@@ -17,17 +20,6 @@ export interface TaskMetric {
   tokensOut: number;
   source: RunUsage["source"];
   ts: string;
-}
-
-export interface TaskTotals {
-  taskId: string;
-  runs: number;
-  ms: number;
-  tokensIn: number;
-  tokensOut: number;
-  tokens: number;
-  /** True when any contributing run used the chars/4 estimate. */
-  estimated: boolean;
 }
 
 const MAX_ROWS = 5000;

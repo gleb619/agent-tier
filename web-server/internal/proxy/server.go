@@ -141,6 +141,10 @@ func (s *Server) dispatchAPI(w http.ResponseWriter, r *http.Request) {
 	case parts[0] == "stats" && r.Method == http.MethodGet && len(parts) == 1:
 		s.handleStats(w, r)
 
+	// --- usage (time/tokens consumed + kanban budgets) ----------------
+	case parts[0] == "usage" && r.Method == http.MethodGet && len(parts) == 1:
+		s.bridgePass(w, r, "usage", "summary", "")
+
 	// --- settings ----------------------------------------------------
 	case parts[0] == "settings" && r.Method == http.MethodGet && len(parts) == 1:
 		// Settings live in their own file (no `at bridge settings` verb yet).
