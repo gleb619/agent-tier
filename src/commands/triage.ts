@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import type { Command } from "commander";
 import { loadBoard, resolveBoardFile, toTasks } from "../kanban/board";
 import { resolveStateDir } from "../state-dir";
-import { resolveModelConfig, triage } from "../triage";
+import { breakerDownUntil, loadTriageConfig, resolveTriageProviders, triage, triageConfigPath } from "../triage";
 
 function readPrompt(opts: { prompt?: string; file?: string; task?: string; board?: string }): string {
   if (opts.prompt) return opts.prompt;
@@ -31,18 +31,29 @@ export function registerTriageCommand(program: Command): void {
     .option("--task <id>", "Triage a kanban task (title + description + plan file)")
     .option("--board <file>", "Board file for --task")
     .option(
-      "--provider <name>",
-      "Refine with a model: local-ollama | remote-ollama | openrouter (or AT_TRIAGE_PROVIDER)",
+      "--provider <names>",
+      "Provider name(s) from ~/.at/triage.json (comma list, tried in order); overrides `use`",
     )
+    .option("--list", "List configured providers and breaker state", false)
     .option("--json", "Print the full result as JSON", false)
     .action(async (opts: Record<string, string | boolean | undefined>) => {
       try {
+        if (opts.list) {
+          const stateDir = resolveStateDir();
+          const cfg = loadTriageConfig(stateDir);
+          console.log(`config: ${triageConfigPath(stateDir)}  use: ${cfg.use.join(",") || "(none — heuristic only)"}`);
+          for (const p of cfg.providers) {
+            const down = breakerDownUntil(stateDir, p.name);
+            const state = down > Date.now() ? `down ${Math.ceil((down - Date.now()) / 1000)}s` : "ok";
+            console.log(`${p.name}\t${p.type}\t${p.url}\t${p.model ?? "(default)"}\t${state}`);
+          }
+          return;
+        }
         const prompt = readPrompt(opts as { prompt?: string; file?: string; task?: string; board?: string });
-        const cfg = resolveModelConfig(process.env, resolveStateDir(), opts.provider as string | undefined);
-        const result = await triage(prompt, {
-          model: cfg && "opts" in cfg ? cfg.opts : undefined,
-        });
-        if (cfg && "error" in cfg) result.note = cfg.error;
+        const stateDir = resolveStateDir();
+        const { models, errors } = await resolveTriageProviders(stateDir, opts.provider as string | undefined);
+        const result = await triage(prompt, { models });
+        if (errors.length > 0) result.note = [result.note, ...errors].filter(Boolean).join("; ");
         if (opts.json) {
           console.log(JSON.stringify(result));
         } else {

@@ -30,6 +30,8 @@ export const TEV1_STATE_MAX_CHARS = 1800;
 const BREAKER_FILE = "triage-tev1.json";
 
 export interface Tev1Options {
+  /** Provider name from triage.json (breaker key + notes). */
+  name?: string;
   provider?: TriageProvider;
   url?: string;
   model?: string;
@@ -53,30 +55,31 @@ const QUESTIONS = {
   backlog: "Does the task ask to work through a backlog of several separate tasks?",
 } satisfies Record<Signal, string>;
 
-function breakerPath(stateDir: string): string {
-  return path.join(stateDir, BREAKER_FILE);
+/** One breaker per named provider, so a dead remote never disables a healthy fallback. */
+function breakerPath(stateDir: string, name?: string): string {
+  return path.join(stateDir, name ? `triage-${name.replace(/[^\w.-]/g, "_")}.json` : BREAKER_FILE);
 }
 
 /** Epoch ms until which the model is skipped; 0 when the breaker is closed. */
-export function breakerDownUntil(stateDir: string): number {
+export function breakerDownUntil(stateDir: string, name?: string): number {
   try {
-    const v = (JSON.parse(readFileSync(breakerPath(stateDir), "utf8")) as { downUntil?: unknown }).downUntil;
+    const v = (JSON.parse(readFileSync(breakerPath(stateDir, name), "utf8")) as { downUntil?: unknown }).downUntil;
     return typeof v === "number" ? v : 0;
   } catch {
     return 0;
   }
 }
 
-function openBreaker(stateDir: string, until: number, reason: string): void {
+function openBreaker(stateDir: string, name: string | undefined, until: number, reason: string): void {
   try {
-    writeFileAtomicSync(breakerPath(stateDir), `${JSON.stringify({ downUntil: until, reason })}\n`);
+    writeFileAtomicSync(breakerPath(stateDir, name), `${JSON.stringify({ downUntil: until, reason })}\n`);
   } catch {
     // best effort: a read-only state dir only costs one timeout per call
   }
 }
 
-function closeBreaker(stateDir: string): void {
-  rmSync(breakerPath(stateDir), { force: true });
+function closeBreaker(stateDir: string, name?: string): void {
+  rmSync(breakerPath(stateDir, name), { force: true });
 }
 
 /** Provider settings from env. `null` = model refinement off. */
@@ -133,8 +136,9 @@ export type Tev1Outcome = { ok: true; probs: Tev1Probabilities } | { ok: false; 
 /** Ask tev1 for the five signal probabilities. Never throws, never outlives `timeoutMs`. */
 export async function askTev1(prompt: string, opts: Tev1Options): Promise<Tev1Outcome> {
   const now = opts.now ?? Date.now;
-  const down = breakerDownUntil(opts.stateDir);
-  if (down > now()) return { ok: false, reason: `model skipped (breaker open ${Math.ceil((down - now()) / 1000)}s)` };
+  const down = breakerDownUntil(opts.stateDir, opts.name);
+  if (down > now())
+    return { ok: false, reason: `${opts.name ?? "model"} skipped (breaker open ${Math.ceil((down - now()) / 1000)}s)` };
 
   const base = (opts.url ?? DEFAULT_TEV1_URL).replace(/\/+$/, "");
   const controller = new AbortController();
@@ -175,17 +179,17 @@ export async function askTev1(prompt: string, opts: Tev1Options): Promise<Tev1Ou
     const body = (await res.json()) as Record<string, unknown>;
     const probs = openrouter ? parseChatProbs(body) : parseSystemOneProbs(body);
     if (Object.keys(probs).length === 0) throw new Error("no usable answers");
-    closeBreaker(opts.stateDir);
+    closeBreaker(opts.stateDir, opts.name);
     return { ok: true, probs };
   } catch (err) {
     const timedOut = controller.signal.aborted;
     const reason = timedOut ? "timeout" : err instanceof Error ? err.message : String(err);
     const ttl = opts.ttlMs ?? DEFAULT_TEV1_TTL_MS;
-    openBreaker(opts.stateDir, now() + (timedOut ? Math.min(ttl, TIMEOUT_BREAKER_MS) : ttl), reason);
+    openBreaker(opts.stateDir, opts.name, now() + (timedOut ? Math.min(ttl, TIMEOUT_BREAKER_MS) : ttl), reason);
     if (timedOut && opts.provider !== "openrouter") {
       (opts.warm ?? spawnWarmUp)({ url: base, model: opts.model ?? DEFAULT_TEV1_MODEL, apiKey: opts.apiKey });
     }
-    return { ok: false, reason: `model unavailable: ${reason}` };
+    return { ok: false, reason: `${opts.name ?? "model"} unavailable: ${reason}` };
   } finally {
     clearTimeout(timer);
   }

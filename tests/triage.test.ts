@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -7,9 +7,12 @@ import {
   breakerDownUntil,
   heuristicSignals,
   heuristicTriage,
+  loadTriageConfig,
   refineSignals,
   resolveModelConfig,
+  resolveTriageProviders,
   triage,
+  triageConfigPath,
 } from "../src/triage";
 
 let dir: string;
@@ -162,41 +165,46 @@ describe("askTev1 providers", () => {
 });
 
 describe("triage()", () => {
-  it("no model → heuristic only", async () => {
+  const ok = (p: number) => (async () => sysOne(p)) as unknown as typeof fetch;
+  const refused = (async () => {
+    throw new Error("ECONNREFUSED");
+  }) as unknown as typeof fetch;
+  const RISKY = "Design and migrate the auth schema";
+
+  it("no models → heuristic only", async () => {
     expect((await triage("fix typo")).source).toBe("heuristic");
   });
   it("no heuristic hit → model never called", async () => {
     let called = false;
-    const r = await triage("fix typo in src/a.ts", {
-      model: {
-        stateDir: dir,
-        fetchImpl: (async () => {
-          called = true;
-          return sysOne(1);
-        }) as unknown as typeof fetch,
-      },
-    });
+    const fetchImpl = (async () => {
+      called = true;
+      return sysOne(1);
+    }) as unknown as typeof fetch;
+    const r = await triage("fix typo in src/a.ts", { models: [{ stateDir: dir, fetchImpl }] });
     expect(called).toBe(false);
     expect(r.route).toBe("single");
   });
-  it("model refines: strong disagreement downgrades to single", async () => {
-    const r = await triage("Design and migrate the auth schema", {
-      model: { stateDir: dir, fetchImpl: (async () => sysOne(0.05)) as unknown as typeof fetch },
-    });
-    expect(r).toMatchObject({ route: "single", source: "heuristic+model", signals: [] });
+  it("model refines: strong disagreement downgrades to single; source names the provider", async () => {
+    const r = await triage(RISKY, { models: [{ name: "box", stateDir: dir, fetchImpl: ok(0.05) }] });
+    expect(r).toMatchObject({ route: "single", source: "heuristic+box", signals: [] });
   });
-  it("model down → heuristic verdict + note", async () => {
-    const r = await triage("Design and migrate the auth schema", {
-      model: {
-        stateDir: dir,
-        fetchImpl: (async () => {
-          throw new Error("ECONNREFUSED");
-        }) as unknown as typeof fetch,
-      },
-    });
+  it("all models down → heuristic verdict + notes", async () => {
+    const r = await triage(RISKY, { models: [{ name: "a", stateDir: dir, fetchImpl: refused }] });
     expect(r.route).toBe("two-agents");
     expect(r.source).toBe("heuristic");
     expect(r.note).toContain("ECONNREFUSED");
+  });
+  it("falls through to the next provider; breaker is per provider", async () => {
+    const r = await triage(RISKY, {
+      models: [
+        { name: "remote", stateDir: dir, fetchImpl: refused },
+        { name: "local", stateDir: dir, fetchImpl: ok(0.9) },
+      ],
+    });
+    expect(r.source).toBe("heuristic+local");
+    expect(r.note).toContain("remote unavailable");
+    expect(breakerDownUntil(dir, "remote")).toBeGreaterThan(Date.now());
+    expect(breakerDownUntil(dir, "local")).toBe(0);
   });
 });
 
@@ -289,5 +297,84 @@ describe("timeout vs hard failure breaker", () => {
       warm,
     });
     expect(warms).toBe(1);
+  });
+});
+
+describe("triage.json", () => {
+  const write = (body: unknown) => {
+    const f = path.join(dir, "triage.json");
+    writeFileSync(f, JSON.stringify(body));
+    return f;
+  };
+  const CATALOG = {
+    use: ["borispc3", "local-ollama"],
+    providers: [
+      { name: "local-ollama", type: "ollama", url: "http://localhost:11434", model: "tev1:0.8b" },
+      { name: "borispc3", type: "ollama", url: "http://borispc3.ai:7869", model: "tev1:latest", timeoutMs: 4000 },
+      { name: "or", type: "openrouter", url: "https://openrouter.ai/api/v1", apiKeyRef: "or-key" },
+      { name: "bad", type: "grpc", url: "x" },
+      { name: "nourl", type: "ollama" },
+    ],
+  };
+
+  it("missing/corrupt file → empty, no throw", () => {
+    expect(loadTriageConfig(dir, {})).toEqual({ use: [], providers: [] });
+    writeFileSync(path.join(dir, "triage.json"), "{nope");
+    expect(loadTriageConfig(dir, {})).toEqual({ use: [], providers: [] });
+  });
+
+  it("validates providers, drops bad ones, accepts use as string or list", () => {
+    write(CATALOG);
+    const cfg = loadTriageConfig(dir, {});
+    expect(cfg.providers.map((p) => p.name)).toEqual(["local-ollama", "borispc3", "or"]);
+    expect(cfg.use).toEqual(["borispc3", "local-ollama"]);
+    write({ use: "a, b", providers: [] });
+    expect(loadTriageConfig(dir, {}).use).toEqual(["a", "b"]);
+  });
+
+  it("AT_TRIAGE_CONFIG overrides the path", () => {
+    const f = write(CATALOG);
+    expect(triageConfigPath("/nowhere", { AT_TRIAGE_CONFIG: f })).toBe(f);
+  });
+
+  it("resolves `use` in order with per-provider url/model/timeout", async () => {
+    write(CATALOG);
+    const r = await resolveTriageProviders(dir, undefined, {});
+    expect(r.errors).toEqual([]);
+    expect(r.models.map((m) => [m.name, m.url, m.model, m.timeoutMs])).toEqual([
+      ["borispc3", "http://borispc3.ai:7869", "tev1:latest", 4000],
+      ["local-ollama", "http://localhost:11434", "tev1:0.8b", 3000],
+    ]);
+  });
+
+  it("flag and env override `use`; empty use → heuristic only", async () => {
+    write(CATALOG);
+    expect((await resolveTriageProviders(dir, "local-ollama", {})).models.map((m) => m.name)).toEqual(["local-ollama"]);
+    expect(
+      (await resolveTriageProviders(dir, undefined, { AT_TRIAGE_PROVIDER: "borispc3" })).models.map((m) => m.name),
+    ).toEqual(["borispc3"]);
+    write({ providers: CATALOG.providers });
+    expect((await resolveTriageProviders(dir, undefined, {})).models).toEqual([]);
+  });
+
+  it("openrouter key from env via apiKeyRef; missing key / unknown name → errors, not throws", async () => {
+    write(CATALOG);
+    const none = await resolveTriageProviders(dir, "or,ghost", {});
+    expect(none.models).toEqual([]);
+    expect(none.errors).toHaveLength(2);
+    const prev = process.env.OR_KEY;
+    process.env.OR_KEY = "sk-1";
+    try {
+      const ok = await resolveTriageProviders(dir, "or", {});
+      expect(ok.models[0]).toMatchObject({ provider: "openrouter", apiKey: "sk-1" });
+    } finally {
+      if (prev === undefined) delete process.env.OR_KEY;
+      else process.env.OR_KEY = prev;
+    }
+  });
+
+  it("falls back to env presets for names missing from the file", async () => {
+    const r = await resolveTriageProviders(dir, "local-ollama", { AT_TRIAGE_URL: "http://h:1" });
+    expect(r.models[0]).toMatchObject({ name: "local-ollama", url: "http://h:1" });
   });
 });

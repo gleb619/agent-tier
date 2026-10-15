@@ -176,22 +176,39 @@ Heuristic (instant, free): five signals — `crossModule` (≥6 distinct file pa
 `needsPlan`, `iterative`, `risky`, `backlog`. **≥2 signals → `two-agents`, else `single`**; `tier` = 1 when
 `risky`/`needsPlan`, else 2. Prompt length alone is not a signal.
 
-Optional model refinement (off by default; only called when the heuristic found ≥1 signal, so the common
-case costs nothing). Providers:
+Optional model refinement, configured like the namer in **`~/.at/triage.json`** (override path:
+`AT_TRIAGE_CONFIG`). Off unless `use` names a provider; only called when the heuristic found ≥1 signal, so
+the common case costs nothing.
 
-| `AT_TRIAGE_PROVIDER` / `--provider` | Backend | Needs |
-|---|---|---|
-| `local-ollama` (or legacy `AT_TRIAGE_TEV1=1`) | tev1 via Ollama `/v1/systemone` at `localhost:11434` | `ollama pull tev1:0.8b` |
-| `remote-ollama` | same API on another host | `AT_TRIAGE_URL`; optional `AT_TRIAGE_API_KEY` (bearer) |
-| `openrouter` | chat completions, JSON probabilities | `AT_TRIAGE_API_KEY` or `OPENROUTER_API_KEY`; `AT_TRIAGE_MODEL` (default `meta-llama/llama-3.2-3b-instruct`) |
+```json
+{
+  "use": ["borispc3", "local-ollama"],
+  "providers": [
+    { "name": "local-ollama", "type": "ollama", "url": "http://localhost:11434", "model": "tev1:0.8b" },
+    { "name": "borispc3", "type": "ollama", "url": "http://borispc3.ai:7869", "model": "tev1:latest", "timeoutMs": 4000 },
+    { "name": "openrouter", "type": "openrouter", "url": "https://openrouter.ai/api/v1",
+      "model": "meta-llama/llama-3.2-3b-instruct", "apiKeyRef": "openrouter-api-key" }
+  ]
+}
+```
 
-Other env: `AT_TRIAGE_MODEL` (default `tev1:0.8b` for ollama), `AT_TRIAGE_URL`, `AT_TRIAGE_TIMEOUT_MS`
-(hard abort, default 3000), `AT_TRIAGE_TTL_MS` (breaker, default 300000). The model answers five yes/no
-probabilities; the model is **veto-only**: a heuristic hit is dropped when the model says < 0.4, and it never adds signals (tev1:0.8b measured poorly calibrated: 0.65–0.95 `crossModule` on plain one-file tasks).
+* `providers[]`: `name`, `type` (`ollama` = tev1 via `/v1/systemone`, local or remote by `url`; `openrouter` =
+  chat completions returning JSON probabilities), `url`, optional `model` (default `tev1:0.8b` /
+  `meta-llama/llama-3.2-3b-instruct`), `apiKeyRef`, `timeoutMs` (default 3000), `ttlMs` (default 300000).
+  Invalid entries are dropped with a warning.
+* `use`: one name or an ordered list — **first reachable provider wins**, the rest are fallbacks. Override
+  per call with `--provider a,b` or `AT_TRIAGE_PROVIDER=a,b`. Names missing from the file fall back to env
+  presets `local-ollama` / `remote-ollama` (`AT_TRIAGE_URL`, `AT_TRIAGE_API_KEY`) / `openrouter`
+  (`OPENROUTER_API_KEY`); `AT_TRIAGE_TEV1=1` = `local-ollama`.
+* `apiKeyRef` resolves like the namer: env var (ref upper-cased, `-`→`_`, e.g. `OPENROUTER_API_KEY`), then
+  `~/.at/secrets.json` (must be mode 0600).
+* `at triage --list` prints the catalog with each provider's breaker state.
+* The model is **veto-only**: a heuristic hit is dropped when the model says < 0.4, and it never adds signals
+  (tev1:0.8b measured poorly calibrated: 0.65–0.95 `crossModule` on plain one-file tasks).
 
 **Never blocks or breaks triage:** every failure (down, hung, model missing, bad JSON, bad config) falls
 back to the heuristic verdict with a `note=`. A failure opens a TTL **circuit breaker**
-(`<stateDir>/triage-tev1.json`): for `AT_TRIAGE_TTL_MS` later calls skip the model without any network
+(`<stateDir>/triage-<provider>.json`, one per provider so a dead remote never disables its fallback): for the provider's `ttlMs` later calls skip the model without any network
 wait, then it is retried; one success closes it. A **timeout** is treated as a likely cold model load (aborting cancels Ollama's load): the breaker is
 only 30 s and a detached warm-up request (`/api/generate`, `keep_alive 10m`) loads the model so the next call is fast.
 
