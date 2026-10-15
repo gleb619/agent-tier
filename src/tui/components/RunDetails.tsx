@@ -3,7 +3,7 @@ import { createEffect, createMemo, For, Show } from "solid-js";
 import type { RunRecord } from "../../run-store";
 import { lineColor, statusColor, truncate } from "../format";
 import { goToTail, isLoading, logLines, scrollOffset, VISIBLE_LINES } from "../store/log";
-import { sessions } from "../store/sessions";
+import { sessions, taskBudgets } from "../store/sessions";
 import { setShowPromptOverlay } from "../store/ui";
 import { RunMeta } from "./RunMeta";
 
@@ -20,6 +20,11 @@ export function RunDetails(props: RunDetailsProps): JSX.Element {
   const session = createMemo((): RunRecord | null =>
     props.runId ? (sessions().find((s) => s.runId === props.runId) ?? null) : null,
   );
+
+  const budget = createMemo(() => {
+    const id = session()?.taskId;
+    return id ? (taskBudgets().find((b) => b.taskId === id) ?? null) : null;
+  });
 
   const visible = createMemo((): [number, string][] => {
     const from = scrollOffset();
@@ -53,7 +58,7 @@ export function RunDetails(props: RunDetailsProps): JSX.Element {
         }
       >
         <box border borderStyle="rounded" borderColor="#30363d" padding={1} marginBottom={1}>
-          <RunMeta session={session()!} />
+          <RunMeta session={session()!} budget={budget()} />
         </box>
 
         <Show when={props.showPrompt}>

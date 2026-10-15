@@ -72,10 +72,26 @@ describe("task metrics", () => {
     const dir = tmp();
     const base = { agent: "a", source: "reported" as const, ts: "t" };
     await recordTaskMetric(dir, { ...base, taskId: "T1", runId: "a", ms: 1000, tokensIn: 10, tokensOut: 5 });
-    await recordTaskMetric(dir, { ...base, taskId: "T1", runId: "b", ms: 2000, tokensIn: 20, tokensOut: 5, source: "estimated" });
+    await recordTaskMetric(dir, {
+      ...base,
+      taskId: "T1",
+      runId: "b",
+      ms: 2000,
+      tokensIn: 20,
+      tokensOut: 5,
+      source: "estimated",
+    });
     await recordTaskMetric(dir, { ...base, taskId: "T2", runId: "c", ms: 500, tokensIn: 1, tokensOut: 1 });
     const t = aggregateTaskMetrics(loadTaskMetrics(dir));
-    expect(t.get("T1")).toEqual({ taskId: "T1", runs: 2, ms: 3000, tokensIn: 30, tokensOut: 10, tokens: 40, estimated: true });
+    expect(t.get("T1")).toEqual({
+      taskId: "T1",
+      runs: 2,
+      ms: 3000,
+      tokensIn: 30,
+      tokensOut: 10,
+      tokens: 40,
+      estimated: true,
+    });
     expect(t.get("T2")?.estimated).toBe(false);
   });
 });

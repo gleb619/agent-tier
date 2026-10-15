@@ -2,6 +2,8 @@ import type { JSX } from "solid-js";
 import { createMemo, For, Show } from "solid-js";
 import type { RunRecord } from "../../run-store";
 import { UNNAMED_PLACEHOLDER } from "../../run-store";
+import { runUsageLines, type TaskBudget } from "../../usage/summary";
+import type { Budget } from "../../usage/units";
 import { formatClockRange, formatDuration, formatExitCode, statusColor, statusIcon, truncate } from "../format";
 import { runLabel } from "./sidebar/row-model";
 
@@ -83,8 +85,29 @@ export function isUnnamed(session: RunRecord): boolean {
   return session.name === UNNAMED_PLACEHOLDER;
 }
 
-/** The four metadata rows for a run, in display order. */
-export function runMetaRows(session: RunRecord): MetaRow[] {
+/** Budget state → the TUI's ok/warn/error tint (neutral when there is nothing to compare). */
+export function budgetColor(state: Budget): string | undefined {
+  return state === "under"
+    ? META_OK
+    : state === "near"
+      ? "#d29922"
+      : state === "over"
+        ? statusColor("failed")
+        : undefined;
+}
+
+/** Time/token rows (own run, then the owning kanban task vs its estimate). Empty while nothing is metered. */
+export function usageRows(session: RunRecord, budget: TaskBudget | null): MetaRow[] {
+  if (!session.usage && !(budget && budget.runs > 0)) return [];
+  return runUsageLines(session, budget).map((line) => ({
+    kind: "fields" as const,
+    valueWidth: META_VALUE_WIDTH_WIDE,
+    fields: [{ label: line.label, value: line.value, color: budgetColor(line.state) }],
+  }));
+}
+
+/** The metadata rows for a run, in display order (+ usage rows when metered). */
+export function runMetaRows(session: RunRecord, budget: TaskBudget | null = null): MetaRow[] {
   // An unnamed run already shows its id as the headline — repeating it dim would
   // just be noise, so the id cell is dropped in that case.
   const runId = isUnnamed(session) ? null : session.runId;
@@ -117,12 +140,15 @@ export function runMetaRows(session: RunRecord): MetaRow[] {
       valueWidth: META_VALUE_WIDTH_WIDE,
       fields: [{ label: "started", value: formatClockRange(session.startedAt, session.finishedAt) }],
     },
+    ...usageRows(session, budget),
   ];
 }
 
 export interface RunMetaProps {
   /** Run whose metadata is shown. */
   session: RunRecord;
+  /** Planned-vs-consumed for the kanban task this run belongs to, when any. */
+  budget?: TaskBudget | null;
 }
 
 /** One metadata line: the bold identity headline or an aligned key/value row. */
@@ -166,7 +192,7 @@ function MetaRowView(props: { row: MetaRow; labelWidth: number }): JSX.Element {
  * chrome.
  */
 export function RunMeta(props: RunMetaProps): JSX.Element {
-  const rows = createMemo(() => runMetaRows(props.session));
+  const rows = createMemo(() => runMetaRows(props.session, props.budget ?? null));
   const labelWidth = createMemo(() => metaLabelWidth(rows()) + 1);
 
   return (

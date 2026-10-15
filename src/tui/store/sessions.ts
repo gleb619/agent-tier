@@ -4,6 +4,7 @@ import { type Accessor, createMemo, createSignal } from "solid-js";
 import { type RunRecord, refreshRuns } from "../../run-store";
 import { getStateFilePath, resolveStatusDirs } from "../../state-dir";
 import { joinRuns } from "../../status";
+import { loadTaskBudgets, type TaskBudget } from "../../usage/summary";
 
 // Same joined scope as `at status`: project `.at/` first, then `~/.at/`.
 // The TUI used to resolve a single dir, so global runs stayed invisible
@@ -23,6 +24,15 @@ export { setShowDashboard, showDashboard };
 export function toggleDashboard(): void {
   setShowDashboard(!showDashboard());
 }
+
+/**
+ * Kanban planned-vs-consumed per task. Recomputed whenever the run snapshot moves (new runs
+ * are what change metrics); reads the board + task-metrics files, both small, and never throws.
+ */
+export const taskBudgets: Accessor<TaskBudget[]> = createMemo(() => {
+  sessions();
+  return loadTaskBudgets(stateDirs);
+});
 
 export const selectedSession: Accessor<RunRecord | null> = createMemo(() => {
   const id = selectedRunId();
@@ -60,7 +70,11 @@ function runEqual(a: RunRecord, b: RunRecord): boolean {
     a.finishedAt === b.finishedAt &&
     a.exitCode === b.exitCode &&
     a.status === b.status &&
-    a.name === b.name
+    a.name === b.name &&
+    a.taskId === b.taskId &&
+    a.usage?.tokensIn === b.usage?.tokensIn &&
+    a.usage?.tokensOut === b.usage?.tokensOut &&
+    a.usage?.source === b.usage?.source
   );
 }
 

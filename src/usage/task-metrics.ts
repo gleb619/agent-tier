@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { withLock } from "../lock";
-import { loadRuns } from "../run-store";
+import { loadRuns, updateRun } from "../run-store";
 import { type RunUsage, usageForRun } from "./extract";
 
 /**
@@ -99,6 +99,8 @@ export function aggregateTaskMetrics(rows: TaskMetric[]): Map<string, TaskTotals
 export async function recordRunForTask(stateDir: string, runId: string, taskId: string): Promise<void> {
   const rec = loadRuns(stateDir).find((r) => r.runId === runId);
   if (!rec) return;
+  // Link the run to its task so Run Details can show planned-vs-consumed (also survives in runs.jsonl).
+  if (rec.taskId !== taskId) await updateRun(stateDir, runId, { taskId });
   const usage = rec.usage ?? usageForRun(rec.prompt, rec.logFile);
   const start = new Date(rec.startedAt).getTime();
   const end = rec.finishedAt ? new Date(rec.finishedAt).getTime() : Date.now();

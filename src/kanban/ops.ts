@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { TableRow } from "mdast";
+import { parseDuration, parseTokens } from "../usage/units";
 import { type BoardDoc, dataRows, findRowById, headerIndex, toTasks } from "./board";
 import { cellText, makeCell, setCellText } from "./parse";
 import { nextExecutable } from "./select";
-import { parseDuration, parseTokens } from "../usage/units";
 import {
   blank,
   COL_EST_TIME,

@@ -3,9 +3,12 @@ import { createMemo, For, Show } from "solid-js";
 import type { RunRecord } from "../../run-store";
 import { resolveStatusDirs } from "../../state-dir";
 import { buildStateReportFor, type StateReport } from "../../status";
+import { summarizeUsage, type UsageSummary } from "../../usage/summary";
+import { formatDuration as fmtPlanDur, formatTokens } from "../../usage/units";
 import { durationMs, formatAgentRow, formatMs, formatRunRow, isToday, statusColor, TUI_COLORS } from "../format";
 import { filteredSessions2 } from "../store/filtered-sessions";
 import { autoRefresh } from "../store/log";
+import { taskBudgets } from "../store/sessions";
 import { agent, tier } from "../store/settings";
 
 const RECENT_LIMIT = 8;
@@ -66,8 +69,22 @@ function EmptyState(props: { message: string }): JSX.Element {
   );
 }
 
+const pct = (r: number | null): string => (r === null ? "-" : `${Math.round(r * 100)}%`);
+
+/** Two dashboard lines: consumed totals, then planned-vs-consumed health. Pure. */
+export function usageLines(u: UsageSummary): string[] {
+  const est = u.estimatedRuns > 0 ? ` · ${u.estimatedRuns} est` : "";
+  return [
+    `time ${fmtPlanDur(u.ms)} · tokens ${formatTokens(u.tokens)} (in ${formatTokens(u.tokensIn)} / out ${formatTokens(u.tokensOut)})${est}`,
+    u.tasksMetered === 0
+      ? "tasks: none metered yet"
+      : `tasks ${u.tasksMetered} metered · over budget ${u.tasksOverBudget} · time ${pct(u.timeRatio)} of plan · tokens ${pct(u.tokenRatio)} of plan`,
+  ];
+}
+
 export function Dashboard(): JSX.Element {
   const stats = createMemo(() => computeStats(filteredSessions2()));
+  const usage = createMemo(() => summarizeUsage(filteredSessions2(), taskBudgets()));
   const successText = createMemo(() => {
     const rate = stats().successRate;
     return rate === null ? "success: -" : `success: ${rate.toFixed(0)}%`;
@@ -99,6 +116,12 @@ export function Dashboard(): JSX.Element {
               <text fg={TUI_COLORS.fg} content={successText()} />
               <text fg={TUI_COLORS.fg} content={`avg: ${formatMs(stats().avgDurationMs)}`} />
             </box>
+          </box>
+
+          {/* Consumed time + tokens, planned-vs-consumed for kanban tasks */}
+          <box>
+            <SectionHeader title="Usage" />
+            <For each={usageLines(usage())}>{(line) => <text fg={TUI_COLORS.fg} content={`  ${line}`} />}</For>
           </box>
 
           {/* Active runs */}

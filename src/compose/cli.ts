@@ -8,12 +8,12 @@ import { resolveBoardFile } from "../kanban/board";
 import { unansweredQuestions } from "../notify/discuss-store";
 import { loadRuns } from "../run-store";
 import { resolveStateDir } from "../state-dir";
+import { recordRunForTask } from "../usage/task-metrics";
 import { createKanbanSource } from "./kanban-source";
 import { type CommandResult, type ComposeDeps, runCompose } from "./machine";
 import { DEFAULT_MAX_NODES, DEFAULT_MAX_ROUNDS, DEFAULT_TEST_CMD, loadState } from "./state";
 import { type ComposeTask, type TaskFinishInfo, type TaskSource, taskGoal } from "./task-source";
 import { ComposeWorkspace } from "./workspace";
-import { recordRunForTask } from "../usage/task-metrics";
 
 const execAsync = promisify(_exec);
 const execFileAsync = promisify(_execFile);

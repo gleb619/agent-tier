@@ -23,7 +23,11 @@ export function parseDuration(value: string | undefined | null): number | null {
 /** `900`, `120k`, `1.5m` → token count. null for blank/`-`/invalid. */
 export function parseTokens(value: string | undefined | null): number | null {
   if (blank(value)) return null;
-  const m = TOKENS_RE.exec(String(value).trim().replace(/[,_\s]/g, ""));
+  const m = TOKENS_RE.exec(
+    String(value)
+      .trim()
+      .replace(/[,_\s]/g, ""),
+  );
   if (!m) return null;
   const mult = m[2].toLowerCase() === "m" ? 1_000_000 : m[2].toLowerCase() === "k" ? 1000 : 1;
   return Math.round(Number(m[1]) * mult);
