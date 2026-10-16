@@ -63,6 +63,45 @@ describe("RunItem", () => {
   });
 });
 
+describe("RunItem layout (grid alignment brief)", () => {
+  it("uses a grid container with explicit column tracks so status/name/agent/tier/duration align vertically", () => {
+    render(RunItem, { props: { run: makeRun("abc") } });
+    const btn = screen.getByRole("button", { name: /Run abc/ });
+    expect(btn.className).toMatch(/\bgrid\b/);
+    // Inline grid-template-columns makes columns explicit, not auto.
+    expect(btn.getAttribute("style") ?? "").toMatch(/grid-template-columns/);
+  });
+
+  it("truncates long names and exposes full name via the title attribute", () => {
+    const LONG = "very-long-task-name-that-should-definitely-overflow-any-narrow-column";
+    const { container } = render(RunItem, {
+      props: { run: makeRun("abc", { name: LONG }) },
+    });
+    const nameEl = container.querySelector('[data-testid="run-name"]') as HTMLElement | null;
+    expect(nameEl).not.toBeNull();
+    expect(nameEl!.className).toMatch(/truncate/);
+    expect(nameEl!.textContent).toBe(LONG);
+    expect(nameEl!.getAttribute("title")).toBe(LONG);
+  });
+
+  it("renders tier in a compact pill (small font + thin padding)", () => {
+    const { container } = render(RunItem, { props: { run: makeRun("abc") } });
+    const tier = container.querySelector('[data-testid="run-tier"]') as HTMLElement | null;
+    expect(tier).not.toBeNull();
+    // pill: thin padding + small font (matches the brief's noise reduction)
+    expect(tier!.className).toMatch(/\btext-\[10px\]|text-xs/);
+    expect(tier!.className).toMatch(/px-1\.5|px-1\b/);
+    expect(tier!.textContent?.trim()).toBe("T2");
+  });
+
+  it("renders duration with tabular-nums alignment", () => {
+    render(RunItem, { props: { run: makeRun("abc") } });
+    const dur = screen.getByTestId("run-duration");
+    expect(dur.className).toMatch(/tabular-nums/);
+    expect(dur.className).toMatch(/font-mono/);
+  });
+});
+
 describe("RunList", () => {
   it("groups runs by date, newest day first", () => {
     setRuns([

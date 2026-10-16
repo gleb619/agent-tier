@@ -29,6 +29,10 @@ const STATUS_CLASS: Record<ApiRun["status"], string> = {
   stuck: "text-yellow-600",
 };
 
+// Fixed column tracks keep status / name / agent / tier / duration aligned
+// vertically across the run list (sidebar, Active runs, Recent completions).
+const GRID_TEMPLATE = "grid-template-columns: 16px minmax(0,1fr) auto 32px auto;";
+
 $: Icon = STATUS_ICON[run.status] ?? Circle;
 $: iconClass = STATUS_CLASS[run.status] ?? "text-gray-400";
 $: duration = formatDuration(runDurationSeconds(run));
@@ -41,16 +45,43 @@ $: duration = formatDuration(runDurationSeconds(run));
   on:click={() => onSelect?.()}
   title="{run.name} — {run.agent} (T{run.tier})"
   class={clsx(
-    "flex w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left text-sm",
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500",
-    selected ? "border-primary-500 bg-primary-50" : "border-transparent hover:bg-gray-100",
+    "grid w-full items-center gap-2 border-b border-gray-100 px-2 py-1 text-left text-sm last:border-b-0",
+    "focus:outline-none focus-visible:bg-gray-100",
+    selected ? "bg-primary-50" : "hover:bg-gray-50",
   )}
+  style={GRID_TEMPLATE}
 >
-  <svelte:component this={Icon} class={clsx("h-4 w-4 shrink-0", iconClass)} aria-hidden="true" />
-  <span class="min-w-0 flex-1 truncate font-medium text-gray-900">{run.name}</span>
-  <span class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700">{run.agent}</span>
-  <span class={clsx("shrink-0 rounded px-1.5 py-0.5 text-xs font-semibold", TIER_COLORS[run.tier] ?? TIER_COLORS[4])}>
+  <svelte:component
+    this={Icon}
+    class={clsx("h-4 w-4 shrink-0 justify-self-center", iconClass)}
+    aria-hidden="true"
+  />
+  <span
+    data-testid="run-name"
+    title={run.name}
+    class="min-w-0 truncate text-[13px] font-medium text-gray-900"
+  >
+    {run.name}
+  </span>
+  <span
+    data-testid="run-agent"
+    class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[11px] text-gray-700"
+  >
+    {run.agent}
+  </span>
+  <span
+    data-testid="run-tier"
+    class={clsx(
+      "shrink-0 rounded px-1 py-px text-center text-[10px] font-semibold leading-tight",
+      TIER_COLORS[run.tier] ?? TIER_COLORS[4],
+    )}
+  >
     T{run.tier}
   </span>
-  <span class="shrink-0 text-xs tabular-nums text-gray-500">{duration}</span>
+  <span
+    data-testid="run-duration"
+    class="shrink-0 justify-self-end font-mono text-[11px] tabular-nums text-gray-500"
+  >
+    {duration}
+  </span>
 </button>
