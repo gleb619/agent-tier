@@ -146,6 +146,32 @@ describe("AgentsPanel", () => {
   });
 });
 
+describe("AgentsPanel layout (grid columns brief)", () => {
+  it("uses a grid layout so tier / status / toggle align vertically across rows", () => {
+    render(AgentsPanel, {
+      props: { agents: [makeAgent("glm-code", { tier: 1 }), makeAgent("mock-long-agent", { tier: 4 })] },
+    });
+    const short = screen.getByTestId("agent-glm-code");
+    const long = screen.getByTestId("agent-mock-long-agent");
+    expect(short.className).toMatch(/\bgrid\b/);
+    expect(long.className).toMatch(/\bgrid\b/);
+    // Explicit (non-auto) grid-template-columns keeps tracks fixed across rows.
+    expect((short.getAttribute("style") ?? "").match(/grid-template-columns/)).not.toBeNull();
+    expect((long.getAttribute("style") ?? "").match(/grid-template-columns/)).not.toBeNull();
+  });
+
+  it("reuses the shared <TierBadge> (no inline tier color map)", () => {
+    render(AgentsPanel, {
+      props: { agents: [makeAgent("glm-code", { tier: 1 })] },
+    });
+    // TierBadge renders a <span class="inline-flex ...">, scoped to the only .inline-flex under the agent row.
+    const row = screen.getByTestId("agent-glm-code");
+    const tier = row.querySelector("span.inline-flex");
+    expect(tier).not.toBeNull();
+    expect(tier!.textContent?.trim()).toBe("T1");
+  });
+});
+
 describe("dashboard store", () => {
   it("refreshDashboard fills stats and agents from the API", async () => {
     const payload = { stats: makeStats(), agents: [makeAgent("glm-code")] };
