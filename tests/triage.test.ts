@@ -37,9 +37,9 @@ describe("heuristic", () => {
   it("one signal stays single", () => {
     expect(heuristicTriage("migrate the users table").route).toBe("single");
   });
-  it("two signals → two-agents candidate, risky → tier 1", () => {
+  it("two signals → plan-then-do candidate, risky → tier 1", () => {
     const r = heuristicTriage("Design and migrate the auth schema, iterate until tests pass");
-    expect(r.route).toBe("two-agents");
+    expect(r.route).toBe("plan-then-do");
     expect(r.tier).toBe(1);
     expect(r.signals).toEqual(expect.arrayContaining(["needsPlan", "risky", "iterative"]));
   });
@@ -190,7 +190,7 @@ describe("triage()", () => {
   });
   it("all models down → heuristic verdict + notes", async () => {
     const r = await triage(RISKY, { models: [{ name: "a", stateDir: dir, fetchImpl: refused }] });
-    expect(r.route).toBe("two-agents");
+    expect(r.route).toBe("plan-then-do");
     expect(r.source).toBe("heuristic");
     expect(r.note).toContain("ECONNREFUSED");
   });

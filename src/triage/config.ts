@@ -49,7 +49,7 @@ const EMPTY: TriageConfig = { use: [], providers: [] };
 
 export function triageConfigPath(stateDir: string, env: NodeJS.ProcessEnv = process.env): string {
   const override = env.AT_TRIAGE_CONFIG;
-  return override && override.trim() ? override : path.join(stateDir, "triage.json");
+  return override?.trim() ? override : path.join(stateDir, "triage.json");
 }
 
 function names(v: unknown): string[] {

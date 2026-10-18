@@ -94,9 +94,9 @@ describe("single mode (default)", () => {
     expect(f.starts.map((s) => s.agent)).toEqual(["qwen", "qwen"]);
   });
 
-  it("--agent is ignored in two-agent mode", async () => {
+  it("--agent is ignored in plan-then-do mode", async () => {
     const f = makeDeps(ws);
-    const res = await runCompose({ goal: "g", cwd: cwd(), twoAgents: true, agent: "qwen" }, f.deps);
+    const res = await runCompose({ goal: "g", cwd: cwd(), planThenDo: true, agent: "qwen" }, f.deps);
     expect(res.state).toBe("DONE");
     expect(f.starts.length).toBeGreaterThan(1);
     expect(f.starts.every((s) => s.agent === undefined)).toBe(true);
@@ -119,7 +119,7 @@ describe("single mode (default)", () => {
     expect(f.starts).toHaveLength(2);
   });
 
-  it("resumes a pre-mode state.json as two-agent", async () => {
+  it("resumes a pre-mode state.json as Plan-then-do", async () => {
     await ws.ensure();
     await saveState(ws, { goal: "g", state: "DONE", round: 1, testCmd: "npm test", maxRounds: 3 });
     const f = makeDeps(ws);

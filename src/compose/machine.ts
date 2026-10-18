@@ -65,12 +65,12 @@ export interface ComposeOptions {
   /** Max brain answers per agent run (default 5). */
   maxQuestions?: number;
   /** Opt-in tier-1 PLAN + CHECK around tier-2 hands. Default: one implementer run + test gate. */
-  twoAgents?: boolean;
-  /** EXPERIMENTAL: let implementer agents ask the tier-1 brain via `at discuss`. Two-agent mode only. */
+  planThenDo?: boolean;
+  /** EXPERIMENTAL: let implementer agents ask the tier-1 brain via `at discuss`. plan-then-do mode only. */
   discuss?: boolean;
-  /** Tier of the single implementer (default 2). Ignored in two-agent mode. */
+  /** Tier of the single implementer (default 2). Ignored in plan-then-do mode. */
   tier?: number;
-  /** Pin the single implementer to this agent (overrides `tier`). Ignored in two-agent mode. */
+  /** Pin the single implementer to this agent (overrides `tier`). Ignored in plan-then-do mode. */
   agent?: string;
   /** Extra codegraph keywords; merged with the task's plan-file keywords. */
   keywords?: string[];
@@ -105,7 +105,7 @@ interface Ctx {
   state: ComposeState;
   mode: ComposeMode;
   tier: number;
-  /** Pinned agent for the single-mode implementer run; never set in two-agent mode. */
+  /** Pinned agent for the single-mode implementer run; never set in plan-then-do mode. */
   agent?: string;
   keywords: string[];
   /** Kanban task id when running under `--task`/`--loop`: finished runs are metered against it. */
@@ -338,7 +338,7 @@ async function check(ctx: Ctx): Promise<ComposeState> {
 /**
  * Single (default): INVESTIGATE → IMPLEMENT (one agent) → CHECK (test gate) → DONE|FAILED;
  * a failing gate under maxRounds loops back to IMPLEMENT with the test output attached.
- * Two-agent (opt-in): INVESTIGATE → PLAN → IMPLEMENT → CHECK → DONE|FAILED;
+ * plan-then-do (opt-in): INVESTIGATE → PLAN → IMPLEMENT → CHECK → DONE|FAILED;
  * a FAIL verdict under maxRounds loops back to PLAN with the findings attached.
  */
 export async function runCompose(opts: ComposeOptions, deps: ComposeDeps): Promise<ComposeResult> {
@@ -347,21 +347,21 @@ export async function runCompose(opts: ComposeOptions, deps: ComposeDeps): Promi
   const saved = await loadState(ws);
   const goal = opts.goal ?? (opts.task ? await taskGoal(opts.task) : undefined);
   if (!goal) throw new Error("compose: either goal or task is required");
-  // A saved state keeps its mode (pre-mode states are two-agent); only fresh runs read the option.
-  const mode: ComposeMode = saved ? (saved.mode ?? "two") : opts.twoAgents ? "two" : "single";
+  // A saved state keeps its mode (pre-mode states are Plan-then-do); only fresh runs read the option.
+  const mode: ComposeMode = saved ? (saved.mode ?? "two") : opts.planThenDo ? "two" : "single";
   const discuss = mode === "two" && opts.discuss === true;
   const keywords = [...new Set([...(opts.keywords ?? []), ...(opts.task ? await taskKeywords(opts.task) : [])])];
   const ctx: Ctx = {
     deps,
     cwd: opts.cwd ?? process.cwd(),
     maxNodes: opts.maxNodes ?? DEFAULT_MAX_NODES,
-    // Discuss is experimental, opt-in and two-agent only; otherwise no tier-1 brain call is ever spent.
+    // Discuss is experimental, opt-in and plan-then-do only; otherwise no tier-1 brain call is ever spent.
     discuss,
     maxQuestions: discuss ? (opts.maxQuestions ?? DEFAULT_MAX_QUESTIONS) : 0,
     state: saved ?? createState(goal, { testCmd: opts.testCmd, maxRounds: opts.maxRounds, mode }),
     mode,
     tier: opts.tier ?? DEFAULT_SINGLE_TIER,
-    // Agent pinning is a single-mode affordance; the two-agent pipeline owns its own tiers.
+    // Agent pinning is a single-mode affordance; the plan-then-do pipeline owns its own tiers.
     agent: mode === "single" ? opts.agent : undefined,
     keywords,
     taskId: opts.task?.id,

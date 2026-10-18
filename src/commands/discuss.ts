@@ -36,7 +36,7 @@ function readGlobals(command: Command): Record<string, unknown> {
 export function registerDiscussCommand(program: Command): void {
   const discuss = program
     .command("discuss")
-    .description("[experimental, AT_DISCUSS=1] Agent<->orchestrator channel for compose two-agent runs (m2m)")
+    .description("[experimental, AT_DISCUSS=1] Agent<->orchestrator channel for compose plan-then-do runs (m2m)")
     .hook("preAction", () => {
       if (!discussEnabled()) {
         console.error(DISCUSS_DISABLED_MSG);

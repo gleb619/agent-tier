@@ -163,17 +163,17 @@ as the flags), `sse` (boolean) and `ssePort` (number, `0` = random).
 
 ## Triage (`at triage`)
 
-Advises a route without spending an agent run: `single` (`at -s -t <tier> -p`) or `two-agents`
-(candidate for `at compose --two-agents`, which still needs the explicit opt-in). It never enables anything.
+Advises a route without spending an agent run: `single` (`at -s -t <tier> -p`) or `plan-then-do`
+(candidate for `at compose --plan-then-do`, which still needs the explicit opt-in). It never enables anything.
 
 ```bash
-at triage -p "Design and migrate the auth schema"   # route=two-agents tier=1 signals=needsPlan,risky source=heuristic
+at triage -p "Design and migrate the auth schema"   # route=plan-then-do tier=1 signals=needsPlan,risky source=heuristic
 at triage --task T7 --json                          # board task (title + description + plan file)
 at triage -f prompt.md --provider openrouter
 ```
 
 Heuristic (instant, free): five signals — `crossModule` (≥6 distinct file paths or "across the codebase"),
-`needsPlan`, `iterative`, `risky`, `backlog`. **≥2 signals → `two-agents`, else `single`**; `tier` = 1 when
+`needsPlan`, `iterative`, `risky`, `backlog`. **≥2 signals → `plan-then-do`, else `single`**; `tier` = 1 when
 `risky`/`needsPlan`, else 2. Prompt length alone is not a signal.
 
 Optional model refinement, configured like the namer in **`~/.at/triage.json`** (override path:
@@ -212,20 +212,20 @@ back to the heuristic verdict with a `note=`. A failure opens a TTL **circuit br
 wait, then it is retried; one success closes it. A **timeout** is treated as a likely cold model load (aborting cancels Ollama's load): the breaker is
 only 30 s and a detached warm-up request (`/api/generate`, `keep_alive 10m`) loads the model so the next call is fast.
 
-## Compose (single run by default; two-agent opt-in)
+## Compose (single run by default; plan-then-do opt-in)
 
 `at compose` runs one goal through a state machine with a **test gate**. Two modes:
 
 | Mode | Enabled by | Agent runs | Phases |
 |------|-----------|-----------|--------|
 | **single** (default) | — | 1 tier-2 implementer (more only on red tests, ≤ `--max-rounds`) | INVESTIGATE → IMPLEMENT → CHECK (`--test-cmd`) → DONE\|FAILED |
-| **two-agent** | `--two-agents` flag **or** `AT_TWO_AGENTS=1` | ≥3: tier-1 PLAN + tier-2 per item + tier-1 CHECK, + brain answers | INVESTIGATE → PLAN → IMPLEMENT → CHECK → DONE\|FAILED |
+| **plan-then-do** | `--plan-then-do` flag **or** `AT_PLAN_THEN_DO=1` | ≥3: tier-1 PLAN + tier-2 per item + tier-1 CHECK, + brain answers | INVESTIGATE → PLAN → IMPLEMENT → CHECK → DONE\|FAILED |
 
 Single mode is the cheap path: the goal (title + description + the kanban **plan file** content, when
 `--task` has one) is the spec, the one implementer follows it, and `--test-cmd` decides pass/fail. Red
 tests re-run the implementer with the test output (round + 1) until `--max-rounds`. No tier-1 brain calls:
 unanswered discuss questions fall back to the asker's `--default`/timeout (the prompt tells it not to ask).
-Use two-agent mode only for large, risky, plan-first work. The mode is stored in `state.json` (`mode`);
+Use plan-then-do mode only for large, risky, plan-first work. The mode is stored in `state.json` (`mode`);
 a saved state keeps its mode on resume, and states without one are `two`.
 
 ```bash
@@ -250,10 +250,10 @@ at compose --loop --stop-on-fail          # drain the board until nothing is exe
 | `--max-rounds <n>`     | Re-plan rounds before FAILED (default 3).                                                                     |
 | `--max-nodes <n>`      | Max codegraph nodes in the PLAN context (default 30).                                                         |
 | `--resume <id>`        | Resume a saved goal by id (continues from its `state.json`).                                                   |
-| `--discuss`            | EXPERIMENTAL, needs `--two-agents`: implementers may `at discuss ask` the tier-1 brain (also `AT_DISCUSS=1`). Off: implementers are told not to ask. |
-| `--two-agents`         | Opt in to tier-1 PLAN + CHECK around tier-2 hands (also `AT_TWO_AGENTS=1\|true\|yes\|on`). Fresh runs only.     |
-| `--tier <n>`           | Tier of the single implementer (default 2). Two-agent mode keeps tier 1 plan/check, tier 2 hands.             |
-| `-a, --agent <name>`   | Run the single implementer on this agent (`at -a`, overrides `--tier`). Ignored with `--two-agents`.           |
+| `--discuss`            | EXPERIMENTAL, needs `--plan-then-do`: implementers may `at discuss ask` the tier-1 brain (also `AT_DISCUSS=1`). Off: implementers are told not to ask. |
+| `--plan-then-do`         | Opt in to tier-1 PLAN + CHECK around tier-2 hands (also `AT_PLAN_THEN_DO=1\|true\|yes\|on`). Fresh runs only.     |
+| `--tier <n>`           | Tier of the single implementer (default 2). plan-then-do mode keeps tier 1 plan/check, tier 2 hands.             |
+| `-a, --agent <name>`   | Run the single implementer on this agent (`at -a`, overrides `--tier`). Ignored with `--plan-then-do`.           |
 | `--keywords <a,b>`     | Codegraph keywords for INVESTIGATE; merged with the plan file's `keywords:` (below).                          |
 
 ### Keywords → INVESTIGATE context
@@ -264,7 +264,7 @@ accepted, max 12). INVESTIGATE then queries `codegraph context` with the keyword
 text** (the goal may embed a whole plan, a noisy query) and records them at the top of `context.md`.
 `--keywords` adds more for `-p` goals.
 
-### State machine (two-agent mode)
+### State machine (plan-then-do mode)
 
 Single mode skips PLAN and replaces the tier-1 CHECK with the bare test gate: green → DONE, red →
 IMPLEMENT again (round + 1) until `--max-rounds`, then FAILED.

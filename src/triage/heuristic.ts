@@ -1,12 +1,12 @@
 /**
  * Zero-cost triage heuristic: which delegation route fits a task prompt.
- * Default is ONE agent; two-agent compose is a candidate only with >= 2 complexity signals.
+ * Default is ONE agent; plan-then-do compose is a candidate only with >= 2 complexity signals.
  */
 
 export const SIGNALS = ["crossModule", "needsPlan", "iterative", "risky", "backlog"] as const;
 export type Signal = (typeof SIGNALS)[number];
 
-export type Route = "single" | "two-agents";
+export type Route = "single" | "plan-then-do";
 
 export interface TriageResult {
   route: Route;
@@ -19,8 +19,8 @@ export interface TriageResult {
   note?: string;
 }
 
-/** Signals needed before two-agent compose is even a candidate. */
-export const TWO_AGENT_MIN_SIGNALS = 2;
+/** Signals needed before plan-then-do compose is even a candidate. */
+export const PLAN_THEN_DO_MIN_SIGNALS = 2;
 
 const FILE_PATH = /(?:^|[\s`'"(])[\w.-]+(?:\/[\w.-]+)+\.\w{1,5}\b/g;
 
@@ -48,7 +48,7 @@ export function heuristicSignals(prompt: string): Signal[] {
 }
 
 export function decide(signals: Signal[], source: string, note?: string): TriageResult {
-  const route: Route = signals.length >= TWO_AGENT_MIN_SIGNALS ? "two-agents" : "single";
+  const route: Route = signals.length >= PLAN_THEN_DO_MIN_SIGNALS ? "plan-then-do" : "single";
   const tier = signals.includes("risky") || signals.includes("needsPlan") ? 1 : 2;
   return { route, tier, signals, source, ...(note ? { note } : {}) };
 }

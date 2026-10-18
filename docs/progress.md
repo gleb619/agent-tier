@@ -85,7 +85,7 @@ The runner exports these to the child process:
 
 ## Discuss channel
 
-> **EXPERIMENTAL, machine-to-machine.** Off by default. Enable with `AT_DISCUSS=1` (or `at compose --two-agents --discuss`, which exports it only to the implementer runs it starts). Intended for the compose two-agent orchestrator (tier-1 brain) ↔ implementer loop, not human chat. When off: `at discuss` / `at notify` exit 2, and no `DISCUSS_INSTRUCTION` is added to agent prompts. Single-agent compose never uses it.
+> **EXPERIMENTAL, machine-to-machine.** Off by default. Enable with `AT_DISCUSS=1` (or `at compose --plan-then-do --discuss`, which exports it only to the implementer runs it starts). Intended for the compose plan-then-do orchestrator (tier-1 brain) ↔ implementer loop, not human chat. When off: `at discuss` / `at notify` exit 2, and no `DISCUSS_INSTRUCTION` is added to agent prompts. Single-agent compose never uses it.
 
 `at discuss` is a two-way conversation channel layered on top of the SSE hub. Agents use it to ask the host a decision-blocking question (and block until answered); the host uses it to push instructions, answer questions, or watch the thread live. Everything is persisted to `<stateDir>/events/<runId>.discuss.jsonl` and mirrored as SSE events so dashboards see the conversation in real time.
 

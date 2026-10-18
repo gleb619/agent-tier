@@ -78,7 +78,7 @@ describe("task-source hooks", () => {
     };
     const deps = makeDeps(ws);
 
-    const res = await runCompose({ twoAgents: true, goal: "g", task, source, cwd: dir }, deps);
+    const res = await runCompose({ planThenDo: true, goal: "g", task, source, cwd: dir }, deps);
 
     expect(res.state).toBe("DONE");
     expect(events).toEqual([
@@ -106,7 +106,7 @@ describe("task-source hooks", () => {
     };
     const deps = makeDeps(ws, { log: (m) => logs.push(m) });
 
-    const res = await runCompose({ twoAgents: true, goal: "g", task, source, cwd: dir }, deps);
+    const res = await runCompose({ planThenDo: true, goal: "g", task, source, cwd: dir }, deps);
 
     expect(res.state).toBe("DONE");
     expect(logs.some((m) => m.includes("onPhase blew up"))).toBe(true);
@@ -125,14 +125,14 @@ describe("task-source hooks", () => {
       },
     };
 
-    const res = await runCompose({ twoAgents: true, goal: "g", task, source, cwd: dir }, makeDeps(ws));
+    const res = await runCompose({ planThenDo: true, goal: "g", task, source, cwd: dir }, makeDeps(ws));
 
     expect(res.state).toBe("DONE");
     expect(finished).toBe(true);
   });
 
   it("does not call hooks when only a task (no source) is given", async () => {
-    const res = await runCompose({ twoAgents: true, goal: "g", task: makeTask(), cwd: dir }, makeDeps(ws));
+    const res = await runCompose({ planThenDo: true, goal: "g", task: makeTask(), cwd: dir }, makeDeps(ws));
     expect(res.state).toBe("DONE");
   });
 });
@@ -143,7 +143,7 @@ describe("goal derivation from a task", () => {
     await writeFile(planFile, "# Existing plan\n\ndo it like this\n");
     const task = makeTask({ planFile });
 
-    await runCompose({ twoAgents: true, task, cwd: dir }, makeDeps(ws));
+    await runCompose({ planThenDo: true, task, cwd: dir }, makeDeps(ws));
 
     const goal = (await loadState(ws))?.goal ?? "";
     expect(goal).toContain("Add retry");
@@ -159,11 +159,11 @@ describe("goal derivation from a task", () => {
   });
 
   it("throws when neither goal nor task is given", async () => {
-    await expect(runCompose({ twoAgents: true, cwd: dir }, makeDeps(ws))).rejects.toThrow(/goal|task/i);
+    await expect(runCompose({ planThenDo: true, cwd: dir }, makeDeps(ws))).rejects.toThrow(/goal|task/i);
   });
 
   it("prefers an explicit goal over the task text", async () => {
-    await runCompose({ twoAgents: true, goal: "explicit goal", task: makeTask(), cwd: dir }, makeDeps(ws));
+    await runCompose({ planThenDo: true, goal: "explicit goal", task: makeTask(), cwd: dir }, makeDeps(ws));
     expect((await loadState(ws))?.goal).toBe("explicit goal");
   });
 });

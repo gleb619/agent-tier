@@ -90,8 +90,8 @@ at compose --loop --board <file>     # use a non-default board
 ```
 
 * **Default = one implementer run**: the plan file is the spec, so there is no tier-1 PLAN/CHECK — the
-  implementer follows it and `--test-cmd` gates DONE. Opt in to the tier-1 pipeline with `--two-agents` /
-  `AT_TWO_AGENTS=1` (see [cli.md](cli.md#compose-single-run-by-default-two-agent-opt-in)).
+  implementer follows it and `--test-cmd` gates DONE. Opt in to the tier-1 pipeline with `--plan-then-do` /
+  `AT_PLAN_THEN_DO=1` (see [cli.md](cli.md#compose-single-run-by-default-plan-then-do-opt-in)).
 * **Plan-file keywords:** put `keywords: a, b` (front matter) or a `Keywords: a, b` line (also `labels:` /
   `tags:`) in the first 30 lines of the plan file. INVESTIGATE feeds them to `codegraph context` as the
   query (instead of the whole goal text) to bootstrap `context.md`. The board schema is unchanged.

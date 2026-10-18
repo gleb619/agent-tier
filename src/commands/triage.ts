@@ -25,7 +25,7 @@ function readPrompt(opts: { prompt?: string; file?: string; task?: string; board
 export function registerTriageCommand(program: Command): void {
   program
     .command("triage")
-    .description("Advise a delegation route (single agent vs two-agent compose); never spends an agent run")
+    .description("Advise a delegation route (single agent vs plan-then-do compose); never spends an agent run")
     .option("-p, --prompt <text>", "Task prompt")
     .option("-f, --file <path>", "Read the task prompt from a file")
     .option("--task <id>", "Triage a kanban task (title + description + plan file)")

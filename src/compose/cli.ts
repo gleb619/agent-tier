@@ -29,13 +29,13 @@ export interface ComposeCliOptions {
   maxRounds: number;
   maxNodes: number;
   maxQuestions: number;
-  /** Opt-in tier-1 PLAN + CHECK around the tier-2 implementer (flag or AT_TWO_AGENTS). */
-  twoAgents?: boolean;
-  /** EXPERIMENTAL: implementers may ask the brain via `at discuss` (two-agent only; flag or AT_DISCUSS). */
+  /** Opt-in tier-1 PLAN + CHECK around the tier-2 implementer (flag or AT_PLAN_THEN_DO). */
+  planThenDo?: boolean;
+  /** EXPERIMENTAL: implementers may ask the brain via `at discuss` (plan-then-do only; flag or AT_DISCUSS). */
   discuss?: boolean;
   /** Tier of the single implementer (default 2). */
   tier?: number;
-  /** Run the single implementer on this agent, overriding --tier. Ignored in two-agent mode. */
+  /** Run the single implementer on this agent, overriding --tier. Ignored in plan-then-do mode. */
   agent?: string;
   /** Codegraph keywords for INVESTIGATE (merged with plan-file keywords). */
   keywords?: string[];
@@ -64,21 +64,21 @@ interface ComposeCliArgs {
   maxNodes: number;
   maxQuestions: number;
   resume?: string;
-  twoAgents?: boolean;
+  planThenDo?: boolean;
   discuss?: boolean;
   tier?: number;
   agent?: string;
   keywords?: string;
 }
 
-/** `AT_TWO_AGENTS=1|true|yes|on` enables two-agent mode without the flag. */
-/** Experimental discuss channel: `--discuss` or `AT_DISCUSS=1`. Only takes effect with two-agent mode. */
+/** `AT_PLAN_THEN_DO=1|true|yes|on` enables plan-then-do mode without the flag. */
+/** Experimental discuss channel: `--discuss` or `AT_DISCUSS=1`. Only takes effect with plan-then-do mode. */
 export function discussOptIn(flag: boolean | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
   return flag === true || discussEnabled(env);
 }
 
-export function twoAgentsEnabled(flag: boolean | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
-  return flag === true || /^(1|true|yes|on)$/i.test((env.AT_TWO_AGENTS ?? "").trim());
+export function planThenDoEnabled(flag: boolean | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  return flag === true || /^(1|true|yes|on)$/i.test((env.AT_PLAN_THEN_DO ?? "").trim());
 }
 
 function parseKeywords(raw: string | undefined): string[] | undefined {
@@ -115,7 +115,7 @@ function isTerminalPhase(state: string | undefined): state is "DONE" | "FAILED" 
 export async function runBoardTasks(
   params: Pick<
     ComposeCliOptions,
-    "testCmd" | "maxRounds" | "maxNodes" | "maxQuestions" | "twoAgents" | "discuss" | "tier" | "agent" | "keywords"
+    "testCmd" | "maxRounds" | "maxNodes" | "maxQuestions" | "planThenDo" | "discuss" | "tier" | "agent" | "keywords"
   >,
   opts: BoardTasksOptions,
 ): Promise<number> {
@@ -268,7 +268,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
           maxRounds: opts.maxRounds,
           maxNodes: opts.maxNodes,
           maxQuestions: opts.maxQuestions,
-          twoAgents: opts.twoAgents,
+          planThenDo: opts.planThenDo,
           discuss: opts.discuss,
           tier: opts.tier,
           agent: opts.agent,
@@ -284,7 +284,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
   program
     .command("compose")
     .description(
-      "Goal runner: one tier-2 implementer + test gate (default); --two-agents / AT_TWO_AGENTS=1 adds tier-1 plan + check",
+      "Goal runner: one tier-2 implementer + test gate (default); --plan-then-do / AT_PLAN_THEN_DO=1 adds tier-1 plan + check",
     )
     .option("-p, --prompt <text>", "Goal prompt")
     .option("--goal <text>", "Alias for --prompt")
@@ -293,13 +293,13 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
     .option("--max-nodes <number>", "Max codegraph nodes in PLAN context", (v) => parseInt(v, 10), DEFAULT_MAX_NODES)
     .option("--max-questions <number>", "Max brain answers per agent run during IMPLEMENT", (v) => parseInt(v, 10), 5)
     .option(
-      "--two-agents",
-      "Opt in to tier-1 PLAN + CHECK around the implementer (3+ agent runs; also AT_TWO_AGENTS=1)",
+      "--plan-then-do",
+      "Opt in to tier-1 PLAN + CHECK around the implementer (3+ agent runs; also AT_PLAN_THEN_DO=1)",
       false,
     )
     .option(
       "--discuss",
-      "EXPERIMENTAL: with --two-agents, let implementers ask the tier-1 brain via `at discuss` (also AT_DISCUSS=1)",
+      "EXPERIMENTAL: with --plan-then-do, let implementers ask the tier-1 brain via `at discuss` (also AT_DISCUSS=1)",
       false,
     )
     .option("--tier <number>", "Tier of the single implementer (default 2)", (v) => parseInt(v, 10))
@@ -326,7 +326,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
                 maxRounds: args.maxRounds,
                 maxNodes: args.maxNodes,
                 maxQuestions: args.maxQuestions,
-                twoAgents: twoAgentsEnabled(args.twoAgents),
+                planThenDo: planThenDoEnabled(args.planThenDo),
                 discuss: discussOptIn(args.discuss),
                 tier: args.tier,
                 agent: args.agent,
@@ -366,7 +366,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
             maxRounds: args.maxRounds,
             maxNodes: args.maxNodes,
             maxQuestions: args.maxQuestions,
-            twoAgents: twoAgentsEnabled(args.twoAgents),
+            planThenDo: planThenDoEnabled(args.planThenDo),
             discuss: discussOptIn(args.discuss),
             tier: args.tier,
             agent: args.agent,
