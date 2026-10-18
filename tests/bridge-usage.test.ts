@@ -34,6 +34,7 @@ describe("bridge usage summary", () => {
     await recordRunForTask(dir, "r1", "T1");
 
     const board = path.join(dir, "kanban.md");
+    writeFileSync(path.join(dir, "t1.md"), "# T1\n\n## Time\n\nPlanned: 10m\n");
     writeFileSync(
       board,
       [
@@ -43,9 +44,9 @@ describe("bridge usage summary", () => {
         "| :-- | :-- | :-- |",
         "| `Done` | d | a |",
         "",
-        "| ID | Status | Title | Est Time |",
+        "| ID | Status | Title | Plan File |",
         "| :-- | :-- | :-- | :-- |",
-        "| T1 | Done | first | 10m |",
+        "| T1 | Done | first | t1.md |",
         "",
       ].join("\n"),
     );

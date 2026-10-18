@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parsePlanKeywords } from "../compose/task-source";
-import { KEYWORDS_HEADING, SENTINEL } from "./types";
+import { KEYWORDS_HEADING, SENTINEL, TIME_HEADING } from "./types";
 
 export interface PlanScaffold {
   id: string;
@@ -30,10 +30,16 @@ function keywordsSection(keywords: string[]): string {
   return `${KEYWORDS_HEADING}\n\n${body}\n`;
 }
 
-/** Skeleton plan file. The Keywords section sits first so compose's head-of-file scan always sees it. */
+/** Skeleton plan file: Keywords (read by compose) and Time (Planned by the agent, Estimated by `at`). Keywords sit first so compose's head-of-file scan always sees it. */
 export function planSkeleton(p: PlanScaffold): string {
   const desc = p.description && p.description !== SENTINEL ? `${p.description}\n\n` : "";
   return `# ${p.id} — ${p.title}\n\n${desc}${keywordsSection(p.keywords)}
+${TIME_HEADING}
+
+<!-- Planned: the planning agent's commitment. Estimated: written by \`at kanban estimate\` — do not edit. -->
+Planned: <duration, e.g. 45m or 1h30m>
+Estimated: -
+
 ## Requirements
 
 ## Design

@@ -9,6 +9,7 @@ import { resolveBoardFile } from "../kanban/board";
 import { unansweredQuestions } from "../notify/discuss-store";
 import { loadRuns } from "../run-store";
 import { resolveStateDir } from "../state-dir";
+import { estimateTasks } from "../usage/summary";
 import { recordRunForTask } from "../usage/task-metrics";
 import { buildJobArgs, defaultJobName, listJobs, readJob, startJob, stopJob, tailLog } from "./background";
 import { createKanbanSource } from "./kanban-source";
@@ -218,6 +219,13 @@ export async function runBoardTasks(
       continue;
     }
     done++;
+    // Best-effort: `Estimated` in the plan's Time section is derived by `at`, never by the agent.
+    try {
+      const est = estimateTasks([resolveStateDir()], source.boardFile, [task.id])[0];
+      if (est?.outcome === "no-planned") opts.log(`[compose] ${task.id}: plan has no 'Planned' time yet`);
+    } catch {
+      // metering must never block a run
+    }
 
     const goalId = task.id.toLowerCase();
     const ws = workspaceFor(goalId);

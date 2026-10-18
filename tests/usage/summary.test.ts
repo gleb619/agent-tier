@@ -4,9 +4,9 @@ import { buildTaskBudgets, runUsageLines, summarizeUsage } from "../../src/usage
 import type { TaskTotals } from "../../src/usage/task-metrics";
 
 const tasks = [
-  { ID: "T1", Status: "Done", Title: "a", "Est Time": "10m" },
-  { ID: "T2", Status: "Done", Title: "b", "Est Time": "10m" },
-  { ID: "T3", Status: "Backlog", Title: "c", "Est Time": "1h" },
+  { ID: "T1", Status: "Done", Title: "a" },
+  { ID: "T2", Status: "Done", Title: "b" },
+  { ID: "T3", Status: "Backlog", Title: "c" },
   { ID: "T4", Status: "Done", Title: "d" },
 ];
 const tot = (taskId: string, ms: number, runs = 1): [string, TaskTotals] => [taskId, { taskId, runs, ms }];
@@ -30,12 +30,17 @@ function run(over: Partial<RunRecord> = {}): RunRecord {
 
 describe("buildTaskBudgets", () => {
   const totals = new Map([tot("T1", 5 * 60_000, 2), tot("T2", 13 * 60_000), tot("T4", 1000)]);
-  const b = buildTaskBudgets(tasks, totals);
+  const times = new Map([
+    ["T1", { plannedMs: 600_000, estMs: 660_000 }],
+    ["T2", { plannedMs: 600_000, estMs: null }],
+    ["T3", { plannedMs: 3_600_000, estMs: null }],
+  ]);
+  const b = buildTaskBudgets(tasks, totals, times);
   it("states", () => {
-    expect(b[0]).toMatchObject({ estMs: 600_000, timeState: "under", runs: 2 });
+    expect(b[0]).toMatchObject({ plannedMs: 600_000, estMs: 660_000, timeState: "under", runs: 2 });
     expect(b[1]).toMatchObject({ timeState: "over" });
     expect(b[2]).toMatchObject({ runs: 0, timeState: "none" });
-    expect(b[3]).toMatchObject({ estMs: null, timeState: "none" });
+    expect(b[3]).toMatchObject({ plannedMs: null, estMs: null, timeState: "none" });
   });
   it("summarizeUsage", () => {
     const s = summarizeUsage([run(), run(), run({ status: "running", finishedAt: null })], b);
@@ -46,7 +51,7 @@ describe("buildTaskBudgets", () => {
   it("runUsageLines", () => {
     const lines = runUsageLines(run(), b[0]);
     expect(lines.map((l) => l.label)).toEqual(["time", "T1 time"]);
-    expect(lines[1]).toMatchObject({ value: "5m / est 10m (-50%) · 2 runs", state: "under" });
+    expect(lines[1]).toMatchObject({ value: "5m / planned 10m (-50%) · est 11m · 2 runs", state: "under" });
     expect(runUsageLines(run(), null).map((l) => l.label)).toEqual(["time"]);
   });
 });

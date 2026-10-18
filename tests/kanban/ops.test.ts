@@ -520,69 +520,32 @@ describe("pipe escaping through the mutator (I12)", () => {
 });
 
 describe("initBoardText", () => {
-  it("parses as a board with the 11-column contract (9 core + Est Time/Planned) and passes lint", () => {
+  it("parses as a board with the 9-column contract and passes lint", () => {
     const dir = makeTmpDir();
     const file = path.join(dir, "docs", "kanban.md");
     writeText(file, initBoardText());
 
     const doc = loadBoard(file);
-    expect(doc.headers).toHaveLength(11);
+    expect(doc.headers).toHaveLength(9);
     expect(toTasks(doc)).toEqual([]);
     expect(doc.statuses).toEqual(["Backlog", "In Progress", "Blocked", "Done"]);
     expect(lintBoard(readBoard(file), dir).violations).toEqual([]);
   });
 });
 
-describe("opAdd optional columns", () => {
-  it("adds Est Time + Planned to a legacy board and fills the row", () => {
+describe("time lives in the plan, not the board", () => {
+  it("init template has the 9 core columns only", () => {
+    expect(initBoardText()).not.toMatch(/Est Time|Planned|Est Tokens/);
+  });
+
+  it("show prints Planned/Estimated read from the plan file", () => {
     const { file } = fresh();
+    const dir = path.dirname(file);
+    writeText(path.join(dir, "t1.md"), "# T1\n\n## Time\n\nPlanned: 45m\nEstimated: 50m\n");
     const doc = loadBoard(file);
-    const r = opAdd(doc, { id: "T3", estTime: "45m", planned: "2026-11-03" });
-    expect(r.changed).toBe(true);
-    saveBoard(doc);
-    const reloaded = loadBoard(file);
-    expect(reloaded.headers.slice(-2)).toEqual(["Est Time", "Planned"]);
-    const tasks = toTasks(reloaded);
-    expect(tasks.find((t) => t.ID === "T3")).toMatchObject({ "Est Time": "45m", Planned: "2026-11-03" });
-    expect(tasks.find((t) => t.ID === "T1")).toMatchObject({ "Est Time": "-", Planned: "-" });
-    expect(lintBoard(readBoard(file), path.dirname(file)).violations).toEqual([]);
-  });
-
-  it("adds only the column that was asked for", () => {
-    const { file } = fresh();
-    const doc = loadBoard(file);
-    opAdd(doc, { id: "T3", planned: "2026-11-03" });
-    expect(doc.headers).not.toContain("Est Time");
-    expect(doc.headers.at(-1)).toBe("Planned");
-  });
-
-  it("keeps existing values when later updates omit them", () => {
-    const { file } = fresh();
-    const doc = loadBoard(file);
-    opAdd(doc, { id: "T3", estTime: "1h" });
-    saveBoard(doc);
-    const doc2 = loadBoard(file);
-    opAdd(doc2, { id: "T3", title: "renamed", planned: "2026-12-01" });
-    saveBoard(doc2);
-    const t = toTasks(loadBoard(file)).find((x) => x.ID === "T3");
-    expect(t).toMatchObject({ Title: "renamed", "Est Time": "1h", Planned: "2026-12-01" });
-  });
-
-  it("rejects malformed estimates and dates", () => {
-    const { file } = fresh();
-    expect(() => opAdd(loadBoard(file), { estTime: "soon" })).toThrow(/est-time/);
-    expect(() => opAdd(loadBoard(file), { planned: "tomorrow" })).toThrow(/planned/);
-    expect(() => opAdd(loadBoard(file), { planned: "2026-02-31" })).toThrow(/planned/);
-  });
-
-  it("init template carries Est Time + Planned", () => {
-    expect(initBoardText()).toContain("| Est Time | Planned |");
-  });
-
-  it("show prints Planned when the board has the column", () => {
-    const { file } = fresh();
-    const doc = loadBoard(file);
-    opAdd(doc, { id: "T3", planned: "2026-11-03" });
-    expect(opShow(doc, "T3").messages.join("\n")).toContain("Planned:");
+    opAdd(doc, { id: "T1", plan: "t1.md" });
+    const out = opShow(doc, "T1").messages.join("\n");
+    expect(out).toMatch(/Planned:\s+45m/);
+    expect(out).toMatch(/Estimated:\s+50m/);
   });
 });

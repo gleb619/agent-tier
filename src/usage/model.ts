@@ -1,6 +1,6 @@
 /** Pure planned-vs-consumed model: no fs, safe to bundle into the WebUI. I/O lives in ./summary. */
-import { COL_EST_TIME, type Task } from "../kanban/types";
-import { type Budget, budgetState, formatDuration, parseDuration, variancePct } from "./units";
+import type { Task } from "../kanban/types";
+import { type Budget, budgetState, formatDuration, variancePct } from "./units";
 
 /** Minimal run shape the model reads — `RunLike` and the WebUI's `ApiRun` both satisfy it. */
 export interface RunLike {
@@ -16,31 +16,45 @@ export interface TaskTotals {
   ms: number;
 }
 
-/** Planned vs consumed wall time for one kanban task. */
+/** A task plan's Time section, as durations (see src/kanban/plan-time.ts). */
+export interface PlanTimes {
+  /** Written by the planning agent. */
+  plannedMs: number | null;
+  /** Written by `at` from history. */
+  estMs: number | null;
+}
+
+/** Planned (agent) and estimated (`at`) vs consumed wall time for one kanban task. */
 export interface TaskBudget {
   taskId: string;
   title: string;
   status: string;
+  plannedMs: number | null;
   estMs: number | null;
   actualMs: number;
   runs: number;
   timeState: Budget;
 }
 
-export function buildTaskBudgets(tasks: Task[], totals: Map<string, TaskTotals>): TaskBudget[] {
+export function buildTaskBudgets(
+  tasks: Task[],
+  totals: Map<string, TaskTotals>,
+  times: Map<string, PlanTimes> = new Map(),
+): TaskBudget[] {
   return tasks.map((t) => {
     const tot = totals.get(t.ID);
-    const estMs = parseDuration(t[COL_EST_TIME]);
+    const { plannedMs = null, estMs = null } = times.get(t.ID) ?? {};
     const actualMs = tot?.ms ?? 0;
     const metered = (tot?.runs ?? 0) > 0;
     return {
       taskId: t.ID,
       title: t.Title ?? "",
       status: t.Status ?? "",
+      plannedMs,
       estMs,
       actualMs,
       runs: tot?.runs ?? 0,
-      timeState: metered ? budgetState(estMs, actualMs) : "none",
+      timeState: metered ? budgetState(plannedMs, actualMs) : "none",
     };
   });
 }
@@ -51,7 +65,7 @@ export interface UsageSummary {
   ms: number;
   /** Tasks with at least one metered run. */
   tasksMetered: number;
-  /** Metered tasks that have a time estimate. */
+  /** Metered tasks whose plan carries a Planned time. */
   tasksWithEstimate: number;
   tasksOverBudget: number;
   /** Sum(actual)/Sum(estimate) over metered tasks having an estimate; null when none. */
@@ -70,8 +84,8 @@ export function summarizeUsage(runs: RunLike[], budgets: TaskBudget[]): UsageSum
   const ms = finished.reduce((s, r) => s + runMs(r), 0);
 
   const metered = budgets.filter((b) => b.runs > 0);
-  const timed = metered.filter((b) => b.estMs !== null && b.estMs > 0);
-  const planned = timed.reduce((s, b) => s + (b.estMs ?? 0), 0);
+  const timed = metered.filter((b) => b.plannedMs !== null && b.plannedMs > 0);
+  const planned = timed.reduce((s, b) => s + (b.plannedMs ?? 0), 0);
 
   return {
     runs: finished.length,
@@ -99,7 +113,7 @@ export function runUsageLines(run: RunLike, budget: TaskBudget | null): UsageLin
     const retries = budget.runs > 1 ? ` · ${budget.runs} runs` : "";
     lines.push({
       label: `${budget.taskId} time`,
-      value: `${formatDuration(budget.actualMs)} / ${budget.estMs === null ? "no est" : `est ${formatDuration(budget.estMs)} (${variancePct(budget.estMs, budget.actualMs)})`}${retries}`,
+      value: `${formatDuration(budget.actualMs)} / ${budget.plannedMs === null ? "no plan" : `planned ${formatDuration(budget.plannedMs)} (${variancePct(budget.plannedMs, budget.actualMs)})`}${budget.estMs === null ? "" : ` · est ${formatDuration(budget.estMs)}`}${retries}`,
       state: budget.timeState,
     });
   }

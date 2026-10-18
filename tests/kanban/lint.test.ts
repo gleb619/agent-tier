@@ -96,14 +96,14 @@ describe("lintBoard — clean boards", () => {
 
   it("accepts a plan file that exists", () => {
     const root = makeTmpDir();
-    writeText(path.join(root, "docs", "plans", "T1-spec.md"), "# spec\n");
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), "# spec\n\n## Time\n");
     const { result } = lint([goodRow("T1", "Backlog", "./docs/plans/T1-spec.md")], { root });
     expect(result.violations).toEqual([]);
   });
 
   it("accepts a backtick-wrapped plan path", () => {
     const root = makeTmpDir();
-    writeText(path.join(root, "docs", "plans", "T1-spec.md"), "# spec\n");
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), "# spec\n\n## Time\n");
     const { result } = lint([goodRow("T1", "Backlog", "`./docs/plans/T1-spec.md`")], { root });
     expect(result.violations).toEqual([]);
   });
@@ -153,7 +153,7 @@ describe("lintBoard — violations", () => {
 describe("lintBoard — plan-file fallback (I5)", () => {
   it("accepts a missing plan path when docs/plans/<ID>-* exists", () => {
     const root = makeTmpDir();
-    writeText(path.join(root, "docs", "plans", "T2-drifted-slug.md"), "# x\n");
+    writeText(path.join(root, "docs", "plans", "T2-drifted-slug.md"), "# x\n\n## Time\n");
     const { result } = lint([goodRow("T2", "Backlog", "./docs/plans/T2-original.md")], { root });
     expect(result.violations).toEqual([]);
   });
@@ -229,7 +229,7 @@ describe("lintBoard — gitignored plan files", () => {
 
   it("does not call isIgnored when the plan file exists on disk", () => {
     const root = makeTmpDir();
-    writeText(path.join(root, "docs", "plans", "T1-spec.md"), "# spec\n");
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), "# spec\n\n## Time\n");
     let called = false;
     lintBoard(rawBoard([goodRow("T1", "Backlog", "./docs/plans/T1-spec.md")], LEGEND), root, {
       isIgnored: () => {

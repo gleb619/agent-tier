@@ -38,7 +38,7 @@ export function deriveUsageTiles(u: UsageSummary): UsageTile[] {
     {
       label: "Over budget",
       value: String(u.tasksOverBudget),
-      hint: `of ${u.tasksWithEstimate} with estimate`,
+      hint: `of ${u.tasksWithEstimate} with plan`,
       tone: u.tasksOverBudget > 0 ? "over" : "none",
     },
   ];

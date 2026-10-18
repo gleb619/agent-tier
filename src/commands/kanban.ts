@@ -20,7 +20,9 @@ import {
 import { ensurePlanFile, splitKeywords } from "../kanban/plan";
 import { initBoardText } from "../kanban/template";
 import { blank, DEFAULT_BOARD_REL, MAX_DESC, REWRITE_TRAILER } from "../kanban/types";
-import { findProjectRoot } from "../state-dir";
+import { findProjectRoot, resolveStatusDirs } from "../state-dir";
+import { estimateTasks } from "../usage/summary";
+import { formatDuration } from "../usage/units";
 
 interface BoardOpts {
   board?: string;
@@ -159,8 +161,6 @@ export function registerKanbanCommand(program: Command): void {
       "plan-file keywords for compose's index/codegraph scan (creates a default plan file if none)",
     )
     .option("--description <text>", `short description (max ${MAX_DESC} chars, trimmed not rejected)`)
-    .option("--est-time <duration>", "planned wall time, e.g. 45m, 1h30m (adds Est Time column when missing)")
-    .option("--planned <date>", "planned start date YYYY-MM-DD (adds Planned column when missing)")
     .option("--json", "emit JSON instead of text")
     .action(
       (
@@ -174,8 +174,6 @@ export function registerKanbanCommand(program: Command): void {
           blockedBy?: string;
           plan?: string;
           description?: string;
-          estTime?: string;
-          planned?: string;
           keywords?: string;
         },
       ) => {
@@ -190,8 +188,6 @@ export function registerKanbanCommand(program: Command): void {
             blockedBy: opts.blockedBy,
             plan: opts.plan,
             description: opts.description,
-            estTime: opts.estTime,
-            planned: opts.planned,
             isIgnored: gitIgnored,
           };
           const keywords = splitKeywords(opts.keywords);
@@ -271,7 +267,9 @@ export function registerKanbanCommand(program: Command): void {
 
   kanban
     .command("lint [file]")
-    .description("Structural lint: column count, unique IDs, legend statuses, plan files resolve")
+    .description(
+      "Structural lint: column count, unique IDs, legend statuses, plan files resolve and carry a valid Time section",
+    )
     .option("--board <path>", "board file")
     .option("--root <path>", "repo root used to resolve plan files (default: nearest git root)")
     .option("--json", "emit JSON instead of text")
@@ -279,18 +277,47 @@ export function registerKanbanCommand(program: Command): void {
       run(() => {
         const p = boardPath(file, opts);
         const root = opts.root ?? findProjectRoot(path.dirname(p)) ?? path.dirname(path.dirname(p));
-        const result = lintBoard(readFileSync(p, "utf8"), root);
+        const result = lintBoard(readFileSync(p, "utf8"), root, { boardDir: path.dirname(p) });
         if (opts.json) {
           printJson({ file: p, rows: result.rows, legend: result.legend, violations: result.violations });
           return result.violations.length > 0 ? 1 : 0;
         }
         if (result.violations.length === 0) {
-          console.log(`[at] ${p}: ${result.rows} rows — IDs unique, statuses valid, plan files resolve`);
+          console.log(
+            `[at] ${p}: ${result.rows} rows — IDs unique, statuses valid, plan files resolve, Time sections valid`,
+          );
           return 0;
         }
         console.error(`[at] ${p}: ${result.violations.length} violation(s) found:`);
         for (const v of result.violations) console.error(`  - ${v.message}`);
         return 1;
+      });
+    });
+
+  kanban
+    .command("estimate [id]")
+    .description("Write 'Estimated' into plan Time sections: the agent's 'Planned' × calibration from past runs")
+    .option("--board <path>", "board file")
+    .option("--json", "emit JSON instead of text")
+    .action((id: string | undefined, opts: BoardOpts) => {
+      run(() => {
+        const p = boardPath(undefined, opts);
+        const results = estimateTasks(resolveStatusDirs(), p, id ? [id] : undefined);
+        if (opts.json) {
+          printJson({ file: p, results });
+          return 0;
+        }
+        if (results.length === 0) console.log("[at] no tasks to estimate");
+        for (const r of results) {
+          const detail =
+            r.outcome === "no-plan-file"
+              ? "no plan file"
+              : r.outcome === "no-planned"
+                ? "plan has no 'Planned' time"
+                : `planned ${formatDuration(r.plannedMs)} -> est ${formatDuration(r.estMs)} (x${r.factor.toFixed(2)}, ${r.outcome})`;
+          console.log(`${r.taskId}\t${detail}`);
+        }
+        return 0;
       });
     });
 

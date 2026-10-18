@@ -12,12 +12,9 @@ export const COLUMNS = [
 
 export type Column = (typeof COLUMNS)[number];
 
-/** Optional trailing columns: appended on demand by `at kanban add` when a board predates them. */
-export const COL_EST_TIME = "Est Time";
-export const COL_PLANNED = "Planned";
-export const OPTIONAL_COLUMNS = [COL_EST_TIME, COL_PLANNED] as const;
-
+/** Plan-file sections. Time lives in the plan (Planned: by the agent, Estimated: by `at`), not in the board. */
 export const KEYWORDS_HEADING = "## Keywords";
+export const TIME_HEADING = "## Time";
 
 export interface Task {
   [key: string]: string;

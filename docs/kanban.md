@@ -45,30 +45,36 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T49 | Done    | Shared TUI/WebUI layout spec   | docs/layout.md is canonical ASCII layout; add src/ui-spec.ts (nav, sections, tokens) mirroring it, used by both UIs                 | High     | loop  | T41,T42,T43,T44,T50 | T25                 | docs/layout.md |
 | T50 | Backlog | TUI layout parity              | align src/tui to ui-spec: same nav/sections, dashboard metrics, agents view, status colors; spec-driven parity tests                | High     | loop  | T48                 | T41,T42,T43,T44,T49 | -              |
 
-## Time planning + consumption
+## Time: planned vs estimated vs consumed
 
-Two optional trailing columns plan a task: `Est Time` (wall-time budget) and `Planned` (start date,
-`YYYY-MM-DD`); `-` = unset. Boards that predate them keep working — the first `at kanban add` that
-uses `--est-time` / `--planned` appends just that column (every other row gets `-`). `at kanban init`
-templates include both. Old `Est Tokens` columns are harmless leftovers: nothing reads them.
+The board has **no** time columns. Time lives in each task's plan file, in a `## Time` section:
 
-```bash
-at kanban add --id T60 --title "x" --est-time 45m --planned 2026-11-03   # 45m, 2h, 1h30m · calendar date
+```markdown
+## Time
+
+Planned: 45m      <- the planning agent's commitment (45m, 2h, 1h30m)
+Estimated: 52m    <- written by `at`, never by hand
 ```
 
-Consumption is **time only** and is not written to the board (it stays small and diff-friendly):
-
-* Compose (`--task` / `--loop`) copies each finished run's wall time (retries included) to the durable
-  `<stateDir>/task-metrics.jsonl` (`runs.jsonl` is pruned at 24h/30 runs), keyed by task id, and tags the run with `taskId`.
-* Run Details shows the task's consumed-vs-planned time (green ≤ plan, yellow ≤ +25%, red above);
-  the Dashboard shows total time, over-budget task count and the consumed÷planned ratio.
-  WebUI reads `GET /api/usage` (`at bridge usage summary`).
+* `Planned` is set by the agent that writes the plan. `Estimated` = `Planned` × a calibration factor —
+  the median actual÷planned of Done tasks with recorded runs (clamped 0.25–4; fewer than 3 samples → factor 1).
+  `at kanban estimate [id]` recomputes it (no id = every non-Done task); `at compose` does it for each task it claims.
+* Consumption is **time only** and not written to the board: compose (`--task` / `--loop`) copies each finished
+  run's wall time (retries included) to the durable `<stateDir>/task-metrics.jsonl` (`runs.jsonl` is pruned at
+  24h/30 runs), keyed by task id, and tags the run with `taskId`.
+* Run Details shows consumed vs planned (+ the estimate); green ≤ plan, yellow ≤ +25%, red above. The Dashboard
+  shows total time, over-budget task count and consumed÷planned. WebUI reads `GET /api/usage` (`at bridge usage summary`).
+* `at kanban lint` checks every plan file it can find: the `## Time` section must exist (Backlog needs no value yet);
+  started tasks (`In Progress` / `Blocked`) need a valid `Planned`; `Estimated`, when set, must be a duration. `Done`
+  tasks are exempt (legacy plans). Plan files that are absent/gitignored are skipped, as before.
+* Old `Est Time` / `Planned` / `Est Tokens` board columns are harmless leftovers: nothing reads them.
 
 ## Plan files + keywords
 
 `at kanban add --plan <path>` creates the plan file when it is missing, from a skeleton whose first
 section is `## Keywords` (then Requirements / Design / Tasks). `--keywords a,b` fills it — and when the
-row has no plan file yet, links a default `plans/<ID>-<slug>.md` first. On an existing plan without
+row has no plan file yet, links a default `plans/<ID>-<slug>.md` first. The skeleton also carries the
+`## Time` section for the planning agent to fill. On an existing plan without
 keywords the section is inserted after the title; existing keywords are never rewritten.
 
 ```bash

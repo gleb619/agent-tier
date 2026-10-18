@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseLegend } from "./legend";
-import { PLANS_DIR_REL, SENTINEL } from "./types";
+import { checkPlanTime, findPlanFile } from "./plan-time";
+import { SENTINEL } from "./types";
 
 export const ROW_RE = /^\|\s*T\d+\s*\|/;
 export const ID_RE = /^\|\s*(T\d+)\s*\|/;
@@ -53,28 +54,17 @@ export function extractIds(text: string): Set<string> {
 
 export type IsIgnoredFn = (filePath: string, cwd: string) => boolean;
 
-function planResolves(plan: string, id: string, root: string, isIgnored: IsIgnoredFn): boolean {
-  const abs = path.isAbsolute(plan) ? plan : path.resolve(root, plan);
-  if (existsSync(abs)) return true;
-
-  // `clean` drops Done rows but leaves their plan files behind, so a re-added task can
-  // carry a drifted slug. An `<ID>-*` file in docs/plans is accepted as the real spec.
-  const plansDir = path.join(root, PLANS_DIR_REL);
-  if (id.startsWith("T") && existsSync(plansDir)) {
-    const found = readdirSync(plansDir).some((name) => {
-      if (!name.startsWith(`${id}-`)) return false;
-      try {
-        return statSync(path.join(plansDir, name)).isFile();
-      } catch {
-        return false;
-      }
-    });
-    if (found) return true;
-  }
-
+function planResolves(
+  plan: string,
+  id: string,
+  root: string,
+  boardDir: string | undefined,
+  isIgnored: IsIgnoredFn,
+): boolean {
+  if (findPlanFile(plan, id, root, boardDir)) return true;
   // A gitignored path is absent in fresh checkouts and worktrees by design — not a lint error.
   try {
-    return isIgnored(abs, root);
+    return isIgnored(path.isAbsolute(plan) ? plan : path.resolve(root, plan), root);
   } catch {
     return false;
   }
@@ -83,6 +73,8 @@ function planResolves(plan: string, id: string, root: string, isIgnored: IsIgnor
 export interface LintOptions {
   /** Override the git-ignore check; defaults to `isGitIgnored`. Inject a stub in tests. */
   isIgnored?: IsIgnoredFn;
+  /** Directory of the board file; plan paths are resolved against it first, then the repo root. */
+  boardDir?: string;
 }
 
 export function lintBoard(text: string, root: string, opts: LintOptions = {}): LintResult {
@@ -134,8 +126,16 @@ export function lintBoard(text: string, root: string, opts: LintOptions = {}): L
 
     const planIdx = headerCols.indexOf("Plan File");
     const plan = (planIdx >= 0 ? (cells[planIdx] ?? "") : "").replace(/`/g, "").trim();
-    if (plan && plan !== SENTINEL && !planResolves(plan, id, root, checkIgnored)) {
-      fail(`line ${lineNo}: ${id} Plan File '${plan}' does not exist`);
+    if (plan && plan !== SENTINEL) {
+      if (!planResolves(plan, id, root, opts.boardDir, checkIgnored)) {
+        fail(`line ${lineNo}: ${id} Plan File '${plan}' does not exist`);
+      } else {
+        // Plan present on disk: its Time section is part of the board contract.
+        const abs = findPlanFile(plan, id, root, opts.boardDir);
+        if (abs) {
+          for (const msg of checkPlanTime(readFileSync(abs, "utf8"), status)) fail(`line ${lineNo}: ${id} plan ${msg}`);
+        }
+      }
     }
   });
 

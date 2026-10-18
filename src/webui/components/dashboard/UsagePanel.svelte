@@ -28,7 +28,7 @@ $: worst = ($usage?.budgets ?? []).filter((b) => b.timeState === "over").slice(0
             <span class="font-mono">{b.taskId}</span>
             <span class="truncate text-gray-600">{b.title}</span>
             <span class={clsx("tabular-nums", BUDGET_CLASS[b.timeState])}>
-              {formatDuration(b.actualMs)} / {b.estMs === null ? "—" : formatDuration(b.estMs)} ({variancePct(b.estMs, b.actualMs)})
+              {formatDuration(b.actualMs)} / {b.plannedMs === null ? "—" : formatDuration(b.plannedMs)} ({variancePct(b.plannedMs, b.actualMs)}){b.estMs === null ? "" : ` · est ${formatDuration(b.estMs)}`}
             </span>
           </li>
         {/each}
