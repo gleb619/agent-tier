@@ -56,6 +56,7 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T60 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 | T61 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 | T62 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
+| T63 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 
 ## Estimates + consumption
 
@@ -91,6 +92,8 @@ at compose --loop --board <file>     # use a non-default board
 at compose --loop --worktree --merge # each task in its own worktree, merged to main when DONE
 at compose --loop --follow 60        # board drained? sleep 60s and poll again (until Ctrl-C)
 at compose --loop --max-tasks 3      # cap an unattended run
+at compose --loop --worktree --merge --follow --background   # detached, survives the terminal
+at compose jobs | logs <name> | stop <name>                  # manage background jobs
 ```
 
 ### Follow flow (poll → take → work → repeat)
@@ -115,9 +118,37 @@ next claim … drained → exit, or with --follow sleep + poll again
   Existing worktree/branch is reused, so a resumed task continues where it stopped. If creation fails the
   task is marked FAILED (→ Blocked) and not run — never silently composed in the shared checkout.
 * **Merge** (`--merge`, needs `--worktree`): only after DONE (gate green). Needs the agent to have
-  *committed* in the worktree; `DIRTY_WORKTREE` / `REBASE_CONFLICT` / `MERGE_FAIL` fail the task run,
-  leave the worktree intact and halt the loop (next task must not build on an unmerged base).
-  Without `--merge` the worktree + branch stay for human review.
+  *committed* in the worktree; `DIRTY_WORKTREE` / `REBASE_CONFLICT` / `MERGE_FAIL` / `MAIN_NOT_ON_<base>`
+  fail the task run, leave the worktree intact and halt the loop (next task must not build on an
+  unmerged base). Without `--merge` the worktree + branch stay for human review.
+* **Works in any git repo** (no `scripts/` needed): the project's own `scripts/merge-worktree.sh` is used
+  when it exists (it may carry project steps); otherwise the built-in merge does the same sequence —
+  clean-tree check, `git rebase <base>` (aborted on conflict), `merge --ff-only` from the main checkout,
+  then worktree + branch removal. Nothing is written into the repo. Base branch = `AT_BASE_BRANCH`, else
+  origin's HEAD, else `main`/`master`, else the main checkout's current branch. A new worktree also
+  symlinks the main checkout's `node_modules` when present (like `scripts/worktree-new.sh`).
+
+### Background jobs
+
+`--background` (with `--task`/`--loop`) re-launches `at compose …` detached and returns at once.
+
+```bash
+at compose --loop --worktree --merge --follow 60 --max-tasks 20 --background --name nightly
+at compose jobs              # name · running|exited · pid · started · cwd
+at compose logs nightly -n 80
+at compose stop nightly      # finish the in-flight task, then exit (resumable); --force = SIGKILL
+```
+
+* Job records + logs: `<stateDir>/compose-jobs/<name>.{json,log}` — project `.at/` when it exists
+  (has `state.json`/`runs.jsonl`), else `~/.at/`; run `jobs`/`logs`/`stop` from the same project.
+  Default name = lowercase task id, else `loop`; a live job with the same name is refused.
+
+* The job runs in the cwd it was started from, so board / worktree resolution is the same as foreground.
+
+* A crashed or stopped job is resumed by starting it again — claims resume the leased/in-progress task
+  and `state.json` continues the run. It is not a system service: after a reboot start it again
+  (or schedule `at compose --loop --background` from cron/systemd).
+
 * **Follow** (`--follow [seconds]`, default 60, needs `--loop`): when nothing is executable the loop
   sleeps and re-polls, so tasks added by humans/`at kanban add` are picked up. First Ctrl-C/SIGTERM ends
   the loop after the in-flight task (resumable via `state.json`); second exits at once.
@@ -127,12 +158,16 @@ next claim … drained → exit, or with --follow sleep + poll again
 * **Default = one implementer run**: the plan file is the spec, so there is no tier-1 PLAN/CHECK — the
   implementer follows it and `--test-cmd` gates DONE. Opt in to the tier-1 pipeline with `--plan-then-do` /
   `AT_PLAN_THEN_DO=1` (see [cli.md](cli.md#compose-single-run-by-default-plan-then-do-opt-in)).
+
 * **Plan-file keywords:** put `keywords: a, b` (front matter) or a `Keywords: a, b` line (also `labels:` /
   `tags:`) in the first 30 lines of the plan file. INVESTIGATE feeds them to `codegraph context` as the
   query (instead of the whole goal text) to bootstrap `context.md`. The board schema is unchanged.
+
 * Goal text comes from the task's Title + Description (+ `Plan File` content when set).
+
 * goalId is the task id lowercased (`T7` -> `~/.at/compose/t7/`), so re-running is an
   implicit `--resume`: a non-terminal `state.json` continues, a terminal one is skipped.
+
 * Status mapping (configurable via `statusMap` in `createKanbanSource`):
 
   | Compose event             | Board status                                                                                        |
@@ -143,17 +178,21 @@ next claim … drained → exit, or with --follow sleep + poll again
 
   The loop then continues with the next executable task (`Blocked By` dependencies gate on `Done`).
   A status missing from the board's legend is warned about and the row is left unchanged.
+
 * **Claim lease:** every claim takes a per-task pid lock (`src/lock.ts`, written to `<boardDir>/locks/`
   under the name of `<boardFile>.claim-<ID>`) and holds it until `onFinish` releases it; a lock whose pid
   died is stale-stolen, so a crashed run frees its own task. `claim()` resumes the first **unleased** task
   already in the claim status (crash or human hand-off) before taking the best unblocked `Backlog` row, and
   skips any row leased by a live pid — two claimers can never be handed the same task.
+
 * **Locking:** every board op (claim, finish) goes through `mutateBoard` (`src/kanban/board.ts`) —
   load → mutate → save inside the `withLock` file mutex, written atomically via
   `src/atomic-write.ts` (temp file + same-dir rename). The lease is taken inside that same mutex, so the
   lease and the `Status` cell land together. Nothing caches board state between ops, so
   **humans may edit the board concurrently**: the next compose op re-loads their changes instead of
   clobbering them.
+
 * Exit code: 0 when no task FAILED, 1 otherwise (also 1 for an unknown `--task <id>`).
+
 * `--prompt`/`--goal` still work as before and need no board. Full flag/state-machine reference:
   [cli.md#compose-plan--implement--check](cli.md#compose-plan--implement--check).

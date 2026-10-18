@@ -197,6 +197,30 @@ describe("compose command — option parsing", () => {
   });
 });
 
+describe("compose command — flag validation", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    [["--background", "-p", "g"], /--background\/--name need --task or --loop/],
+    [["--loop", "--name", "x"], /--name requires --background/],
+    [["--loop", "--merge"], /--merge requires --worktree/],
+    [["--task", "T1", "--follow"], /--follow requires --loop/],
+    [["-p", "g", "--worktree"], /need --task or --loop/],
+  ])("%j is rejected", async (argv, msg) => {
+    vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as never);
+    const run = vi.fn(async () => 0);
+    const { program, errors } = build(run);
+
+    await expect(parse(program, argv)).rejects.toThrow("exit 1");
+    expect(run).not.toHaveBeenCalled();
+    expect(errors.join("\n")).toMatch(msg);
+  });
+});
+
 describe("compose command — missing prompt", () => {
   afterEach(() => {
     vi.restoreAllMocks();

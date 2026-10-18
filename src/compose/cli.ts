@@ -10,12 +10,13 @@ import { unansweredQuestions } from "../notify/discuss-store";
 import { loadRuns } from "../run-store";
 import { resolveStateDir } from "../state-dir";
 import { recordRunForTask } from "../usage/task-metrics";
+import { buildJobArgs, defaultJobName, listJobs, readJob, startJob, stopJob, tailLog } from "./background";
 import { createKanbanSource } from "./kanban-source";
 import { type CommandResult, type ComposeDeps, runCompose } from "./machine";
 import { DEFAULT_MAX_NODES, DEFAULT_MAX_ROUNDS, DEFAULT_TEST_CMD, loadState } from "./state";
 import { type ComposeTask, type TaskFinishInfo, type TaskSource, taskGoal } from "./task-source";
 import { ComposeWorkspace } from "./workspace";
-import { ensureTaskWorktree, type MergeRunner, mainCheckout, mergeViaScript, type TaskWorktree } from "./worktree";
+import { ensureTaskWorktree, type MergeRunner, mainCheckout, mergeWorktree, type TaskWorktree } from "./worktree";
 
 const execAsync = promisify(_exec);
 const execFileAsync = promisify(_execFile);
@@ -74,6 +75,8 @@ interface ComposeCliArgs {
   keywords?: string;
   worktree?: boolean;
   merge?: boolean;
+  background?: boolean;
+  name?: string;
   follow?: string | boolean;
   maxTasks?: number;
 }
@@ -188,7 +191,7 @@ export async function runBoardTasks(
         );
       }));
   const prepare = opts.prepareWorktree ?? ((id: string) => ensureTaskWorktree(process.cwd(), id));
-  const merger = opts.mergeRunner ?? mergeViaScript;
+  const merger = opts.mergeRunner ?? mergeWorktree;
   const follow = opts.loop && !opts.taskId && (opts.followMs ?? 0) > 0;
 
   let anyFailed = false;
@@ -374,7 +377,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
       return result.state === "DONE" ? 0 : 1;
     });
 
-  program
+  const compose = program
     .command("compose")
     .description(
       "Goal runner: one tier-2 implementer + test gate (default); --plan-then-do / AT_PLAN_THEN_DO=1 adds tier-1 plan + check",
@@ -407,6 +410,8 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
     .option("--merge", "With --worktree: after a DONE run, rebase + ff-merge into main and clean up", false)
     .option("--follow [seconds]", "With --loop: keep polling the board when drained (default every 60s)")
     .option("--max-tasks <number>", "With --loop: stop after composing this many tasks", (v) => parseInt(v, 10))
+    .option("--background", "With --task/--loop: run detached (`at compose jobs|logs|stop` manage it)", false)
+    .option("--name <name>", "With --background: job name (default: task id, else 'loop')")
     .action(async (args: ComposeCliArgs) => {
       const prompt = args.prompt ?? args.goal;
       if ((args.worktree || args.merge || args.follow || args.maxTasks) && !(args.task || args.loop)) {
@@ -422,6 +427,34 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
       if (args.follow && !args.loop) {
         error("[compose] Error: --follow requires --loop");
         process.exit(1);
+        return;
+      }
+      if ((args.background || args.name) && !(args.task || args.loop)) {
+        error("[compose] Error: --background/--name need --task or --loop");
+        process.exit(1);
+        return;
+      }
+      if (args.name && !args.background) {
+        error("[compose] Error: --name requires --background");
+        process.exit(1);
+        return;
+      }
+      if (args.background) {
+        try {
+          const stateDir = resolveStateDir();
+          const job = startJob({
+            stateDir,
+            name: args.name ?? defaultJobName(args.task),
+            args: buildJobArgs(process.argv.slice(2)),
+            cwd: process.cwd(),
+          });
+          log(`[compose] job ${job.name} started (pid ${job.pid}) — log ${job.logFile}`);
+          log("[compose] manage: at compose jobs | at compose logs " + job.name + " | at compose stop " + job.name);
+          process.exit(0);
+        } catch (err) {
+          error(`[compose] ${err instanceof Error ? err.message : String(err)}`);
+          process.exit(1);
+        }
         return;
       }
       if (args.task || args.loop) {
@@ -489,6 +522,47 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
             agent: args.agent,
             keywords: parseKeywords(args.keywords),
           }),
+        );
+      } catch (err) {
+        error(`[compose] ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      }
+    });
+
+  compose
+    .command("jobs")
+    .description("List background compose jobs (--background)")
+    .action(() => {
+      const jobs = listJobs(resolveStateDir());
+      if (jobs.length === 0) log("[compose] no background jobs");
+      for (const j of jobs) log(`${j.name}\t${j.alive ? "running" : "exited"}\tpid ${j.pid}\t${j.startedAt}\t${j.cwd}`);
+    });
+
+  compose
+    .command("logs <name>")
+    .description("Tail a background job's log")
+    .option("-n, --lines <number>", "Lines to show", (v) => parseInt(v, 10), 40)
+    .action((name: string, o: { lines: number }) => {
+      const job = readJob(resolveStateDir(), name);
+      if (!job) {
+        error(`[compose] job not found: ${name}`);
+        process.exit(1);
+        return;
+      }
+      log(tailLog(job.logFile, o.lines));
+    });
+
+  compose
+    .command("stop <name>")
+    .description("Stop a background job after its in-flight task (--force: kill now)")
+    .option("--force", "SIGKILL instead of finishing the in-flight task", false)
+    .action((name: string, o: { force: boolean }) => {
+      try {
+        const job = stopJob(resolveStateDir(), name, o.force);
+        log(
+          job.alive
+            ? `[compose] ${o.force ? "killed" : "stop requested (finishing in-flight task)"}: ${name} (pid ${job.pid})`
+            : `[compose] job ${name} not running`,
         );
       } catch (err) {
         error(`[compose] ${err instanceof Error ? err.message : String(err)}`);
