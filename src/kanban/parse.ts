@@ -6,8 +6,28 @@ import { unified } from "unified";
 import type { Node } from "unist";
 import { visit } from "unist-util-visit";
 
+/**
+ * remark-stringify escapes `_`, `*` and `~` in text (`AT\_NO\_DAEMON`, `\~/.at`), which litters every
+ * hand-written board on its first mutation. Keep an escape only where dropping it would change the parse:
+ * `_` next to a non-word char, `*`/`~` when the cell holds a pair that could open emphasis/strike.
+ */
+export function relaxEscapes(escaped: string, raw: string): string {
+  const count = (ch: string) => raw.split(ch).length - 1;
+  return escaped
+    .replace(/\\_(?<=[A-Za-z0-9]\\_)(?=[A-Za-z0-9])/g, "_")
+    .replace(/\\([*~])/g, (m, ch: string) => (count(ch) < 2 ? ch : m));
+}
+
 export function createProcessor() {
-  return unified().use(remarkParse).use(remarkGfm).use(remarkStringify);
+  return unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkStringify, {
+      handlers: {
+        text: (node: { value: string }, _parent: unknown, state: any, info: any) =>
+          relaxEscapes(state.safe(node.value, info), node.value),
+      },
+    });
 }
 
 export type Processor = ReturnType<typeof createProcessor>;

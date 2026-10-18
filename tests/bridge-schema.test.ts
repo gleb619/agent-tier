@@ -65,6 +65,9 @@ describe("at bridge — contract schema (T31)", () => {
   it("covers every bridge resource/verb from docs/bridge.md with valid envelope", () => {
     const stateDir = mkdtempSync(path.join(os.tmpdir(), "at-bridge-schema-all-"));
     seedStateDir(stateDir);
+    // kanban cases mutate the board: point at a throwaway file, never the repo's docs/kanban.md
+    const board = path.join(stateDir, "kanban.md");
+    writeFileSync(board, "| ID | Status | Title |\n| -- | ------ | ----- |\n| T1 | Backlog | seed |\n", "utf8");
     try {
       const cases: Array<{ args: string[]; stdin: string }> = [
         { args: ["bridge", "ping", "ping"], stdin: "{}" },
@@ -99,7 +102,7 @@ describe("at bridge — contract schema (T31)", () => {
         { args: ["bridge", "health", "get"], stdin: "{}" },
       ];
       for (const c of cases) {
-        const r = runBridge(c.args, c.stdin, { AT_STATE_DIR: stateDir });
+        const r = runBridge(c.args, c.stdin, { AT_STATE_DIR: stateDir, AT_KANBAN_FILE: board });
         const out = JSON.parse(r.stdout);
         expect(typeof out).toBe("object");
         if (out.ok === true) {

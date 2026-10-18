@@ -73,3 +73,23 @@ describe("parseBoardText", () => {
     expect(again.table.children).toHaveLength(parsed.table.children.length);
   });
 });
+
+describe("stringifyBoard escaping", () => {
+  const roundTrip = (desc: string) => {
+    const parsed = parseBoardText(`| ID | Status | Desc |\n| -- | ------ | ---- |\n| T1 | Backlog | ${desc} |\n`);
+    return { out: stringifyBoard(parsed.processor, parsed.tree), parsed };
+  };
+
+  it("does not add backslashes to underscores, lone ~ or lone *", () => {
+    const { out } = roundTrip("AT_NO_DAEMON ~/.at/x *.svelte.ts");
+    expect(out).toContain("AT_NO_DAEMON ~/.at/x *.svelte.ts");
+    expect(out).not.toContain("\\");
+  });
+
+  it("keeps escapes that protect real emphasis and stays idempotent", () => {
+    const { out, parsed } = roundTrip("a \\*b\\* c \\_d\\_ e");
+    const again = parseBoardText(out);
+    expect(cellText(again.table.children[1].children[2])).toBe(cellText(parsed.table.children[1].children[2]));
+    expect(stringifyBoard(again.processor, again.tree)).toBe(out);
+  });
+});
