@@ -34,3 +34,4 @@ bin/mock-long-agent
 /gradlew.bat
 /build/
 .kiro/
+/docs/locks/*
