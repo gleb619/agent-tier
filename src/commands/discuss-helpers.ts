@@ -1,3 +1,4 @@
+import { discussViaDaemon } from "../notify/daemon-sock";
 import { appendDiscuss, nextDiscussId } from "../notify/discuss-store";
 import type { DiscussEntry } from "../notify/types";
 import { resolveStateDir } from "../state-dir";
@@ -7,14 +8,21 @@ export interface PostResult {
 }
 
 /**
- * Append a discuss entry to the per-run thread, or POST to the hub if
- * AT_SSE_URL is set. Mirrors `at discuss note`/`say`/`answer`/`ask` first-step.
+ * Append a discuss entry to the per-run thread. Prefers the shared writer:
+ * the daemon socket when `at serve --daemon` is up, then the SSE hub when
+ * AT_SSE_URL is set, then the direct file write. Mirrors `at discuss
+ * note`/`say`/`answer`/`ask` first-step.
  */
 export async function postDiscussEntry(
   runId: string,
   entry: Omit<DiscussEntry, "id" | "ts">,
   stateDir?: string,
 ): Promise<string> {
+  const resolved = stateDir ?? resolveStateDir(process.env.AT_STATE_DIR);
+
+  const daemonId = await discussViaDaemon(resolved, runId, entry);
+  if (daemonId) return daemonId;
+
   const sseUrl = process.env.AT_SSE_URL;
   if (sseUrl) {
     const url = `${sseUrl.replace(/\/$/, "")}/discuss/${encodeURIComponent(runId)}`;
@@ -30,7 +38,6 @@ export async function postDiscussEntry(
     const json = (await res.json()) as PostResult;
     return json.id;
   }
-  const resolved = stateDir ?? resolveStateDir(process.env.AT_STATE_DIR);
   const id = nextDiscussId(resolved, runId);
   const full: DiscussEntry = { ...entry, id, ts: new Date().toISOString() };
   appendDiscuss(resolved, runId, full);

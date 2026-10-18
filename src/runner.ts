@@ -9,6 +9,7 @@ import { isQuotaMarker, scanForFatalMarkers } from "./fatal-markers";
 import { filterHealthy, isDeactivated, loadHealth, recordResult, setDeactivated } from "./health";
 import { applyRunName, readLogTail } from "./naming";
 import { type Hub, type NotifyEvent, setupNotify, startHub, tailLogFile } from "./notify";
+import { startDaemonBackedHub } from "./notify/hub";
 import type { RunOptions } from "./resolver";
 import { addRun, loadRuns, UNNAMED_PLACEHOLDER, updateRun } from "./run-store";
 import { spawnRunWatch } from "./run-watch";
@@ -399,7 +400,14 @@ export function closeProcessHub(): Promise<void> {
 export async function getProcessHub(options: RunOptions): Promise<Hub> {
   if (processHub) return processHub;
   if (processHubPromise) return processHubPromise;
-  processHubPromise = startHub({ stateDir: options.stateDir, port: options.ssePort });
+  // `at serve --daemon` owns the event writer + the SSE port for the whole state
+  // dir, so a run that finds it alive publishes through the daemon socket
+  // instead of binding its own per-run hub. No daemon -> per-run hub as before.
+  processHubPromise = (async () => {
+    const daemonHub = await startDaemonBackedHub(options.stateDir);
+    if (daemonHub) return daemonHub;
+    return startHub({ stateDir: options.stateDir, port: options.ssePort });
+  })();
   processHub = await processHubPromise;
   return processHub;
 }

@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { withLock } from "./lock";
+import { brokerRunStore } from "./notify/daemon-sock";
 import { getProcessTicks, isPidAlive } from "./process-utils";
 import { getStateFilePath } from "./state-dir";
 
@@ -89,7 +90,12 @@ export function saveRuns(stateDir: string, runs: RunRecord[]): void {
   writeJsonl(getRunsFile(stateDir), runs);
 }
 
-export async function addRun(stateDir: string, record: RunRecord): Promise<void> {
+/**
+ * Direct write path: takes the runs-file lock itself. Used as the fallback when
+ * no daemon is up, and by the daemon's broker handler — which must never route
+ * back through `addRun` and recurse into the socket.
+ */
+export async function addRunLocal(stateDir: string, record: RunRecord): Promise<void> {
   const runsFile = getRunsFile(stateDir);
   return withLock(runsFile, () => {
     const max = getMaxRuns(stateDir);
@@ -100,7 +106,7 @@ export async function addRun(stateDir: string, record: RunRecord): Promise<void>
   });
 }
 
-export async function updateRun(stateDir: string, runId: string, updates: Partial<RunRecord>): Promise<void> {
+export async function updateRunLocal(stateDir: string, runId: string, updates: Partial<RunRecord>): Promise<void> {
   const runsFile = getRunsFile(stateDir);
   return withLock(runsFile, () => {
     const runs = readJsonl(runsFile);
@@ -110,6 +116,24 @@ export async function updateRun(stateDir: string, runId: string, updates: Partia
       writeJsonl(runsFile, runs);
     }
   });
+}
+
+/**
+ * `addRun`/`updateRun` ask the daemon to do the write when its socket is up, so
+ * N concurrent `at` processes queue on one broker instead of racing for the file
+ * lock. A daemon that answers `{ok:false}` — or is absent/stale — falls through
+ * to the local locked write, so the run is never silently dropped.
+ */
+export async function addRun(stateDir: string, record: RunRecord): Promise<void> {
+  const brokered = await brokerRunStore(stateDir, "runs.add", { stateDir, record });
+  if (brokered) return;
+  return addRunLocal(stateDir, record);
+}
+
+export async function updateRun(stateDir: string, runId: string, updates: Partial<RunRecord>): Promise<void> {
+  const brokered = await brokerRunStore(stateDir, "runs.update", { stateDir, runId, updates });
+  if (brokered) return;
+  return updateRunLocal(stateDir, runId, updates);
 }
 
 /** TTL/max cutoff filter + newest-first ordering. Pure: no I/O. */
@@ -123,7 +147,7 @@ function pruneList(runs: RunRecord[], ttlMs: number, maxRuns: number): RunRecord
   return filtered.slice(0, maxRuns);
 }
 
-export async function pruneRuns(
+export async function pruneRunsLocal(
   stateDir: string,
   ttlMs: number = getTtl(),
   maxRuns: number = getMaxRuns(stateDir),
@@ -138,6 +162,12 @@ export async function pruneRuns(
   });
 }
 
+export async function pruneRuns(stateDir: string, ttlMs: number = getTtl(), maxRuns: number = getMaxRuns(stateDir)) {
+  const brokered = await brokerRunStore(stateDir, "runs.prune", { stateDir, ttlMs, maxRuns });
+  if (brokered) return;
+  return pruneRunsLocal(stateDir, ttlMs, maxRuns);
+}
+
 /**
  * One atomic status refresh: prune expired runs (TTL + maxEntries), annotate
  * dead/stuck processes, and persist — all under the runs-file lock. The
@@ -145,7 +175,7 @@ export async function pruneRuns(
  * print it directly without a follow-up unlocked `saveRuns` racing
  * `addRun`/`updateRun` or a fire-and-forget `pruneRuns`.
  */
-export async function refreshRuns(
+export async function refreshRunsLocal(
   stateDir: string,
   ttlMs: number = getTtl(),
   maxRuns: number = getMaxRuns(stateDir),
@@ -157,6 +187,16 @@ export async function refreshRuns(
     writeJsonl(runsFile, annotated);
     return annotated;
   });
+}
+
+export async function refreshRuns(
+  stateDir: string,
+  ttlMs: number = getTtl(),
+  maxRuns: number = getMaxRuns(stateDir),
+): Promise<RunRecord[]> {
+  const brokered = await brokerRunStore(stateDir, "runs.refresh", { stateDir, ttlMs, maxRuns });
+  if (brokered) return (brokered.data as { runs: RunRecord[] }).runs;
+  return refreshRunsLocal(stateDir, ttlMs, maxRuns);
 }
 
 export function getLogMtime(logFile: string): number | null {

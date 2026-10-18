@@ -1,15 +1,21 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { registerServeCommand } from "../../src/commands/serve";
+import { requestDaemon } from "../../src/notify/daemon-sock";
 import { type Hub, startHub } from "../../src/notify/hub";
+import type { NotifyEvent } from "../../src/notify/types";
 
-// Stub startHub so the command never binds a real socket in the test process —
-// we assert on the wiring (port, URL, signal handlers) instead.
+// Stub startHub so the command never binds a real TCP socket in the test process —
+// we assert on the wiring (port, URL, signal handlers) instead. The daemon's unix
+// socket is real (it is the object under test); createIngest/ingestDiscuss are
+// only needed as defined exports since serve.ts imports them.
 vi.mock("../../src/notify/hub", () => ({
   startHub: vi.fn(),
+  createIngest: vi.fn(() => ({ publish: (e: NotifyEvent) => e })),
+  ingestDiscuss: vi.fn(() => null),
 }));
 
 function makeProgram(): Command {
@@ -86,6 +92,35 @@ describe("serve command", () => {
 
     await sigterm!();
     expect(fakeHub.close).toHaveBeenCalledTimes(1);
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    onSpy.mockRestore();
+  });
+
+  it("--daemon serves the broker over daemon.sock alongside the hub", async () => {
+    // The daemon client refuses to talk when these are set; the suite must not
+    // inherit them from the `at` process that happens to run it.
+    delete process.env.AT_NO_DAEMON;
+    delete process.env.AT_DEPTH;
+
+    const onSpy = vi.spyOn(process, "on");
+    const program = makeProgram();
+    await program.parseAsync(["node", "at", "serve", "--daemon", "-p", "0"]);
+
+    const sockPath = path.join(stateDir, "daemon.sock");
+    expect(existsSync(sockPath)).toBe(true);
+    expect(logSpy).toHaveBeenCalledWith(`[at] serve --daemon: ${sockPath}`);
+    expect(logSpy).toHaveBeenCalledWith("[at] serve: http://127.0.0.1:43210/events");
+
+    // Real frame through the real socket: ping answers with the hub port so
+    // consumers can hand agents a live SSE URL without binding their own.
+    const ping = await requestDaemon(stateDir, "ping", undefined, { timeoutMs: 2000 });
+    expect(ping?.ok).toBe(true);
+    expect(ping?.data).toMatchObject({ pong: true, port: 43210 });
+
+    const sigint = onSpy.mock.calls.find((c) => c[0] === "SIGINT")?.[1] as (() => Promise<void>) | undefined;
+    await sigint!();
+    expect(fakeHub.close).toHaveBeenCalledTimes(1);
+    expect(existsSync(sockPath)).toBe(false);
     expect(exitSpy).toHaveBeenCalledWith(0);
     onSpy.mockRestore();
   });

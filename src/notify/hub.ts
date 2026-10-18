@@ -1,9 +1,10 @@
 import { existsSync, readdirSync } from "node:fs";
 import http from "node:http";
 import type { Socket } from "node:net";
+import { autostartDaemon, connectDaemon, emitViaDaemon, isDaemonUp, requestDaemon } from "./daemon-sock";
 import { appendDiscuss, nextDiscussId, readThread, unansweredQuestions } from "./discuss-store";
 import { appendEvent, getEventsDir, readEvents, readEventsSince } from "./store";
-import type { DiscussEntry, DiscussFrom, DiscussKind, NotifyEvent } from "./types";
+import type { DiscussEntry, DiscussFrom, NotifyEvent } from "./types";
 
 export interface Hub {
   port: number;
@@ -12,7 +13,148 @@ export interface Hub {
   /** True iff at least one SSE client was connected since the hub was created. */
   hadActiveClients: boolean;
   close(): Promise<void>;
-  publish(event: NotifyEvent): void;
+  publish(event: NotifyEvent): NotifyEvent;
+}
+
+/**
+ * Persists events into `<stateDir>/events/<runId>.jsonl`, assigning the
+ * per-run sequence number from the tail of that file. The HTTP hub and the
+ * daemon socket server both publish through one instance, so the seq counter
+ * stays monotonic for whoever is the live writer.
+ */
+export interface EventIngest {
+  publish(event: NotifyEvent): NotifyEvent;
+}
+
+export function createIngest(stateDir: string): EventIngest {
+  const seqMap: Map<string, number> = new Map();
+
+  function nextSeq(runId: string): number {
+    if (!seqMap.has(runId)) seqMap.set(runId, maxSeqForRun(readEvents(stateDir, runId)) + 1);
+    const seq = seqMap.get(runId) ?? 1;
+    seqMap.set(runId, seq + 1);
+    return seq;
+  }
+
+  return {
+    publish(event: NotifyEvent): NotifyEvent {
+      const e: NotifyEvent = {
+        ...event,
+        seq: event.seq > 0 ? event.seq : nextSeq(event.runId),
+        ts: event.ts || new Date().toISOString(),
+      };
+      appendEvent(stateDir, e);
+      return e;
+    },
+  };
+}
+
+/**
+ * Validate a client-supplied discuss payload and allocate its thread id.
+ * Returns null on anything malformed so both transports (HTTP + daemon sock)
+ * reject the same way without duplicating the rules.
+ */
+export function buildDiscussEntry(stateDir: string, runId: string, raw: unknown): DiscussEntry | null {
+  if (!raw || typeof raw !== "object") return null;
+  const parsed = raw as {
+    from?: unknown;
+    kind?: unknown;
+    text?: unknown;
+    options?: unknown;
+    replyTo?: unknown;
+  };
+  const from: DiscussFrom = parsed.from === "host" ? "host" : "agent";
+  const kind = parsed.kind;
+  const text = typeof parsed.text === "string" ? parsed.text : "";
+  if (!text || (kind !== "question" && kind !== "answer" && kind !== "say" && kind !== "note")) return null;
+
+  const entry: DiscussEntry = { id: nextDiscussId(stateDir, runId), from, kind, text, ts: new Date().toISOString() };
+  const options = Array.isArray(parsed.options)
+    ? parsed.options.filter((o): o is string => typeof o === "string")
+    : undefined;
+  if (options?.length) entry.options = options;
+  const replyTo = typeof parsed.replyTo === "string" ? parsed.replyTo : undefined;
+  if (replyTo) entry.replyTo = replyTo;
+  return entry;
+}
+
+/** Append to the thread and mirror it as an SSE-shaped event. */
+export function ingestDiscuss(
+  stateDir: string,
+  runId: string,
+  raw: unknown,
+  publish: (event: NotifyEvent) => NotifyEvent,
+): DiscussEntry | null {
+  const entry = buildDiscussEntry(stateDir, runId, raw);
+  if (!entry) return null;
+  appendDiscuss(stateDir, runId, entry);
+
+  // question/answer -> matching event type; say/note -> 'message'
+  const sseType: NotifyEvent["type"] = entry.kind === "question" || entry.kind === "answer" ? entry.kind : "message";
+  publish({
+    runId,
+    agent: entry.from,
+    ts: entry.ts,
+    seq: 0,
+    type: sseType,
+    text: entry.text,
+    data: {
+      id: entry.id,
+      kind: entry.kind,
+      options: entry.options,
+      replyTo: entry.replyTo,
+      from: entry.from,
+    },
+  });
+  return entry;
+}
+
+/**
+ * A `Hub` backed by the daemon socket instead of a per-run TCP listen.
+ *
+ * `at serve --daemon` already owns the writer (event seq, `events/*.jsonl`) and
+ * the SSE port for the whole state dir, so a run that finds the daemon alive
+ * routes its publishes through the sock and skips binding its own port. The
+ * queue keeps events in order across the async hop; `close()` drains it so the
+ * final `done` event is not lost when the CLI exits.
+ */
+export async function startDaemonBackedHub(
+  stateDir: string,
+  opts?: { timeoutMs?: number; warn?: (msg: string) => void; autostart?: boolean },
+): Promise<Hub | null> {
+  const warn = opts?.warn ?? ((m: string) => console.warn(m));
+  if (!isDaemonUp(stateDir)) {
+    if (!opts?.autostart) return null;
+    const client = await connectDaemon(stateDir, { spawn: autostartDaemon, timeoutMs: opts.timeoutMs ?? 2000 });
+    if (!client) return null;
+    client.close();
+  }
+
+  const ping = await requestDaemon(stateDir, "ping", undefined, { timeoutMs: opts?.timeoutMs ?? 500 });
+  if (!ping?.ok) return null;
+  const info = ping.data as { port?: number; sockPath?: string } | undefined;
+  const port = typeof info?.port === "number" ? info.port : 0;
+  // No SSE endpoint to hand out means adapters/agents could not subscribe —
+  // the local hub is the better writer in that case.
+  if (port <= 0) return null;
+
+  let queue: Promise<void> = Promise.resolve();
+  return {
+    port,
+    requestedPort: port,
+    hadActiveClients: false,
+    publish(event: NotifyEvent): NotifyEvent {
+      queue = queue
+        .then(async () => {
+          if (!(await emitViaDaemon(stateDir, event))) warn(`[at] daemon dropped event for run ${event.runId}`);
+        })
+        .catch(() => {});
+      return event;
+    },
+    async close(): Promise<void> {
+      await queue;
+    },
+  };
 }
 
 interface Client {
@@ -73,32 +215,11 @@ export function startHub({
   warn?: (msg: string) => void;
 }): Promise<Hub> {
   const clients: Set<Client> = new Set();
-  const seqMap: Map<string, number> = new Map();
   let hadActiveClients = false;
+  const ingest = createIngest(stateDir);
 
-  function loadRunSeq(runId: string): void {
-    if (seqMap.has(runId)) return;
-    seqMap.set(runId, maxSeqForRun(readEvents(stateDir, runId)) + 1);
-  }
-
-  function nextSeq(runId: string): number {
-    loadRunSeq(runId);
-    const seq = seqMap.get(runId) ?? 1;
-    seqMap.set(runId, seq + 1);
-    return seq;
-  }
-
-  function normalize(event: NotifyEvent): NotifyEvent {
-    return {
-      ...event,
-      seq: event.seq > 0 ? event.seq : nextSeq(event.runId),
-      ts: event.ts || new Date().toISOString(),
-    };
-  }
-
-  function broadcast(event: NotifyEvent): void {
-    const e = normalize(event);
-    appendEvent(stateDir, e);
+  function broadcast(event: NotifyEvent): NotifyEvent {
+    const e = ingest.publish(event);
     const line = sseLine(e);
     for (const client of clients) {
       if (client.runId === undefined || client.runId === e.runId) {
@@ -107,6 +228,7 @@ export function startHub({
         } catch {}
       }
     }
+    return e;
   }
 
   function replaySingle(client: Client, runId: string): void {
@@ -208,60 +330,22 @@ export function startHub({
         req.setEncoding("utf8");
         req.on("data", (chunk) => (body += chunk));
         req.on("end", () => {
+          let parsed: unknown;
           try {
-            const parsed = JSON.parse(body) as {
-              from?: DiscussFrom;
-              kind?: DiscussKind;
-              text?: unknown;
-              options?: unknown;
-              replyTo?: unknown;
-            };
-            const from: DiscussFrom = parsed.from === "host" ? "host" : "agent";
-            const kind = parsed.kind;
-            const text = typeof parsed.text === "string" ? parsed.text : "";
-            const options = Array.isArray(parsed.options)
-              ? parsed.options.filter((o): o is string => typeof o === "string")
-              : undefined;
-            const replyTo = typeof parsed.replyTo === "string" ? parsed.replyTo : undefined;
-            if (!text || (kind !== "question" && kind !== "answer" && kind !== "say" && kind !== "note")) {
-              res.writeHead(400);
-              res.end("bad request");
-              return;
-            }
-            const entry: DiscussEntry = {
-              id: nextDiscussId(stateDir, runId),
-              from,
-              kind,
-              text,
-              ts: new Date().toISOString(),
-            };
-            if (options?.length) entry.options = options;
-            if (replyTo) entry.replyTo = replyTo;
-            appendDiscuss(stateDir, runId, entry);
-
-            // Mirror as SSE event: question/answer -> matching type; say/note -> 'message'
-            const sseType: NotifyEvent["type"] = kind === "question" || kind === "answer" ? kind : "message";
-            broadcast({
-              runId,
-              agent: from,
-              ts: entry.ts,
-              seq: 0,
-              type: sseType,
-              text: entry.text,
-              data: {
-                id: entry.id,
-                kind: entry.kind,
-                options: entry.options,
-                replyTo: entry.replyTo,
-                from: entry.from,
-              },
-            });
-            res.writeHead(202);
-            res.end(JSON.stringify({ id: entry.id }));
+            parsed = JSON.parse(body);
           } catch {
             res.writeHead(400);
             res.end("bad request");
+            return;
           }
+          const entry = ingestDiscuss(stateDir, runId, parsed, broadcast);
+          if (!entry) {
+            res.writeHead(400);
+            res.end("bad request");
+            return;
+          }
+          res.writeHead(202);
+          res.end(JSON.stringify({ id: entry.id }));
         });
         return;
       }

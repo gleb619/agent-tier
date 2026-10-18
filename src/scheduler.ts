@@ -3,6 +3,7 @@ import path from "node:path";
 import type { AgentDef } from "./agents/registry";
 import { cachedState } from "./daemon-cache";
 import { withLock } from "./lock";
+import { brokerRunStore } from "./notify/daemon-sock";
 
 export interface SchedulerState {
   index: number;
@@ -35,6 +36,20 @@ export function getStateFile(stateDir: string): string {
 }
 
 export async function pickAgent(agents: AgentDef[], stateFilePath: string, key = "default"): Promise<AgentDef> {
+  // With the daemon up it owns the state.json advance, so concurrent `at`
+  // processes cannot lose a round-robin step to each other. Absent or refusing
+  // daemon falls through to the locked local path below.
+  if (agents.length > 0) {
+    const stateDir = path.dirname(stateFilePath);
+    const brokered = await brokerRunStore(stateDir, "state.pick", {
+      stateDir,
+      stateFilePath,
+      key,
+      count: agents.length,
+    });
+    if (brokered) return agents[(brokered.data as { index: number }).index];
+  }
+
   return withLock(stateFilePath, async () => {
     // Read through the daemon's state.json cache (fingerprint-checked, so as
     // fresh as the direct read); the advance below is still written directly.
