@@ -1,7 +1,7 @@
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CELL_SPLIT_RE, extractIds, ID_RE, lintBoard, ROW_RE, splitCells } from "../../src/kanban/lint";
-import { boardMarkdown, cleanupTmpDirs, makeTmpDir, row, writeText } from "./helpers";
+import { boardMarkdown, cleanupTmpDirs, makeTmpDir, row, VALID_PLAN, writeText } from "./helpers";
 
 afterEach(cleanupTmpDirs);
 
@@ -96,14 +96,14 @@ describe("lintBoard — clean boards", () => {
 
   it("accepts a plan file that exists", () => {
     const root = makeTmpDir();
-    writeText(path.join(root, "docs", "plans", "T1-spec.md"), "# spec\n\n## Time\n");
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), VALID_PLAN);
     const { result } = lint([goodRow("T1", "Backlog", "./docs/plans/T1-spec.md")], { root });
     expect(result.violations).toEqual([]);
   });
 
   it("accepts a backtick-wrapped plan path", () => {
     const root = makeTmpDir();
-    writeText(path.join(root, "docs", "plans", "T1-spec.md"), "# spec\n\n## Time\n");
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), VALID_PLAN);
     const { result } = lint([goodRow("T1", "Backlog", "`./docs/plans/T1-spec.md`")], { root });
     expect(result.violations).toEqual([]);
   });
@@ -153,7 +153,7 @@ describe("lintBoard — violations", () => {
 describe("lintBoard — plan-file fallback (I5)", () => {
   it("accepts a missing plan path when docs/plans/<ID>-* exists", () => {
     const root = makeTmpDir();
-    writeText(path.join(root, "docs", "plans", "T2-drifted-slug.md"), "# x\n\n## Time\n");
+    writeText(path.join(root, "docs", "plans", "T2-drifted-slug.md"), VALID_PLAN);
     const { result } = lint([goodRow("T2", "Backlog", "./docs/plans/T2-original.md")], { root });
     expect(result.violations).toEqual([]);
   });
@@ -229,7 +229,7 @@ describe("lintBoard — gitignored plan files", () => {
 
   it("does not call isIgnored when the plan file exists on disk", () => {
     const root = makeTmpDir();
-    writeText(path.join(root, "docs", "plans", "T1-spec.md"), "# spec\n\n## Time\n");
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), VALID_PLAN);
     let called = false;
     lintBoard(rawBoard([goodRow("T1", "Backlog", "./docs/plans/T1-spec.md")], LEGEND), root, {
       isIgnored: () => {

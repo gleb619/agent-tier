@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { lintBoard } from "../../src/kanban/lint";
 import { planSkeleton } from "../../src/kanban/plan";
 import { checkPlanTime, findPlanFile, parsePlanTime, setPlanTimeField } from "../../src/kanban/plan-time";
-import { cleanupTmpDirs, makeTmpDir } from "./helpers";
+import { cleanupTmpDirs, makeTmpDir, VALID_PLAN } from "./helpers";
 
 afterEach(cleanupTmpDirs);
 
@@ -91,8 +91,15 @@ describe("lintBoard enforces plan Time sections", () => {
     expect(setup("# T1\n", "Backlog").violations[0]?.message).toMatch(/missing '## Time'/);
     expect(setup("## Time\n", "In Progress").violations[0]?.message).toMatch(/no 'Planned'/);
   });
+  it("flags structural gaps (missing Goal/Steps/Done when) via lintBoard", () => {
+    const msgs = setup("## Time\n", "Backlog")
+      .violations.map((v) => v.message)
+      .join("\n");
+    expect(msgs).toMatch(/plan missing 'Goal' section/);
+    expect(msgs).toMatch(/plan missing 'Steps' section/);
+  });
   it("passes valid plans, Done legacy plans and absent plan files", () => {
-    expect(setup("## Time\nPlanned: 20m\n", "In Progress").violations).toEqual([]);
+    expect(setup(VALID_PLAN, "In Progress").violations).toEqual([]);
     expect(setup("# legacy\n", "Done").violations).toEqual([]);
     expect(setup(null, "Backlog", true).violations).toEqual([]);
   });

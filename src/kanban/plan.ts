@@ -30,23 +30,27 @@ function keywordsSection(keywords: string[]): string {
   return `${KEYWORDS_HEADING}\n\n${body}\n`;
 }
 
-/** Skeleton plan file: Keywords (read by compose) and Time (Planned by the agent, Estimated by `at`). Keywords sit first so compose's head-of-file scan always sees it. */
+/** Skeleton plan file with every section `checkPlanStructure` requires. Keywords sit first so compose's head-of-file scan always sees it; Goal follows the title block. */
 export function planSkeleton(p: PlanScaffold): string {
-  const desc = p.description && p.description !== SENTINEL ? `${p.description}\n\n` : "";
-  return `# ${p.id} — ${p.title}\n\n${desc}${keywordsSection(p.keywords)}
+  const goal = p.description && p.description !== SENTINEL ? p.description : "<what this builds and why>";
+  return `# ${p.id} — ${p.title}\n\n${keywordsSection(p.keywords)}
+## Goal
+
+${goal}
+
 ${TIME_HEADING}
 
-<!-- Planned: the planning agent's commitment. Estimated: written by \`at kanban estimate\` — do not edit. -->
+<!-- Planned: the planning agent's commitment (>= 2m per step). Estimated: written by \`at kanban estimate\` — do not edit. -->
 Planned: <duration, e.g. 45m or 1h30m>
 Estimated: -
 
-## Requirements
+## Steps
 
-## Design
+- [ ] <one action with a checkable result>
 
-## Tasks
+## Done when
 
-- [ ] 1.
+- <checkable condition, e.g. a command and its expected output>
 `;
 }
 

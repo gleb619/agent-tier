@@ -97,3 +97,28 @@ export function writeText(file: string, text: string): string {
   writeFileSync(file, text, "utf8");
   return file;
 }
+
+/** Plan file that satisfies `checkPlanStructure` + `checkPlanTime` in every enforced status. */
+export const VALID_PLAN = `# spec
+
+## Goal
+
+Ship it.
+
+## Keywords
+
+Keywords: auth
+
+## Time
+
+Planned: 20m
+
+## Steps
+
+- [ ] write test
+- [ ] implement
+
+## Done when
+
+- tests pass
+`;

@@ -27,17 +27,31 @@ Estimated: 52m    <- written by `at`, never by hand
   tasks are exempt (legacy plans). Plan files that are absent/gitignored are skipped, as before.
 * Old `Est Time` / `Planned` / `Est Tokens` board columns are harmless leftovers: nothing reads them.
 
-## Plan files + keywords
+## Plan files: required structure
 
-`at kanban add --plan <path>` creates the plan file when it is missing, from a skeleton whose first
-section is `## Keywords` (then Requirements / Design / Tasks). `--keywords a,b` fills it — and when the
-row has no plan file yet, links a default `plans/<ID>-<slug>.md` first. The skeleton also carries the
-`## Time` section for the planning agent to fill. On an existing plan without
-keywords the section is inserted after the title; existing keywords are never rewritten.
+`at kanban add --plan <path>` creates a missing plan file from a skeleton with every section lint requires:
+`## Keywords` (first, so compose's head-of-file scan sees it), `## Goal`, `## Time`, `## Steps`, `## Done when`.
+`--keywords a,b` fills Keywords — and when the row has no plan file yet, links a default `plans/<ID>-<slug>.md`
+first. On an existing plan without keywords the section is inserted after the title; existing keywords are never rewritten.
 
 ```bash
 at kanban add --id T61 --title "login flow" --keywords "auth, jwt, src/auth/login.ts"
 ```
+
+`at kanban lint` checks every plan file it can find (absent/gitignored plans are skipped). `Done` tasks are exempt (legacy).
+
+| Rule | Backlog | In Progress / Blocked |
+| ---- | :-----: | :-------------------: |
+| `Goal`, `Steps`, `Done when`, `Time` headings exist (any level, case-insensitive, headings in code fences ignored) | ✔ | ✔ |
+| Section bodies non-empty; `<placeholder>` lines and `<!-- -->` comments count as empty | – | ✔ |
+| `Steps`: every item is `- [ ]` / `- [x]` with real text (`- [ ] 1.` or `- [ ] <...>` fails), ≥ 1 item | – | ✔ |
+| `Done when`: ≥ 1 non-placeholder bullet | – | ✔ |
+| `Keywords` non-empty (compose seeds INVESTIGATE codegraph context from it) | – | ✔ |
+| `Planned` is a valid duration (see Time above) | – | ✔ |
+| `Planned` ≥ 2m × number of steps | – | ✔ |
+
+So a fresh skeleton is a valid Backlog plan; the planning agent must fill it in before the task starts.
+Code: `src/kanban/plan-lint.ts` (`checkPlanStructure`), wired in `src/kanban/lint.ts` next to `checkPlanTime`.
 
 `at compose` reads the keywords (see [cli.md](cli.md#keywords--investigate-context)) and uses them as
 the `at index` / codegraph query in INVESTIGATE, so keep them to concrete symbols, paths and concepts.

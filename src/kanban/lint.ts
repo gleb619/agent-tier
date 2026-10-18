@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseLegend } from "./legend";
+import { checkPlanStructure } from "./plan-lint";
 import { checkPlanTime, findPlanFile } from "./plan-time";
 import { SENTINEL } from "./types";
 
@@ -130,10 +131,13 @@ export function lintBoard(text: string, root: string, opts: LintOptions = {}): L
       if (!planResolves(plan, id, root, opts.boardDir, checkIgnored)) {
         fail(`line ${lineNo}: ${id} Plan File '${plan}' does not exist`);
       } else {
-        // Plan present on disk: its Time section is part of the board contract.
+        // Plan present on disk: its structure + Time section are part of the board contract.
         const abs = findPlanFile(plan, id, root, opts.boardDir);
         if (abs) {
-          for (const msg of checkPlanTime(readFileSync(abs, "utf8"), status)) fail(`line ${lineNo}: ${id} plan ${msg}`);
+          const text = readFileSync(abs, "utf8");
+          for (const msg of [...checkPlanTime(text, status), ...checkPlanStructure(text, status)]) {
+            fail(`line ${lineNo}: ${id} plan ${msg}`);
+          }
         }
       }
     }

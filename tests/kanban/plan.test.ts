@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { parsePlanKeywords } from "../../src/compose/task-source";
 import { ensurePlanFile, planSkeleton, splitKeywords } from "../../src/kanban/plan";
+import { checkPlanStructure } from "../../src/kanban/plan-lint";
 import { cleanupTmpDirs, makeTmpDir } from "./helpers";
 
 afterEach(cleanupTmpDirs);
@@ -25,6 +26,14 @@ describe("planSkeleton", () => {
 
   it("an unfilled Keywords section yields no keywords (placeholder ignored)", () => {
     expect(parsePlanKeywords(planSkeleton({ ...meta, keywords: [] }))).toEqual([]);
+  });
+});
+
+describe("planSkeleton structure", () => {
+  it("scaffolds every required section and passes lint as Backlog, fails once started", () => {
+    const text = planSkeleton({ ...meta, keywords: ["auth"] });
+    expect(checkPlanStructure(text, "Backlog")).toEqual([]);
+    expect(checkPlanStructure(text, "In Progress").length).toBeGreaterThan(0);
   });
 });
 

@@ -28,6 +28,7 @@ export const SENTINEL = "-";
 export const DEFAULT_STATUS = "Backlog";
 export const IN_PROGRESS = "In Progress";
 export const BLOCKED = "Blocked";
+export const BACKLOG = "Backlog";
 export const DONE = "Done";
 export const FALLBACK_STATUSES = ["Backlog", "In Progress", "Blocked", "Done"];
 

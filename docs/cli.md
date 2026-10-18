@@ -348,7 +348,7 @@ at kanban add [file] [--id T7] --title "..." [--priority High|Medium|Low] [--own
 at kanban status <id> <status> [file]    # vocabulary comes from the board's own legend
 at kanban remove <id> [file]             # alias: rm
 at kanban clean [file]                   # drop every Done row
-at kanban lint [file] [--root path]      # column count, unique IDs, legend statuses, plan files
+at kanban lint [file] [--root path]      # column count, unique IDs, legend statuses, plan files (Goal/Steps/Done when/Time structure)
 at kanban guard <base> [--board rel]     # append-only history check
 ```
 

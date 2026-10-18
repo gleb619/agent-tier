@@ -284,7 +284,7 @@ export function registerKanbanCommand(program: Command): void {
         }
         if (result.violations.length === 0) {
           console.log(
-            `[at] ${p}: ${result.rows} rows — IDs unique, statuses valid, plan files resolve, Time sections valid`,
+            `[at] ${p}: ${result.rows} rows — IDs unique, statuses valid, plan files resolve, plan structure + Time valid`,
           );
           return 0;
         }
