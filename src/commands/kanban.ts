@@ -19,6 +19,7 @@ import {
   resolvePlanPath,
 } from "../kanban/ops";
 import { ensurePlanFile, splitKeywords } from "../kanban/plan";
+import { checkPlanStructure } from "../kanban/plan-lint";
 import { initBoardText } from "../kanban/template";
 import { blank, DEFAULT_BOARD_REL, MAX_DESC, REWRITE_TRAILER } from "../kanban/types";
 import { findProjectRoot, resolveStatusDirs } from "../state-dir";
@@ -223,6 +224,18 @@ export function registerKanbanCommand(program: Command): void {
               keywords,
             });
             if (outcome !== "unchanged") r.messages.push(`Plan file ${outcome}: ${abs}`);
+            // Post-create lint: surface structure warnings immediately so the author can fix them
+            // before the task moves to In Progress (Backlog status only — skeleton is valid until started).
+            if (outcome === "created") {
+              const planText = readFileSync(abs, "utf8");
+              const issues = checkPlanStructure(planText, task.Status ?? "Backlog");
+              for (const issue of issues) {
+                r.warnings.push(`[plan-lint] ${issue}`);
+              }
+              if (issues.length > 0) {
+                r.warnings.push(`[plan-lint] fill in ${abs} before moving to In Progress`);
+              }
+            }
           }
           if (opts.json) printJson({ file: p, ...(r.data as object), warnings: r.warnings });
           else printText(r);

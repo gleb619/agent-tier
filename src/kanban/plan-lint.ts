@@ -6,11 +6,16 @@ import { BACKLOG, DONE } from "./types";
 export const REQUIRED_SECTIONS = ["Goal", "Steps", "Done when", "Time"] as const;
 /** Planned must leave at least this long per step. */
 const MIN_MS_PER_STEP = 2 * 60_000;
+/** Warn when Steps count exceeds Done-when bullet count by more than this ratio. */
+const MAX_STEPS_PER_CRITERION = 3;
 
 const HEADING_RE = /^#{1,6}\s+(.*?)\s*:?\s*$/;
 const CHECKBOX_RE = /^[-*]\s+\[[ xX]\]\s*(.*)$/;
 const BULLET_RE = /^(?:[-*]|\d+\.)\s+(.*)$/;
 const PLACEHOLDER_RE = /^<.*>$/;
+
+/** Pattern that matches concrete symbol/path keywords: contains `.`, `/`, camelCase, SCREAMING_CASE, or snake_case. */
+const SYMBOL_RE = /[./]|[a-z][A-Z]|[A-Z]{2,}|_[a-zA-Z]/;
 
 type Sections = Map<string, string[]>;
 
@@ -46,9 +51,34 @@ function sections(text: string): Sections {
   return out;
 }
 
+/** Extract individual keyword tokens from a Keywords body. */
+function extractKeywords(body: string[]): string[] {
+  return body.flatMap((l) =>
+    l
+      .replace(/^(?:[-*]\s+)?keywords\s*:/i, "")
+      .split(",")
+      .map((w) => w.trim())
+      .filter(Boolean),
+  );
+}
+
 /** Keywords body text: `Keywords: a, b` line, bullets or comma list; anything but a placeholder counts. */
 function hasKeywords(body: string[]): boolean {
-  return body.some((l) => l.replace(/^(?:[-*]\s+)?keywords\s*:/i, "").replace(/[,\s]/g, "") !== "");
+  return extractKeywords(body).some((w) => w !== "");
+}
+
+/**
+ * Check whether keywords contain at least one concrete symbol/path reference.
+ * Returns a warning message when all keywords are plain prose, or null when they look actionable.
+ */
+export function checkKeywordsQuality(body: string[]): string | null {
+  const kws = extractKeywords(body);
+  if (kws.length === 0) return null; // already caught by hasKeywords
+  const hasSymbol = kws.some((w) => SYMBOL_RE.test(w));
+  if (!hasSymbol) {
+    return `Keywords has no file paths or symbol names — codegraph needs concrete references (e.g. src/runner.ts, schedulerNext)`;
+  }
+  return null;
 }
 
 /**
@@ -86,19 +116,41 @@ export function checkPlanStructure(text: string, status: string): string[] {
   }
 
   const done = secs.get("done when");
+  let doneWhenBullets = 0;
   if (
     done &&
     done.length > 0 &&
     !done.some((l) => {
       const t = (BULLET_RE.exec(l)?.[1] ?? "").trim();
-      return t !== "" && !PLACEHOLDER_RE.test(t);
+      const ok = t !== "" && !PLACEHOLDER_RE.test(t);
+      if (ok) doneWhenBullets += 1;
+      return ok;
     })
   ) {
     out.push("'Done when' needs at least one bullet");
+  } else {
+    // Re-count in case the some() short-circuited; we need the full count for ratio check.
+    doneWhenBullets = (done ?? []).filter((l) => {
+      const t = (BULLET_RE.exec(l)?.[1] ?? "").trim();
+      return t !== "" && !PLACEHOLDER_RE.test(t);
+    }).length;
   }
 
-  if (!hasKeywords(secs.get("keywords") ?? [])) {
+  // Guard: Steps count must not exceed Done-when bullet count by more than MAX_STEPS_PER_CRITERION.
+  // Catches plans with many steps but a single vague acceptance criterion.
+  if (checkboxes > 0 && doneWhenBullets > 0 && checkboxes > doneWhenBullets * MAX_STEPS_PER_CRITERION) {
+    out.push(
+      `Steps (${checkboxes}) far exceeds 'Done when' criteria (${doneWhenBullets}) — add acceptance criteria (aim for ≤ ${MAX_STEPS_PER_CRITERION} steps per criterion)`,
+    );
+  }
+
+  const kwBody = secs.get("keywords") ?? [];
+  if (!hasKeywords(kwBody)) {
     out.push("missing or empty 'Keywords' (compose seeds codegraph context from it)");
+  } else {
+    // Keywords exist — check quality: at least one should be a symbol/path, not pure prose.
+    const qualityWarn = checkKeywordsQuality(kwBody);
+    if (qualityWarn) out.push(qualityWarn);
   }
 
   const planned = parsePlanTime(text).planned;

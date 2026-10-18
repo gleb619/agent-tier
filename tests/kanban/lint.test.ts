@@ -204,6 +204,103 @@ describe("lintBoard — the generated fixture", () => {
   });
 });
 
+describe("lintBoard — stale In Progress guard", () => {
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  it("does not flag a fresh In Progress plan file", () => {
+    const root = makeTmpDir();
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), VALID_PLAN);
+    const freshMtime = () => Date.now() - DAY_MS; // 1 day old — under default 7d threshold
+    const result = lintBoard(rawBoard([goodRow("T1", "In Progress", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: () => false,
+      getMtime: freshMtime,
+    });
+    expect(result.violations).toEqual([]);
+  });
+
+  it("flags an In Progress plan file older than staleDays", () => {
+    const root = makeTmpDir();
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), VALID_PLAN);
+    const staleMtime = () => Date.now() - 10 * DAY_MS; // 10 days — exceeds default 7
+    const result = lintBoard(rawBoard([goodRow("T1", "In Progress", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: () => false,
+      getMtime: staleMtime,
+    });
+    expect(result.violations).toHaveLength(1);
+    expect(result.violations[0].message).toMatch(/stale/);
+    expect(result.violations[0].message).toMatch(/In Progress/);
+    expect(result.violations[0].message).toMatch(/10 day/);
+  });
+
+  it("respects a custom staleDays threshold", () => {
+    const root = makeTmpDir();
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), VALID_PLAN);
+    const ageMtime = () => Date.now() - 3 * DAY_MS; // 3 days
+    // With staleDays=2 this should fire; with staleDays=5 it should not
+    const result2 = lintBoard(rawBoard([goodRow("T1", "In Progress", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: () => false,
+      getMtime: ageMtime,
+      staleDays: 2,
+    });
+    expect(result2.violations.some((v) => v.message.includes("stale"))).toBe(true);
+
+    const result5 = lintBoard(rawBoard([goodRow("T1", "In Progress", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: () => false,
+      getMtime: ageMtime,
+      staleDays: 5,
+    });
+    expect(result5.violations.filter((v) => v.message.includes("stale"))).toEqual([]);
+  });
+
+  it("does not fire for non-In-Progress statuses", () => {
+    const root = makeTmpDir();
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), VALID_PLAN);
+    const staleMtime = () => Date.now() - 30 * DAY_MS; // very old
+    for (const status of ["Backlog", "Blocked", "Done"]) {
+      const result = lintBoard(rawBoard([goodRow("T1", status, "./docs/plans/T1-spec.md")], LEGEND), root, {
+        isIgnored: () => false,
+        getMtime: staleMtime,
+      });
+      expect(result.violations.filter((v) => v.message.includes("stale"))).toEqual([]);
+    }
+  });
+
+  it("disables the guard when staleDays is 0", () => {
+    const root = makeTmpDir();
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), VALID_PLAN);
+    const staleMtime = () => Date.now() - 30 * DAY_MS;
+    const result = lintBoard(rawBoard([goodRow("T1", "In Progress", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: () => false,
+      getMtime: staleMtime,
+      staleDays: 0,
+    });
+    expect(result.violations.filter((v) => v.message.includes("stale"))).toEqual([]);
+  });
+
+  it("disables the guard when staleDays is Infinity", () => {
+    const root = makeTmpDir();
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), VALID_PLAN);
+    const staleMtime = () => Date.now() - 365 * DAY_MS;
+    const result = lintBoard(rawBoard([goodRow("T1", "In Progress", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: () => false,
+      getMtime: staleMtime,
+      staleDays: Number.POSITIVE_INFINITY,
+    });
+    expect(result.violations.filter((v) => v.message.includes("stale"))).toEqual([]);
+  });
+
+  it("does not crash when getMtime returns null (file stat error)", () => {
+    const root = makeTmpDir();
+    writeText(path.join(root, "docs", "plans", "T1-spec.md"), VALID_PLAN);
+    const result = lintBoard(rawBoard([goodRow("T1", "In Progress", "./docs/plans/T1-spec.md")], LEGEND), root, {
+      isIgnored: () => false,
+      getMtime: () => null,
+    });
+    // null mtime → skip stale check, no crash
+    expect(result.violations.filter((v) => v.message.includes("stale"))).toEqual([]);
+  });
+});
+
 describe("lintBoard — gitignored plan files", () => {
   // Stub helpers: always-ignored and never-ignored
   const alwaysIgnored = () => true;

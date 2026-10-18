@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parseLegend } from "./legend";
 import { checkPlanStructure } from "./plan-lint";
 import { checkPlanTime, findPlanFile } from "./plan-time";
-import { SENTINEL } from "./types";
+import { IN_PROGRESS, SENTINEL } from "./types";
 
 export const ROW_RE = /^\|\s*T\d+\s*\|/;
 export const ID_RE = /^\|\s*(T\d+)\s*\|/;
@@ -55,6 +55,17 @@ export function extractIds(text: string): Set<string> {
 
 export type IsIgnoredFn = (filePath: string, cwd: string) => boolean;
 
+/** Return mtime of a file in milliseconds, or null on error. */
+type MtimeFn = (filePath: string) => number | null;
+
+function defaultMtime(filePath: string): number | null {
+  try {
+    return statSync(filePath).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
 function planResolves(
   plan: string,
   id: string,
@@ -76,10 +87,20 @@ export interface LintOptions {
   isIgnored?: IsIgnoredFn;
   /** Directory of the board file; plan paths are resolved against it first, then the repo root. */
   boardDir?: string;
+  /**
+   * Warn when an In Progress task's plan file has not been modified in this many days.
+   * Default: 7. Set to 0 or Infinity to disable.
+   */
+  staleDays?: number;
+  /** Override file mtime lookup (injectable for tests). */
+  getMtime?: MtimeFn;
 }
 
 export function lintBoard(text: string, root: string, opts: LintOptions = {}): LintResult {
   const checkIgnored: IsIgnoredFn = opts.isIgnored ?? isGitIgnored;
+  const getMtime: MtimeFn = opts.getMtime ?? defaultMtime;
+  const staleDays = opts.staleDays ?? 7;
+  const staleMs = staleDays > 0 && Number.isFinite(staleDays) ? staleDays * 24 * 60 * 60 * 1000 : null;
   const lines = text.split("\n");
   const legend = parseLegend(text);
   const violations: LintViolation[] = [];
@@ -134,9 +155,20 @@ export function lintBoard(text: string, root: string, opts: LintOptions = {}): L
         // Plan present on disk: its structure + Time section are part of the board contract.
         const abs = findPlanFile(plan, id, root, opts.boardDir);
         if (abs) {
-          const text = readFileSync(abs, "utf8");
-          for (const msg of [...checkPlanTime(text, status), ...checkPlanStructure(text, status)]) {
+          const planText = readFileSync(abs, "utf8");
+          for (const msg of [...checkPlanTime(planText, status), ...checkPlanStructure(planText, status)]) {
             fail(`line ${lineNo}: ${id} plan ${msg}`);
+          }
+
+          // Stale In Progress guard: warn when the plan file hasn't been touched in staleDays.
+          if (staleMs !== null && status === IN_PROGRESS) {
+            const mtime = getMtime(abs);
+            if (mtime !== null && Date.now() - mtime > staleMs) {
+              const days = Math.floor((Date.now() - mtime) / (24 * 60 * 60 * 1000));
+              fail(
+                `line ${lineNo}: ${id} plan file has not been modified in ${days} day(s) — task may be stale (In Progress for >${staleDays}d without progress)`,
+              );
+            }
           }
         }
       }
