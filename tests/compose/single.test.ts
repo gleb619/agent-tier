@@ -8,8 +8,10 @@ import { parsePlanKeywords, taskKeywords } from "../../src/compose/task-source";
 import { ComposeWorkspace } from "../../src/compose/workspace";
 import type { DiscussEntry } from "../../src/notify/types";
 
+const TWO_AGENT_PLAN = "# Plan\n\n## Tasks\n- [ ] 1. Add resolver retry\n";
+
 function makeDeps(ws: ComposeWorkspace, testCodes: number[] = [0]) {
-  const starts: Array<{ tier: number; prompt: string }> = [];
+  const starts: Array<{ tier: number; prompt: string; agent?: string }> = [];
   const cmds: string[] = [];
   const queries: string[] = [];
   const brain: string[] = [];
@@ -17,8 +19,11 @@ function makeDeps(ws: ComposeWorkspace, testCodes: number[] = [0]) {
   const deps: ComposeDeps = {
     workspace: ws,
     stateDir: path.join(path.dirname(path.dirname(ws.goalDir)), "at-state"),
-    async startAt(tier, prompt) {
-      starts.push({ tier, prompt });
+    async startAt(tier, prompt, _cwd, opts) {
+      starts.push({ tier, prompt, agent: opts?.agent });
+      // Two-agent mode needs the tier-1 artifacts the real agents would leave behind.
+      if (tier === 1 && prompt.includes("verdict.md")) await ws.write("verdict.md", "PASS\n");
+      else if (tier === 1) await ws.write("plan.md", TWO_AGENT_PLAN);
       return { runId: `r${starts.length}` };
     },
     async waitRun(_id, { onQuestion }) {
@@ -65,6 +70,7 @@ describe("single mode (default)", () => {
     expect(f.starts[0].prompt).toContain("add retry");
     expect(f.starts[0].prompt).toContain("CTX");
     expect(f.brain).toEqual([]);
+    expect(f.starts[0].agent).toBeUndefined();
     expect((await loadState(ws))?.mode).toBe("single");
   });
 
@@ -72,6 +78,28 @@ describe("single mode (default)", () => {
     const f = makeDeps(ws);
     await runCompose({ goal: "g", cwd: cwd(), tier: 1 }, f.deps);
     expect(f.starts.map((s) => s.tier)).toEqual([1]);
+  });
+
+  it("--agent pins the single implementer run", async () => {
+    const f = makeDeps(ws);
+    const res = await runCompose({ goal: "g", cwd: cwd(), agent: "qwen" }, f.deps);
+    expect(res.state).toBe("DONE");
+    expect(f.starts.map((s) => s.agent)).toEqual(["qwen"]);
+  });
+
+  it("--agent keeps the test gate and re-runs on the same agent", async () => {
+    const f = makeDeps(ws, [1, 0]);
+    const res = await runCompose({ goal: "g", cwd: cwd(), agent: "qwen" }, f.deps);
+    expect(res.state).toBe("DONE");
+    expect(f.starts.map((s) => s.agent)).toEqual(["qwen", "qwen"]);
+  });
+
+  it("--agent is ignored in two-agent mode", async () => {
+    const f = makeDeps(ws);
+    const res = await runCompose({ goal: "g", cwd: cwd(), twoAgents: true, agent: "qwen" }, f.deps);
+    expect(res.state).toBe("DONE");
+    expect(f.starts.length).toBeGreaterThan(1);
+    expect(f.starts.every((s) => s.agent === undefined)).toBe(true);
   });
 
   it("red tests re-run the implementer with the test output, then DONE", async () => {

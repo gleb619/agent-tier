@@ -37,7 +37,12 @@ export interface ComposeDeps {
   /** `at` state dir: run-store polling + discuss threads live here. */
   stateDir: string;
   /** Detached start: returns the child runId (parsed from the `at` report). */
-  startAt(tier: number, prompt: string, cwd: string, opts?: { discuss?: boolean }): Promise<{ runId: string }>;
+  startAt(
+    tier: number,
+    prompt: string,
+    cwd: string,
+    opts?: { discuss?: boolean; agent?: string },
+  ): Promise<{ runId: string }>;
   /** Poll a run until done/failed, answering discuss questions along the way. */
   waitRun(runId: string, opts: WaitRunOptions): Promise<CommandResult>;
   /** Blocking tier-1 call that answers one question (first line of output). */
@@ -65,6 +70,8 @@ export interface ComposeOptions {
   discuss?: boolean;
   /** Tier of the single implementer (default 2). Ignored in two-agent mode. */
   tier?: number;
+  /** Pin the single implementer to this agent (overrides `tier`). Ignored in two-agent mode. */
+  agent?: string;
   /** Extra codegraph keywords; merged with the task's plan-file keywords. */
   keywords?: string[];
   /** The claimed task being composed (paired with `source`). */
@@ -98,6 +105,8 @@ interface Ctx {
   state: ComposeState;
   mode: ComposeMode;
   tier: number;
+  /** Pinned agent for the single-mode implementer run; never set in two-agent mode. */
+  agent?: string;
   keywords: string[];
   /** Kanban task id when running under `--task`/`--loop`: finished runs are metered against it. */
   taskId?: string;
@@ -233,7 +242,7 @@ async function implement(ctx: Ctx): Promise<void> {
  * persisted into state.json BEFORE the agent starts, so a crashed compose can
  * resume by waiting on the in-flight run instead of spawning a duplicate.
  */
-async function runItemAgent(ctx: Ctx, itemIndex: number, prompt: string, tier = 2): Promise<void> {
+async function runItemAgent(ctx: Ctx, itemIndex: number, prompt: string, tier = 2, agent?: string): Promise<void> {
   const ws = ctx.deps.workspace;
   const saved = (ctx.state.runs ?? []).find(
     (r) => r.phase === "IMPLEMENT" && r.item === itemIndex && isRunInFlight(ctx, r.runId),
@@ -243,7 +252,7 @@ async function runItemAgent(ctx: Ctx, itemIndex: number, prompt: string, tier = 
   if (saved) {
     runId = saved.runId;
   } else {
-    runId = (await ctx.deps.startAt(tier, prompt, ctx.cwd, { discuss: ctx.discuss })).runId;
+    runId = (await ctx.deps.startAt(tier, prompt, ctx.cwd, { discuss: ctx.discuss, agent })).runId;
     ctx.state = { ...ctx.state, runs: [...(ctx.state.runs ?? []), { phase: "IMPLEMENT", item: itemIndex, runId }] };
     await saveState(ws, ctx.state);
   }
@@ -266,7 +275,7 @@ async function implementSingle(ctx: Ctx): Promise<void> {
   const context = (await ws.exists(CONTEXT_FILE)) ? await ws.read(CONTEXT_FILE) : "";
   const findings = ctx.state.round > 1 && (await ws.exists(VERDICT_FILE)) ? await ws.read(VERDICT_FILE) : undefined;
   const prompt = buildSingleImplementPrompt({ goal: ctx.state.goal, context, workspaceDir: ws.goalDir, findings });
-  await runItemAgent(ctx, 0, prompt, ctx.tier);
+  await runItemAgent(ctx, 0, prompt, ctx.tier, ctx.agent);
 }
 
 /** Single mode CHECK: no reviewer agent — the test command is the gate. FAIL re-runs the implementer. */
@@ -352,6 +361,8 @@ export async function runCompose(opts: ComposeOptions, deps: ComposeDeps): Promi
     state: saved ?? createState(goal, { testCmd: opts.testCmd, maxRounds: opts.maxRounds, mode }),
     mode,
     tier: opts.tier ?? DEFAULT_SINGLE_TIER,
+    // Agent pinning is a single-mode affordance; the two-agent pipeline owns its own tiers.
+    agent: mode === "single" ? opts.agent : undefined,
     keywords,
     taskId: opts.task?.id,
   };

@@ -56,9 +56,43 @@ describe("compose command — option parsing", () => {
       twoAgents: false,
       discuss: true, // tests/setup.ts exports AT_DISCUSS=1
       tier: undefined,
+      agent: undefined,
       keywords: undefined,
     });
     expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it("-a/--agent reaches the run dep as agent", async () => {
+    let seen: ComposeCliOptions | undefined;
+    vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    const { program } = build(async (opts) => {
+      seen = opts;
+      return 0;
+    });
+
+    await parse(program, ["-p", "g", "-a", "qwen"]);
+
+    expect(seen?.agent).toBe("qwen");
+  });
+
+  it("--agent reaches the run dep through --task too", async () => {
+    vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    const dir = mkdtempSync(path.join(os.tmpdir(), "at-compose-cli-"));
+    try {
+      const boardFile = writeBoard(dir, [row("T1", "Backlog", "cli task")]);
+      let seen: ComposeCliOptions | undefined;
+      const { program } = build(async (opts) => {
+        seen = opts;
+        await opts.source?.onFinish?.(opts.task as ComposeTask, "DONE", { goalDir: "/tmp/x", round: 1 });
+        return 0;
+      });
+
+      await parse(program, ["--task", "T1", "--board", boardFile, "--agent", "qwen"]);
+
+      expect(seen?.agent).toBe("qwen");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("--two-agents, --tier and --keywords reach the run dep", async () => {

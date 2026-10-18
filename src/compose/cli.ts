@@ -35,6 +35,8 @@ export interface ComposeCliOptions {
   discuss?: boolean;
   /** Tier of the single implementer (default 2). */
   tier?: number;
+  /** Run the single implementer on this agent, overriding --tier. Ignored in two-agent mode. */
+  agent?: string;
   /** Codegraph keywords for INVESTIGATE (merged with plan-file keywords). */
   keywords?: string[];
   /** Set when composing a kanban task (goal text is derived from it). */
@@ -65,6 +67,7 @@ interface ComposeCliArgs {
   twoAgents?: boolean;
   discuss?: boolean;
   tier?: number;
+  agent?: string;
   keywords?: string;
 }
 
@@ -112,7 +115,7 @@ function isTerminalPhase(state: string | undefined): state is "DONE" | "FAILED" 
 export async function runBoardTasks(
   params: Pick<
     ComposeCliOptions,
-    "testCmd" | "maxRounds" | "maxNodes" | "maxQuestions" | "twoAgents" | "discuss" | "tier" | "keywords"
+    "testCmd" | "maxRounds" | "maxNodes" | "maxQuestions" | "twoAgents" | "discuss" | "tier" | "agent" | "keywords"
   >,
   opts: BoardTasksOptions,
 ): Promise<number> {
@@ -180,7 +183,11 @@ export function createComposeDeps(workspace: ComposeWorkspace, stateDir = resolv
     stateDir,
     async startAt(tier, prompt, cwd, opts) {
       // Detached start (no -s): `at` prints the run box and returns immediately.
-      const { stdout } = await execFileAsync("at", ["-t", String(tier), "--state-dir", stateDir, "-p", prompt], {
+      // A pinned agent replaces the tier selection: `at` round-robins within the tier otherwise.
+      const args = opts?.agent
+        ? ["-a", opts.agent, "--state-dir", stateDir, "-p", prompt]
+        : ["-t", String(tier), "--state-dir", stateDir, "-p", prompt];
+      const { stdout } = await execFileAsync("at", args, {
         cwd,
         maxBuffer: MAX_BUFFER,
         // Explicit either way: a stray AT_DISCUSS in the parent env must not leak into non-discuss runs.
@@ -264,6 +271,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
           twoAgents: opts.twoAgents,
           discuss: opts.discuss,
           tier: opts.tier,
+          agent: opts.agent,
           keywords: opts.keywords,
           cwd: process.cwd(),
         },
@@ -295,6 +303,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
       false,
     )
     .option("--tier <number>", "Tier of the single implementer (default 2)", (v) => parseInt(v, 10))
+    .option("-a, --agent <name>", "Run the single implementer on this agent (overrides --tier)")
     .option("--keywords <list>", "Comma-separated codegraph keywords for INVESTIGATE (plan-file keywords are merged)")
     .option("--resume <id>", "Resume a saved goal by id (continues from state.json)")
     .option("--task <id>", "Compose one kanban task by id (claims and marks it In Progress)")
@@ -320,6 +329,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
                 twoAgents: twoAgentsEnabled(args.twoAgents),
                 discuss: discussOptIn(args.discuss),
                 tier: args.tier,
+                agent: args.agent,
                 keywords: parseKeywords(args.keywords),
               },
               {
@@ -359,6 +369,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
             twoAgents: twoAgentsEnabled(args.twoAgents),
             discuss: discussOptIn(args.discuss),
             tier: args.tier,
+            agent: args.agent,
             keywords: parseKeywords(args.keywords),
           }),
         );
