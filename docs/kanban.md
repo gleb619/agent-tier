@@ -55,6 +55,7 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T59 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 | T60 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 | T61 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
+| T62 | Backlog | new                            | -                                                                                                                                   | Low      | loop  | -                   | -                   | -              |
 
 ## Estimates + consumption
 
@@ -87,7 +88,41 @@ at compose --task T7                 # claim T7 (Backlog -> In Progress) and com
 at compose --loop                    # claim -> compose -> repeat until nothing is executable
 at compose --loop --stop-on-fail     # stop the loop after the first FAILED run
 at compose --loop --board <file>     # use a non-default board
+at compose --loop --worktree --merge # each task in its own worktree, merged to main when DONE
+at compose --loop --follow 60        # board drained? sleep 60s and poll again (until Ctrl-C)
+at compose --loop --max-tasks 3      # cap an unattended run
 ```
+
+### Follow flow (poll → take → work → repeat)
+
+```
+at kanban next [--json]        POLL   first unblocked task: In Progress wins, else Backlog by priority then ID
+        │                              (read-only, free; exit 0 + "no executable task" when drained)
+        ▼
+compose claims (lease + In Progress)   TAKE   pid lease; a live holder's task is skipped, a dead one resumed
+        │  --worktree: git worktree add ../<repo>-<id> -b feat/<id> main   (reused on resume)
+        ▼
+single implementer + --test-cmd gate  WORK   cwd = the task worktree
+        │  DONE → Done · FAILED → Blocked (+ outcome.md)
+        │  --merge (DONE only): scripts/merge-worktree.sh = rebase + ff-merge + cleanup
+        ▼
+next claim … drained → exit, or with --follow sleep + poll again
+```
+
+* **Poll** = `at kanban next` (same `nextExecutable` rule the loop uses, one selection rule for both).
+  `Blocked By` ids must be `Done`; unknown blocker ids are ignored.
+* **Worktree** (`--worktree`): path `<repo>-<id-lowercase>` next to the main checkout, branch `feat/<id>`.
+  Existing worktree/branch is reused, so a resumed task continues where it stopped. If creation fails the
+  task is marked FAILED (→ Blocked) and not run — never silently composed in the shared checkout.
+* **Merge** (`--merge`, needs `--worktree`): only after DONE (gate green). Needs the agent to have
+  *committed* in the worktree; `DIRTY_WORKTREE` / `REBASE_CONFLICT` / `MERGE_FAIL` fail the task run,
+  leave the worktree intact and halt the loop (next task must not build on an unmerged base).
+  Without `--merge` the worktree + branch stay for human review.
+* **Follow** (`--follow [seconds]`, default 60, needs `--loop`): when nothing is executable the loop
+  sleeps and re-polls, so tasks added by humans/`at kanban add` are picked up. First Ctrl-C/SIGTERM ends
+  the loop after the in-flight task (resumable via `state.json`); second exits at once.
+  Pair with `--max-tasks <n>` as a spend cap. For an external scheduler instead, run
+  `at compose --loop` per tick (`/loop 30m …`) — a drained board exits 0 and costs nothing.
 
 * **Default = one implementer run**: the plan file is the spec, so there is no tier-1 PLAN/CHECK — the
   implementer follows it and `--test-cmd` gates DONE. Opt in to the tier-1 pipeline with `--plan-then-do` /

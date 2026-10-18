@@ -5,6 +5,7 @@ import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type ComposeCliOptions,
+  followMsFrom,
   planThenDoEnabled,
   registerComposeCommand,
   runBoardTasks,
@@ -265,6 +266,108 @@ describe("compose — board tasks (--task / --loop)", () => {
     expect(statusOf(boardFile, "T1")).toBe("Done");
     expect(statusOf(boardFile, "T2")).toBe("Blocked");
     expect(statusOf(boardFile, "T3")).toBe("Done");
+  });
+
+  it("--worktree runs each task in its own worktree and passes cwd", async () => {
+    const { runOne, seen } = fakeRunOne({});
+    const prepared: string[] = [];
+
+    await runBoardTasks(params, {
+      board: boardFile,
+      loop: true,
+      stopOnFail: false,
+      worktree: true,
+      prepareWorktree: async (id) => {
+        prepared.push(id);
+        return { path: `/wt/${id.toLowerCase()}`, branch: `feat/${id.toLowerCase()}` };
+      },
+      runOne,
+      log: () => {},
+    });
+
+    expect(prepared).toEqual(["T1", "T2", "T3"]);
+    expect(seen.map((o) => o.cwd)).toEqual(["/wt/t1", "/wt/t2", "/wt/t3"]);
+  });
+
+  it("--worktree failure marks the task FAILED without running it", async () => {
+    const { runOne, seen } = fakeRunOne({});
+
+    const code = await runBoardTasks(params, {
+      board: boardFile,
+      taskId: "T1",
+      loop: false,
+      stopOnFail: false,
+      worktree: true,
+      prepareWorktree: async () => {
+        throw new Error("git boom");
+      },
+      runOne,
+      log: () => {},
+    });
+
+    expect(code).toBe(1);
+    expect(seen).toHaveLength(0);
+    expect(statusOf(boardFile, "T1")).toBe("Blocked");
+  });
+
+  it("--merge merges after DONE and halts the loop when the merge fails", async () => {
+    const { runOne, seen } = fakeRunOne({});
+    const merged: string[] = [];
+
+    const code = await runBoardTasks(params, {
+      board: boardFile,
+      loop: true,
+      stopOnFail: false,
+      worktree: true,
+      merge: true,
+      prepareWorktree: async (id) => ({ path: `/wt/${id}`, branch: `feat/${id}` }),
+      mergeRunner: async (wt) => {
+        merged.push(wt.branch);
+        return wt.branch === "feat/T2" ? { ok: false, output: "REBASE_CONFLICT" } : { ok: true, output: "MERGED" };
+      },
+      runOne,
+      log: () => {},
+    });
+
+    expect(merged).toEqual(["feat/T1", "feat/T2"]);
+    expect(seen.map((o) => o.goalId)).toEqual(["t1", "t2"]);
+    expect(code).toBe(1);
+  });
+
+  it("--follow polls again when drained and --max-tasks ends the loop", async () => {
+    const { runOne, seen } = fakeRunOne({});
+    const board = writeBoard(dir, [row("T1", "Backlog", "only")]);
+    const sleeps: number[] = [];
+
+    const code = await runBoardTasks(params, {
+      board,
+      loop: true,
+      stopOnFail: false,
+      followMs: 5000,
+      maxTasks: 2,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+        // a human adds a task while the loop idles
+        if (sleeps.length === 1) {
+          const { mutateBoard } = await import("../../src/kanban/board");
+          const { opAdd } = await import("../../src/kanban/ops");
+          await mutateBoard(board, (doc) => opAdd(doc, { id: "T2", title: "late" }));
+        }
+      },
+      runOne,
+      log: () => {},
+    });
+
+    expect(code).toBe(0);
+    expect(sleeps).toEqual([5000]);
+    expect(seen.map((o) => o.goalId)).toEqual(["t1", "t2"]);
+  });
+
+  it("followMsFrom parses the --follow value", () => {
+    expect(followMsFrom(undefined)).toBeUndefined();
+    expect(followMsFrom(true)).toBe(60000);
+    expect(followMsFrom("30")).toBe(30000);
+    expect(followMsFrom("junk")).toBe(60000);
   });
 
   it("--loop --stop-on-fail stops after the first FAILED run", async () => {

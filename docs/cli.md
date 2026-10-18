@@ -245,6 +245,10 @@ at compose --loop --stop-on-fail          # drain the board until nothing is exe
 | `--loop`               | Claim + compose board tasks until no executable task remains (per-task: DONE → skip, FAILED → Blocked).       |
 | `--board <file>`       | Board file for `--task`/`--loop` (default: resolved project board — see [kanban.md](kanban.md)).              |
 | `--stop-on-fail`       | With `--loop`: stop after the first FAILED run (default: mark Blocked, keep going).                           |
+| `--worktree`           | With `--task`/`--loop`: run each task in `../<repo>-<id>` on `feat/<id>` (created off `main`, reused on resume). |
+| `--merge`              | With `--worktree`: after DONE, `scripts/merge-worktree.sh` (rebase + ff-merge + cleanup); failure halts the loop. |
+| `--follow [seconds]`   | With `--loop`: when drained, sleep (default 60s) and poll the board again; Ctrl-C ends after the current task. |
+| `--max-tasks <n>`      | With `--loop`: stop after composing `n` tasks.                                                                |
 | `--max-questions <n>`  | Max brain answers per agent run during IMPLEMENT (default 5) — see [progress.md](progress.md#brain--hands-m2m-discuss). |
 | `--test-cmd <cmd>`     | Test command run during CHECK (default `npm test`).                                                           |
 | `--max-rounds <n>`     | Re-plan rounds before FAILED (default 3).                                                                     |

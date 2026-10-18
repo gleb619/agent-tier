@@ -15,6 +15,7 @@ import { type CommandResult, type ComposeDeps, runCompose } from "./machine";
 import { DEFAULT_MAX_NODES, DEFAULT_MAX_ROUNDS, DEFAULT_TEST_CMD, loadState } from "./state";
 import { type ComposeTask, type TaskFinishInfo, type TaskSource, taskGoal } from "./task-source";
 import { ComposeWorkspace } from "./workspace";
+import { ensureTaskWorktree, type MergeRunner, mainCheckout, mergeViaScript, type TaskWorktree } from "./worktree";
 
 const execAsync = promisify(_exec);
 const execFileAsync = promisify(_execFile);
@@ -39,6 +40,8 @@ export interface ComposeCliOptions {
   agent?: string;
   /** Codegraph keywords for INVESTIGATE (merged with plan-file keywords). */
   keywords?: string[];
+  /** Working directory for the run (task worktree under --worktree); default process.cwd(). */
+  cwd?: string;
   /** Set when composing a kanban task (goal text is derived from it). */
   task?: ComposeTask;
   /** Kanban source: machine fires onPhase/onFinish against the board. */
@@ -69,6 +72,10 @@ interface ComposeCliArgs {
   tier?: number;
   agent?: string;
   keywords?: string;
+  worktree?: boolean;
+  merge?: boolean;
+  follow?: string | boolean;
+  maxTasks?: number;
 }
 
 /** `AT_PLAN_THEN_DO=1|true|yes|on` enables plan-then-do mode without the flag. */
@@ -89,6 +96,30 @@ function parseKeywords(raw: string | undefined): string[] | undefined {
   return kw.length > 0 ? kw : undefined;
 }
 
+const DEFAULT_FOLLOW_S = 60;
+
+/** `--follow` → 60s, `--follow 30` → 30s; unset → no follow. */
+export function followMsFrom(raw: string | boolean | undefined): number | undefined {
+  if (raw === undefined || raw === false) return undefined;
+  const n = raw === true ? DEFAULT_FOLLOW_S : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n * 1000 : DEFAULT_FOLLOW_S * 1000;
+}
+
+/**
+ * First Ctrl-C / SIGTERM ends the loop after the in-flight task (resumable via state.json);
+ * the second one exits immediately.
+ */
+function abortOnSignal(): AbortSignal {
+  const ac = new AbortController();
+  for (const sig of ["SIGINT", "SIGTERM"] as const) {
+    process.on(sig, () => {
+      if (ac.signal.aborted) process.exit(130);
+      ac.abort();
+    });
+  }
+  return ac.signal;
+}
+
 export interface BoardTasksOptions {
   board?: string;
   /** Compose one specific kanban task by id. */
@@ -97,8 +128,21 @@ export interface BoardTasksOptions {
   loop: boolean;
   /** Stop the loop after the first FAILED run (default: FAILED → Blocked, loop continues). */
   stopOnFail: boolean;
+  /** Run each task in its own worktree (`<repo>-<id>` on `feat/<id>`) instead of the current checkout. */
+  worktree?: boolean;
+  /** With worktree: after a DONE run, rebase + ff-merge + clean up via scripts/merge-worktree.sh. */
+  merge?: boolean;
+  /** With loop: when the board is drained, sleep this many ms and poll again (until max-tasks / SIGINT). */
+  followMs?: number;
+  /** Stop after composing this many tasks (guards an unattended loop / follow). */
+  maxTasks?: number;
   runOne: (opts: ComposeCliOptions) => Promise<number>;
   log: (msg: string) => void;
+  /** Test seams. */
+  sleep?: (ms: number) => Promise<void>;
+  prepareWorktree?: (taskId: string) => Promise<TaskWorktree>;
+  mergeRunner?: MergeRunner;
+  signal?: AbortSignal;
   /** Test seam: where per-goal compose state lives. Defaults to ~/.at/compose. */
   workspaceFor?: (goalId: string) => ComposeWorkspace;
 }
@@ -129,9 +173,30 @@ export async function runBoardTasks(
     }
   };
 
+  const sleep =
+    opts.sleep ??
+    ((ms: number) =>
+      new Promise<void>((resolve) => {
+        const t = setTimeout(resolve, ms);
+        opts.signal?.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(t);
+            resolve();
+          },
+          { once: true },
+        );
+      }));
+  const prepare = opts.prepareWorktree ?? ((id: string) => ensureTaskWorktree(process.cwd(), id));
+  const merger = opts.mergeRunner ?? mergeViaScript;
+  const follow = opts.loop && !opts.taskId && (opts.followMs ?? 0) > 0;
+
   let anyFailed = false;
   let claimedSpecific = false;
+  let done = 0;
   for (;;) {
+    if (opts.signal?.aborted) break;
+    if (opts.maxTasks !== undefined && done >= opts.maxTasks) break;
     let task: Awaited<ReturnType<typeof source.claim>>;
     if (opts.taskId) {
       if (claimedSpecific) {
@@ -145,8 +210,11 @@ export async function runBoardTasks(
     }
     if (!task) {
       if (opts.taskId) return 1; // explicitly requested task not found
-      break;
+      if (!follow) break;
+      await sleep(opts.followMs as number); // drained: poll the board again
+      continue;
     }
+    done++;
 
     const goalId = task.id.toLowerCase();
     const ws = workspaceFor(goalId);
@@ -160,10 +228,35 @@ export async function runBoardTasks(
     }
 
     const goal = await taskGoal(task);
-    const code = await opts.runOne({ goal, goalId, task, source, ...params });
+    let wt: TaskWorktree | undefined;
+    if (opts.worktree) {
+      try {
+        wt = await prepare(task.id);
+        opts.log(`[compose] ${task.id} worktree ${wt.path} (${wt.branch})`);
+      } catch (err) {
+        // No isolation = no run: composing in the shared checkout would defeat the flag.
+        opts.log(`[compose] worktree for ${task.id} failed: ${err instanceof Error ? err.message : String(err)}`);
+        await finish(task, "FAILED", { goalDir: ws.goalDir, round: 0 });
+        anyFailed = true;
+        if (opts.stopOnFail) break;
+        if (!opts.loop || opts.taskId) break;
+        continue;
+      }
+    }
+    const code = await opts.runOne({ goal, goalId, task, source, cwd: wt?.path, ...params });
     if (code !== 0) {
       anyFailed = true;
       if (opts.stopOnFail) break;
+    } else if (wt && opts.merge) {
+      const merged = await merger(wt, await mainCheckout(process.cwd()));
+      opts.log(
+        `[compose] merge ${wt.branch}: ${merged.ok ? "MERGED" : "FAILED"} ${merged.ok ? "" : merged.output}`.trim(),
+      );
+      if (!merged.ok) {
+        // Work is done and committed in the worktree; leave it for a human, do not loop on top of an unmerged base.
+        anyFailed = true;
+        break;
+      }
     }
     if (!opts.loop || opts.taskId) break;
   }
@@ -273,7 +366,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
           tier: opts.tier,
           agent: opts.agent,
           keywords: opts.keywords,
-          cwd: process.cwd(),
+          cwd: opts.cwd ?? process.cwd(),
         },
         createComposeDeps(workspace),
       );
@@ -310,8 +403,27 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
     .option("--loop", "Claim and compose board tasks until none are executable", false)
     .option("--board <file>", "Kanban board file for --task/--loop (default: resolved project board)")
     .option("--stop-on-fail", "With --loop: stop after the first FAILED run", false)
+    .option("--worktree", "With --task/--loop: run each task in its own worktree <repo>-<id> on feat/<id>", false)
+    .option("--merge", "With --worktree: after a DONE run, rebase + ff-merge into main and clean up", false)
+    .option("--follow [seconds]", "With --loop: keep polling the board when drained (default every 60s)")
+    .option("--max-tasks <number>", "With --loop: stop after composing this many tasks", (v) => parseInt(v, 10))
     .action(async (args: ComposeCliArgs) => {
       const prompt = args.prompt ?? args.goal;
+      if ((args.worktree || args.merge || args.follow || args.maxTasks) && !(args.task || args.loop)) {
+        error("[compose] Error: --worktree/--merge/--follow/--max-tasks need --task or --loop");
+        process.exit(1);
+        return;
+      }
+      if (args.merge && !args.worktree) {
+        error("[compose] Error: --merge requires --worktree");
+        process.exit(1);
+        return;
+      }
+      if (args.follow && !args.loop) {
+        error("[compose] Error: --follow requires --loop");
+        process.exit(1);
+        return;
+      }
       if (args.task || args.loop) {
         if (prompt) {
           error("[compose] Error: --prompt/--goal cannot be combined with --task/--loop");
@@ -337,6 +449,11 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
                 taskId: args.task,
                 loop: args.loop ?? false,
                 stopOnFail: args.stopOnFail ?? false,
+                worktree: args.worktree ?? false,
+                merge: args.merge ?? false,
+                followMs: followMsFrom(args.follow),
+                maxTasks: args.maxTasks,
+                signal: abortOnSignal(),
                 runOne: run,
                 log,
               },
