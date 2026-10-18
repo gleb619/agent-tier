@@ -33,4 +33,4 @@ bin/mock-long-agent
 /gradlew
 /gradlew.bat
 /build/
-# .kiro/ is tracked — steering files live there
+.kiro/
