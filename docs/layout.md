@@ -64,8 +64,8 @@ One query box, always the first sidebar row, filters **both** the navigation ite
 | | Total runs  | | Active      | | Success     | | Avg time    |      |
 | | 128  ↑ 12   | | 2           | | 44%  ▼ red  | | 3m 12s ↓    |      |
 | +-------------+ +-------------+ +-------------+ +-------------+      |
-| Time & tokens   time 3h20m · tokens 1.2M (in 900k / out 300k)        |
-|   over budget 2 · time 78% of plan · tokens 112% of plan             |
+| Time            time 3h20m · 128 finished runs                       |
+|   over budget 2 · time 78% of plan                                   |
 +----------------------------------+-----------------------------------+
 | Active runs                      | Agents                            |
 |  ● fix-auth      kimi   02:11    |  tier 1  glm-code  codex   kimi   |
@@ -101,8 +101,8 @@ Success-rate card color: ≥80% green, 50–79% amber, <50% red.
 +----------------------------------------------------------------------+
 | ● fix-auth                      kimi · t2 · running · 02:11          |
 | id 8f3a… · started 19:02 · cwd ~/proj          [Retry] [Kill] [Discuss]|
-| time 12m · tokens 84k in · 12k out                                   |
-| T9 time 20m / est 30m (-33%) · T9 tokens 140k / est 120k (+16%)     |
+| time 12m                                                             |
+| T9 time 20m / est 30m (-33%)                                         |
 +----------------------------------------------------------------------+
 | Log                                                  [follow ✓] [⤓]  |
 | 19:02:11 starting…                                                   |

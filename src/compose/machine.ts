@@ -49,7 +49,7 @@ export interface ComposeDeps {
   askBrain(prompt: string): Promise<string>;
   runCmd(cmd: string, cwd: string): Promise<CommandResult>;
   codegraph(goal: string, maxNodes: number): Promise<string>;
-  /** Optional: meter a finished run against a kanban task (time + tokens). Best-effort. */
+  /** Optional: meter a finished run against a kanban task (time). Best-effort. */
   recordRun?(runId: string, taskId: string): Promise<void>;
   /** Optional log sink for non-fatal warnings (e.g. task-source hook errors). */
   log?(msg: string): void;

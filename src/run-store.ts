@@ -3,7 +3,6 @@ import path from "node:path";
 import { withLock } from "./lock";
 import { getProcessTicks, isPidAlive } from "./process-utils";
 import { getStateFilePath } from "./state-dir";
-import { type RunUsage, usageForRun } from "./usage/extract";
 
 /** Placeholder `RunRecord.name` until the namer resolves — or forever, when it never does. */
 export const UNNAMED_PLACEHOLDER = "unnamed";
@@ -26,8 +25,6 @@ export interface RunRecord {
    * (`at status`, TUI sidebar) can always render a stable column.
    */
   name: string;
-  /** Token usage, filled once when the run finishes (see `updateRun`). Absent on legacy/unfinished runs. */
-  usage?: RunUsage;
   /** Kanban task this run worked on (compose `--task` / `--loop`). */
   taskId?: string;
 }
@@ -110,14 +107,6 @@ export async function updateRun(stateDir: string, runId: string, updates: Partia
     const run = runs.find((r) => r.runId === runId);
     if (run) {
       Object.assign(run, updates);
-      // Single choke point for every finish path (runner, supervisor, mcp, stop): capture usage once.
-      if (run.finishedAt && !run.usage) {
-        try {
-          run.usage = usageForRun(run.prompt, run.logFile);
-        } catch {
-          // usage is advisory — never fail a status update over it
-        }
-      }
       writeJsonl(runsFile, runs);
     }
   });

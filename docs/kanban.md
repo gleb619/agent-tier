@@ -45,25 +45,38 @@ Lightweight planner for `at` implementation tasks. Machine-mutated by `at kanban
 | T49 | Done    | Shared TUI/WebUI layout spec   | docs/layout.md is canonical ASCII layout; add src/ui-spec.ts (nav, sections, tokens) mirroring it, used by both UIs                 | High     | loop  | T41,T42,T43,T44,T50 | T25                 | docs/layout.md |
 | T50 | Backlog | TUI layout parity              | align src/tui to ui-spec: same nav/sections, dashboard metrics, agents view, status colors; spec-driven parity tests                | High     | loop  | T48                 | T41,T42,T43,T44,T49 | -              |
 
-## Estimates + consumption
+## Time planning + consumption
 
-Two optional trailing columns, `Est Time` and `Est Tokens`, plan the cost of a task; `-` = unset.
-Boards that predate them keep working — the first `at kanban add --est-*` appends the columns
-(every other row gets `-`). `at kanban init` templates include them.
+Two optional trailing columns plan a task: `Est Time` (wall-time budget) and `Planned` (start date,
+`YYYY-MM-DD`); `-` = unset. Boards that predate them keep working — the first `at kanban add` that
+uses `--est-time` / `--planned` appends just that column (every other row gets `-`). `at kanban init`
+templates include both. Old `Est Tokens` columns are harmless leftovers: nothing reads them.
 
 ```bash
-at kanban add --id T60 --title "x" --est-time 45m --est-tokens 120k   # 45m, 2h, 1h30m · 900, 120k, 1.5M
+at kanban add --id T60 --title "x" --est-time 45m --planned 2026-11-03   # 45m, 2h, 1h30m · calendar date
 ```
 
-Consumption is **not** written to the board (it stays small and diff-friendly). Instead:
+Consumption is **time only** and is not written to the board (it stays small and diff-friendly):
 
-* Every finished run records `usage` in `runs.jsonl` — real numbers when the agent log reports them
-  (cline `run_result`, opencode `step-finish`, codex/qwen `usage`), else a chars/4 estimate flagged `estimated`.
-* Compose (`--task` / `--loop`) copies each finished run (retries included) to the durable
+* Compose (`--task` / `--loop`) copies each finished run's wall time (retries included) to the durable
   `<stateDir>/task-metrics.jsonl` (`runs.jsonl` is pruned at 24h/30 runs), keyed by task id, and tags the run with `taskId`.
-* Run Details shows the run's time + tokens and the task's consumed-vs-planned (green ≤ plan, yellow ≤ +25%, red above);
-  the Dashboard shows totals, over-budget task count and consumed÷planned ratios.
+* Run Details shows the task's consumed-vs-planned time (green ≤ plan, yellow ≤ +25%, red above);
+  the Dashboard shows total time, over-budget task count and the consumed÷planned ratio.
   WebUI reads `GET /api/usage` (`at bridge usage summary`).
+
+## Plan files + keywords
+
+`at kanban add --plan <path>` creates the plan file when it is missing, from a skeleton whose first
+section is `## Keywords` (then Requirements / Design / Tasks). `--keywords a,b` fills it — and when the
+row has no plan file yet, links a default `plans/<ID>-<slug>.md` first. On an existing plan without
+keywords the section is inserted after the title; existing keywords are never rewritten.
+
+```bash
+at kanban add --id T61 --title "login flow" --keywords "auth, jwt, src/auth/login.ts"
+```
+
+`at compose` reads the keywords (see [cli.md](cli.md#keywords--investigate-context)) and uses them as
+the `at index` / codegraph query in INVESTIGATE, so keep them to concrete symbols, paths and concepts.
 
 ## Compose + Kanban
 
@@ -146,8 +159,9 @@ at compose stop nightly      # finish the in-flight task, then exit (resumable);
   implementer follows it and `--test-cmd` gates DONE. Opt in to the tier-1 pipeline with `--plan-then-do` /
   `AT_PLAN_THEN_DO=1` (see [cli.md](cli.md#compose-single-run-by-default-plan-then-do-opt-in)).
 
-* **Plan-file keywords:** put `keywords: a, b` (front matter) or a `Keywords: a, b` line (also `labels:` /
-  `tags:`) in the first 30 lines of the plan file. INVESTIGATE feeds them to `codegraph context` as the
+* **Plan-file keywords:** a `## Keywords` section (bullets or comma list; scaffolded by `at kanban add --plan`),
+  or `keywords: a, b` (front matter) / a `Keywords: a, b` line (also `labels:` / `tags:`) in the first 30 lines
+  of the plan file. INVESTIGATE feeds them to `codegraph context` as the
   query (instead of the whole goal text) to bootstrap `context.md`. The board schema is unchanged.
 
 * Goal text comes from the task's Title + Description (+ `Plan File` content when set).

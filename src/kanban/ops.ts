@@ -1,14 +1,14 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { TableRow } from "mdast";
-import { parseDuration, parseTokens } from "../usage/units";
+import { parseDuration } from "../usage/units";
 import { type BoardDoc, dataRows, findRowById, headerIndex, toTasks } from "./board";
 import { cellText, makeCell, setCellText } from "./parse";
 import { nextExecutable } from "./select";
 import {
   blank,
   COL_EST_TIME,
-  COL_EST_TOKENS,
+  COL_PLANNED,
   DEFAULT_OWNER,
   DEFAULT_PRIORITY,
   DEFAULT_STATUS,
@@ -46,6 +46,14 @@ function requireRow(doc: BoardDoc, id: string): number {
   const rowIdx = findRowById(doc, id);
   if (rowIdx === -1) throw new Error(`Task ${id} not found`);
   return rowIdx;
+}
+
+/** Strict `YYYY-MM-DD` that is a real calendar day (rejects 2026-02-31). */
+export function isIsoDate(value: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return false;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
 }
 
 /** Append `name` as a trailing column (header + `-` in every row) when the board lacks it. */
@@ -139,7 +147,7 @@ export function opShow(doc: BoardDoc, id: string, opts: ShowOptions = {}): OpRes
   field("Blocked By:", task["Blocked By"]);
   field("Plan File:", task["Plan File"]);
   if (COL_EST_TIME in task) field("Est Time:", task[COL_EST_TIME]);
-  if (COL_EST_TOKENS in task) field("Est Tokens:", task[COL_EST_TOKENS]);
+  if (COL_PLANNED in task) field("Planned:", task[COL_PLANNED]);
 
   if (!opts.withPlan || blank(task["Plan File"])) return r;
 
@@ -170,8 +178,8 @@ export interface AddOptions {
   description?: string;
   /** Planned wall time, e.g. `45m`, `1h30m`. */
   estTime?: string;
-  /** Planned token budget, e.g. `120k`. */
-  estTokens?: string;
+  /** Planned start date, `YYYY-MM-DD`. */
+  planned?: string;
 }
 
 export function opAdd(doc: BoardDoc, opts: AddOptions): OpResult {
@@ -182,13 +190,13 @@ export function opAdd(doc: BoardDoc, opts: AddOptions): OpResult {
   if (opts.estTime !== undefined && opts.estTime !== SENTINEL && parseDuration(opts.estTime) === null) {
     throw new Error(`Invalid --est-time "${opts.estTime}". Use e.g. 45m, 2h, 1h30m`);
   }
-  if (opts.estTokens !== undefined && opts.estTokens !== SENTINEL && parseTokens(opts.estTokens) === null) {
-    throw new Error(`Invalid --est-tokens "${opts.estTokens}". Use e.g. 900, 120k, 1.5M`);
+  if (opts.planned !== undefined && opts.planned !== SENTINEL && !isIsoDate(opts.planned.trim())) {
+    throw new Error(`Invalid --planned "${opts.planned}". Use a calendar date, e.g. 2026-11-03`);
   }
 
   const r = op();
   if (opts.estTime !== undefined) ensureColumn(doc, COL_EST_TIME);
-  if (opts.estTokens !== undefined) ensureColumn(doc, COL_EST_TOKENS);
+  if (opts.planned !== undefined) ensureColumn(doc, COL_PLANNED);
 
   const idIdx = requireIndex(doc, "ID");
   const id = opts.id?.trim() || nextId(doc);
@@ -226,7 +234,7 @@ export function opAdd(doc: BoardDoc, opts: AddOptions): OpResult {
   values["Plan File"] = opts.plan || existing?.["Plan File"] || SENTINEL;
   values.Description = existing?.Description || SENTINEL;
   if (opts.estTime !== undefined) values[COL_EST_TIME] = opts.estTime.trim() || SENTINEL;
-  if (opts.estTokens !== undefined) values[COL_EST_TOKENS] = opts.estTokens.trim() || SENTINEL;
+  if (opts.planned !== undefined) values[COL_PLANNED] = opts.planned.trim() || SENTINEL;
 
   if (opts.description !== undefined) {
     // Code points, not UTF-16 units: emoji and CJK must count as one and never split a surrogate.

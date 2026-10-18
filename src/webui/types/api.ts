@@ -20,8 +20,6 @@ export interface ApiRun {
   name: string;
   /** Present when the run list joins several state dirs (project `.at/` + `~/.at/`). */
   scope?: string;
-  /** Token usage captured when the run finished (reported by the agent or estimated). */
-  usage?: { tokensIn: number; tokensOut: number; source: "reported" | "estimated" };
   /** Kanban task this run worked on. */
   taskId?: string;
 }

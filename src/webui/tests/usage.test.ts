@@ -9,28 +9,19 @@ import { deriveUsageTiles } from "../utils/usage";
 const summary: ApiUsage["summary"] = {
   runs: 3,
   ms: 3_600_000,
-  tokensIn: 150_000,
-  tokensOut: 50_000,
-  tokens: 200_000,
-  estimatedRuns: 1,
   tasksMetered: 2,
   tasksWithEstimate: 2,
   tasksOverBudget: 1,
   timeRatio: 0.8,
-  tokenRatio: 1.5,
 };
 const budget: ApiUsage["budgets"][number] = {
   taskId: "T9",
   title: "slow one",
   status: "Done",
   estMs: 600_000,
-  estTokens: 100_000,
   actualMs: 1_200_000,
-  actualTokens: 150_000,
   runs: 2,
-  estimated: false,
   timeState: "over",
-  tokenState: "over",
 };
 
 const run: ApiRun = {
@@ -45,7 +36,6 @@ const run: ApiRun = {
   exitCode: 0,
   status: "done",
   name: "Run r1",
-  usage: { tokensIn: 2000, tokensOut: 500, source: "reported" },
   taskId: "T9",
 };
 
@@ -56,14 +46,11 @@ describe("usage tiles", () => {
     const t = deriveUsageTiles(summary);
     expect(t.map((x) => [x.label, x.value])).toEqual([
       ["Time consumed", "1h00m"],
-      ["Tokens consumed", "200k"],
       ["Time vs plan", "80%"],
-      ["Tokens vs plan", "150%"],
       ["Over budget", "1"],
     ]);
-    expect(t[2].tone).toBe("under");
-    expect(t[3].tone).toBe("over");
-    expect(t[4].tone).toBe("over");
+    expect(t[1].tone).toBe("under");
+    expect(t[2].tone).toBe("over");
   });
 });
 
@@ -72,7 +59,7 @@ describe("UsagePanel", () => {
     render(UsagePanel);
     expect(screen.getByTestId("usage-empty")).toBeTruthy();
     usage.set({ summary, budgets: [budget] });
-    expect(await screen.findAllByTestId("usage-tile")).toHaveLength(5);
+    expect(await screen.findAllByTestId("usage-tile")).toHaveLength(3);
     expect(screen.getByTestId("usage-over-budget").textContent).toContain("T9");
   });
 });
@@ -84,14 +71,12 @@ describe("RunMeta usage rows", () => {
     const rows = await screen.findAllByTestId("run-usage-row");
     expect(rows.map((r) => r.textContent)).toEqual([
       expect.stringContaining("12m"),
-      expect.stringContaining("2k in · 500 out"),
       expect.stringContaining("T9 time"),
-      expect.stringContaining("T9 tokens"),
     ]);
   });
 
   it("no usage rows for legacy runs", () => {
-    render(RunMeta, { run: { ...run, usage: undefined, taskId: undefined } });
+    render(RunMeta, { run: { ...run, taskId: undefined } });
     expect(screen.queryAllByTestId("run-usage-row")).toHaveLength(0);
   });
 });

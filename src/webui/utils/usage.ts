@@ -1,10 +1,10 @@
 // Shared with the TUI/CLI: pure model + unit formatters (no fs), so both UIs agree on every number.
 
 export { runUsageLines, type TaskBudget, type UsageLine, type UsageSummary } from "../../usage/model";
-export { type Budget, budgetState, formatDuration, formatTokens, variancePct } from "../../usage/units";
+export { type Budget, budgetState, formatDuration, variancePct } from "../../usage/units";
 
 import type { UsageSummary } from "../../usage/model";
-import { formatDuration, formatTokens } from "../../usage/units";
+import { formatDuration } from "../../usage/units";
 
 /** Budget state → tailwind text colour class (neutral when nothing to compare). */
 export const BUDGET_CLASS: Record<string, string> = {
@@ -23,25 +23,18 @@ export interface UsageTile {
   tone: "none" | "under" | "near" | "over";
 }
 
-/** Dashboard tiles: consumed time/tokens, then planned-vs-consumed health. Pure. */
+/** Dashboard tiles: consumed time, then planned-vs-consumed health. Pure. */
 export function deriveUsageTiles(u: UsageSummary): UsageTile[] {
   const ratioTone = (r: number | null): UsageTile["tone"] =>
     r === null ? "none" : r <= 1 ? "under" : r <= 1.25 ? "near" : "over";
   return [
     { label: "Time consumed", value: formatDuration(u.ms), hint: `${u.runs} finished runs`, tone: "none" },
     {
-      label: "Tokens consumed",
-      value: formatTokens(u.tokens),
-      hint: `in ${formatTokens(u.tokensIn)} · out ${formatTokens(u.tokensOut)}${u.estimatedRuns > 0 ? ` · ${u.estimatedRuns} est` : ""}`,
-      tone: "none",
-    },
-    {
       label: "Time vs plan",
       value: pct(u.timeRatio),
       hint: `${u.tasksMetered} tasks metered`,
       tone: ratioTone(u.timeRatio),
     },
-    { label: "Tokens vs plan", value: pct(u.tokenRatio), tone: ratioTone(u.tokenRatio) },
     {
       label: "Over budget",
       value: String(u.tasksOverBudget),

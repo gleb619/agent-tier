@@ -71,10 +71,7 @@ function runEqual(a: RunRecord, b: RunRecord): boolean {
     a.exitCode === b.exitCode &&
     a.status === b.status &&
     a.name === b.name &&
-    a.taskId === b.taskId &&
-    a.usage?.tokensIn === b.usage?.tokensIn &&
-    a.usage?.tokensOut === b.usage?.tokensOut &&
-    a.usage?.source === b.usage?.source
+    a.taskId === b.taskId
   );
 }
 

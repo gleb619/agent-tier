@@ -46,23 +46,44 @@ export async function taskGoal(task: ComposeTask): Promise<string> {
 const KEYWORD_KEYS = new Set(["keywords", "labels", "tags"]);
 const KEYWORD_SCAN_LINES = 30;
 const MAX_KEYWORDS = 12;
+const SECTION_SCAN_LINES = 80;
+const KEYWORDS_SECTION_RE = /^#{1,6}\s+(?:keywords|labels|tags)\s*$/i;
+
+/** Words under a `## Keywords` heading: bullets and/or comma-separated lines, up to the next heading. */
+function parseKeywordsSection(plan: string): string[] {
+  const out: string[] = [];
+  let inSection = false;
+  for (const raw of plan.split("\n").slice(0, SECTION_SCAN_LINES)) {
+    const line = raw.trim();
+    if (/^#{1,6}\s/.test(line)) {
+      if (inSection) break;
+      inSection = KEYWORDS_SECTION_RE.test(line);
+      continue;
+    }
+    if (!inSection || !line || /^<.*>$/.test(line)) continue;
+    out.push(...line.replace(/^[-*]\s+/, "").split(","));
+  }
+  return out;
+}
+
+function cleanWords(words: string[]): string[] {
+  const cleaned = words.map((w) => w.replace(/[`"']/g, "").trim()).filter((w) => w.length > 0);
+  return [...new Set(cleaned)].slice(0, MAX_KEYWORDS);
+}
 
 /**
- * Keywords/labels from a plan file's head: a `keywords:` / `labels:` / `tags:` line
- * (YAML front matter or a plain `Keywords: a, b` line), comma-separated, optional `[...]`.
+ * Keywords/labels from a plan file: a `keywords:` / `labels:` / `tags:` line in the head
+ * (YAML front matter or a plain `Keywords: a, b` line), comma-separated, optional `[...]`;
+ * else the bullets / comma lines under a `## Keywords` heading.
  */
 export function parsePlanKeywords(plan: string): string[] {
   for (const line of plan.split("\n").slice(0, KEYWORD_SCAN_LINES)) {
     const m = /^\s*(?:[-*]\s+)?(?:\*\*)?([A-Za-z]+)(?:\*\*)?\s*:\s*(?:\*\*)?\s*(.+?)\s*$/.exec(line);
     if (!m || !KEYWORD_KEYS.has(m[1].toLowerCase())) continue;
-    const words = m[2]
-      .replace(/^\[|\]$/g, "")
-      .split(",")
-      .map((w) => w.replace(/[`"']/g, "").trim())
-      .filter((w) => w.length > 0);
-    return [...new Set(words)].slice(0, MAX_KEYWORDS);
+    const words = cleanWords(m[2].replace(/^\[|\]$/g, "").split(","));
+    if (words.length > 0) return words;
   }
-  return [];
+  return cleanWords(parseKeywordsSection(plan));
 }
 
 /** Keywords of the task's plan file; empty when unset, unreadable or absent (hint only). */

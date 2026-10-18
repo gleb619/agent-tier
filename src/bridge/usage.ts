@@ -5,7 +5,7 @@ import type { BridgeResource } from "./types";
 import { optionalString } from "./util";
 
 /**
- * `bridge usage summary` — dashboard numbers (time/tokens consumed, kanban budget health)
+ * `bridge usage summary` — dashboard numbers (time consumed, kanban budget health)
  * plus per-task planned-vs-consumed rows. params: `{ board?: string }`. Read-only.
  */
 export const usageResource: BridgeResource = {

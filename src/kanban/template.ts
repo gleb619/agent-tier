@@ -8,7 +8,7 @@ export const LEGEND_SECTION = `## Status Legend
 | \`Done\`        | Task completed and accepted.                                  | Coding agent    |
 `;
 
-export const BOARD_HEADER = `| ID | Status | Title | Description | Priority | Owner | Blocks | Blocked By | Plan File | Est Time | Est Tokens |
+export const BOARD_HEADER = `| ID | Status | Title | Description | Priority | Owner | Blocks | Blocked By | Plan File | Est Time | Planned |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |`;
 
 export function initBoardText(): string {

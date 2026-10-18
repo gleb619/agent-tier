@@ -6,7 +6,7 @@ import { resolveStatusDirs } from "../../state-dir";
 import { buildStateReportFor, type StateReport } from "../../status";
 import { AGENT_HEALTH_CONFIG, type AgentHealthState } from "../../ui-spec";
 import { summarizeUsage, type UsageSummary } from "../../usage/summary";
-import { formatDuration as fmtPlanDur, formatTokens } from "../../usage/units";
+import { formatDuration as fmtPlanDur } from "../../usage/units";
 import { durationMs, formatMs, formatRunRow, isToday, statusColor, successRateColor, TUI_COLORS } from "../format";
 import { refreshTick } from "../store/auto-refresh";
 import { filteredSessions2 } from "../store/filtered-sessions";
@@ -101,14 +101,13 @@ function EmptyState(props: { message: string }): JSX.Element {
 
 const pct = (r: number | null): string => (r === null ? "-" : `${Math.round(r * 100)}%`);
 
-/** Two dashboard lines: consumed totals, then planned-vs-consumed health. Pure. */
+/** Two dashboard lines: consumed time, then planned-vs-consumed health. Pure. */
 export function usageLines(u: UsageSummary): string[] {
-  const est = u.estimatedRuns > 0 ? ` · ${u.estimatedRuns} est` : "";
   return [
-    `time ${fmtPlanDur(u.ms)} · tokens ${formatTokens(u.tokens)} (in ${formatTokens(u.tokensIn)} / out ${formatTokens(u.tokensOut)})${est}`,
+    `time ${fmtPlanDur(u.ms)} · ${u.runs} finished runs`,
     u.tasksMetered === 0
       ? "tasks: none metered yet"
-      : `tasks ${u.tasksMetered} metered · over budget ${u.tasksOverBudget} · time ${pct(u.timeRatio)} of plan · tokens ${pct(u.tokenRatio)} of plan`,
+      : `tasks ${u.tasksMetered} metered · over budget ${u.tasksOverBudget} · time ${pct(u.timeRatio)} of plan`,
   ];
 }
 

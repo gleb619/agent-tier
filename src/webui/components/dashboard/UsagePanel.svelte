@@ -2,13 +2,13 @@
 import clsx from "clsx";
 import Card from "$components/common/Card.svelte";
 import { usage } from "$stores/usage";
-import { BUDGET_CLASS, deriveUsageTiles, formatDuration, formatTokens, variancePct } from "$utils/usage";
+import { BUDGET_CLASS, deriveUsageTiles, formatDuration, variancePct } from "$utils/usage";
 
 $: tiles = $usage ? deriveUsageTiles($usage.summary) : [];
-$: worst = ($usage?.budgets ?? []).filter((b) => b.timeState === "over" || b.tokenState === "over").slice(0, 5);
+$: worst = ($usage?.budgets ?? []).filter((b) => b.timeState === "over").slice(0, 5);
 </script>
 
-<Card title="Time &amp; tokens">
+<Card title="Time">
   {#if !$usage}
     <p class="text-sm text-gray-500" data-testid="usage-empty">No usage data yet</p>
   {:else}
@@ -29,9 +29,6 @@ $: worst = ($usage?.budgets ?? []).filter((b) => b.timeState === "over" || b.tok
             <span class="truncate text-gray-600">{b.title}</span>
             <span class={clsx("tabular-nums", BUDGET_CLASS[b.timeState])}>
               {formatDuration(b.actualMs)} / {b.estMs === null ? "—" : formatDuration(b.estMs)} ({variancePct(b.estMs, b.actualMs)})
-            </span>
-            <span class={clsx("tabular-nums", BUDGET_CLASS[b.tokenState])}>
-              {formatTokens(b.actualTokens)} / {b.estTokens === null ? "—" : formatTokens(b.estTokens)} ({variancePct(b.estTokens, b.actualTokens)})
             </span>
           </li>
         {/each}

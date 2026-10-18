@@ -104,9 +104,9 @@ export function budgetColor(state: Budget): string | undefined {
         : undefined;
 }
 
-/** Time/token rows (own run, then the owning kanban task vs its estimate). Empty while nothing is metered. */
+/** Time rows (own run, then the owning kanban task vs its estimate). Empty while nothing is metered. */
 export function usageRows(session: RunRecord, budget: TaskBudget | null): MetaRow[] {
-  if (!session.usage && !(budget && budget.runs > 0)) return [];
+  if (!(budget && budget.runs > 0)) return [];
   return runUsageLines(session, budget).map((line) => ({
     kind: "fields" as const,
     valueWidth: META_VALUE_WIDTH_WIDE,

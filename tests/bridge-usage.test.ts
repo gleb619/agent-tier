@@ -16,7 +16,7 @@ describe("bridge usage summary", () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), "at-bu-"));
     dirs.push(dir);
     const logFile = path.join(dir, "r1.log");
-    writeFileSync(logFile, '{"usage":{"inputTokens":150000,"outputTokens":50000}}\n');
+    writeFileSync(logFile, "log\n");
     await addRun(dir, {
       runId: "r1",
       agent: "qwen",
@@ -43,24 +43,23 @@ describe("bridge usage summary", () => {
         "| :-- | :-- | :-- |",
         "| `Done` | d | a |",
         "",
-        "| ID | Status | Title | Est Time | Est Tokens |",
-        "| :-- | :-- | :-- | :-- | :-- |",
-        "| T1 | Done | first | 10m | 100k |",
+        "| ID | Status | Title | Est Time |",
+        "| :-- | :-- | :-- | :-- |",
+        "| T1 | Done | first | 10m |",
         "",
       ].join("\n"),
     );
 
     const out = (await dispatchBridge("usage", "summary", { board }, { stateDirs: [dir] })) as {
-      summary: { runs: number; tokens: number; tasksOverBudget: number };
-      budgets: Array<{ taskId: string; actualMs: number; timeState: string; tokenState: string }>;
+      summary: { runs: number; ms: number; tasksOverBudget: number };
+      budgets: Array<{ taskId: string; actualMs: number; timeState: string }>;
     };
-    expect(out.summary).toMatchObject({ runs: 1, tokens: 200_000, tasksOverBudget: 1 });
+    expect(out.summary).toMatchObject({ runs: 1, ms: 20 * 60_000, tasksOverBudget: 1 });
     expect(out.budgets).toHaveLength(1);
     expect(out.budgets[0]).toMatchObject({
       taskId: "T1",
       actualMs: 20 * 60_000,
       timeState: "over",
-      tokenState: "over",
     });
   });
 

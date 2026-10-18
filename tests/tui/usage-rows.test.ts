@@ -25,13 +25,9 @@ const budget: TaskBudget = {
   title: "t",
   status: "Done",
   estMs: 600_000,
-  estTokens: 100_000,
   actualMs: 720_000,
-  actualTokens: 150_000,
   runs: 1,
-  estimated: false,
   timeState: "near",
-  tokenState: "over",
 };
 
 describe("TUI usage rows", () => {
@@ -40,20 +36,19 @@ describe("TUI usage rows", () => {
     expect(runMetaRows(run())).toHaveLength(4);
   });
 
-  it("shows run time/tokens plus task budget lines with state colours", () => {
-    const rows = usageRows(run({ usage: { tokensIn: 2000, tokensOut: 500, source: "reported" } }), budget);
+  it("shows run time plus task budget lines with state colours", () => {
+    const rows = usageRows(run(), budget);
     const fields = rows.flatMap((r) => (r.kind === "fields" ? r.fields : []));
-    expect(fields.map((f) => f.label)).toEqual(["time", "tokens", "T9 time", "T9 tokens"]);
-    expect(fields[2].color).toBe(budgetColor("near"));
-    expect(fields[3].color).toBe(budgetColor("over"));
+    expect(fields.map((f) => f.label)).toEqual(["time", "T9 time"]);
+    expect(fields[1].color).toBe(budgetColor("near"));
     expect(budgetColor("none")).toBeUndefined();
   });
 
   it("dashboard usage lines", () => {
-    const s = summarizeUsage([run({ usage: { tokensIn: 1000, tokensOut: 200, source: "estimated" } })], [budget]);
+    const s = summarizeUsage([run()], [budget]);
     const [a, b] = usageLines(s);
-    expect(a).toBe("time 12m · tokens 1.2k (in 1k / out 200) · 1 est");
-    expect(b).toBe("tasks 1 metered · over budget 1 · time 120% of plan · tokens 150% of plan");
+    expect(a).toBe("time 12m · 1 finished runs");
+    expect(b).toBe("tasks 1 metered · over budget 0 · time 120% of plan");
     expect(usageLines(summarizeUsage([], []))[1]).toBe("tasks: none metered yet");
   });
 });

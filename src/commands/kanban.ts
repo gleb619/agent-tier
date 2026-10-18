@@ -15,9 +15,11 @@ import {
   opRemove,
   opShow,
   opStatus,
+  resolvePlanPath,
 } from "../kanban/ops";
+import { ensurePlanFile, splitKeywords } from "../kanban/plan";
 import { initBoardText } from "../kanban/template";
-import { DEFAULT_BOARD_REL, MAX_DESC, REWRITE_TRAILER } from "../kanban/types";
+import { blank, DEFAULT_BOARD_REL, MAX_DESC, REWRITE_TRAILER } from "../kanban/types";
 import { findProjectRoot } from "../state-dir";
 
 interface BoardOpts {
@@ -35,6 +37,16 @@ function gitIgnored(planPath: string, cwd: string): boolean {
   const r = spawnSync("git", ["check-ignore", "-q", planPath], { cwd, stdio: "ignore" });
   // status === 0 → matched an ignore pattern; null/!=0 → not ignored or git unavailable
   return r.status === 0;
+}
+
+function slug(title: string): string {
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "task"
+  );
 }
 
 function printText(r: OpResult): void {
@@ -141,10 +153,14 @@ export function registerKanbanCommand(program: Command): void {
     .option("--owner <owner>", "owner (default: loop)")
     .option("--blocks <ids>", "comma-separated IDs this task blocks")
     .option("--blocked-by <ids>", "comma-separated blocker IDs")
-    .option("--plan <path>", "path to the plan file")
+    .option("--plan <path>", "path to the plan file (created with a Keywords section when missing)")
+    .option(
+      "--keywords <a,b>",
+      "plan-file keywords for compose's index/codegraph scan (creates a default plan file if none)",
+    )
     .option("--description <text>", `short description (max ${MAX_DESC} chars, trimmed not rejected)`)
     .option("--est-time <duration>", "planned wall time, e.g. 45m, 1h30m (adds Est Time column when missing)")
-    .option("--est-tokens <count>", "planned token budget, e.g. 120k (adds Est Tokens column when missing)")
+    .option("--planned <date>", "planned start date YYYY-MM-DD (adds Planned column when missing)")
     .option("--json", "emit JSON instead of text")
     .action(
       (
@@ -159,7 +175,8 @@ export function registerKanbanCommand(program: Command): void {
           plan?: string;
           description?: string;
           estTime?: string;
-          estTokens?: string;
+          planned?: string;
+          keywords?: string;
         },
       ) => {
         runAsync(async () => {
@@ -174,10 +191,31 @@ export function registerKanbanCommand(program: Command): void {
             plan: opts.plan,
             description: opts.description,
             estTime: opts.estTime,
-            estTokens: opts.estTokens,
+            planned: opts.planned,
             isIgnored: gitIgnored,
           };
-          const r = await mutateBoard(p, (doc) => opAdd(doc, addOpts));
+          const keywords = splitKeywords(opts.keywords);
+          const r = await mutateBoard(p, (doc) => {
+            const res = opAdd(doc, addOpts);
+            const task = (res.data as { task: Record<string, string> }).task;
+            // Keywords need a plan file to live in: link a default one when the row has none.
+            if (keywords.length > 0 && blank(task["Plan File"])) {
+              task["Plan File"] = `plans/${task.ID}-${slug(task.Title)}.md`;
+              opAdd(doc, { id: task.ID, plan: task["Plan File"] });
+            }
+            return res;
+          });
+          const task = (r.data as { task: Record<string, string> }).task;
+          if (!blank(task["Plan File"])) {
+            const abs = resolvePlanPath(p, task["Plan File"].replace(/`/g, "").trim());
+            const outcome = ensurePlanFile(abs, {
+              id: task.ID,
+              title: task.Title,
+              description: task.Description,
+              keywords,
+            });
+            if (outcome !== "unchanged") r.messages.push(`Plan file ${outcome}: ${abs}`);
+          }
           if (opts.json) printJson({ file: p, ...(r.data as object), warnings: r.warnings });
           else printText(r);
           return 0;

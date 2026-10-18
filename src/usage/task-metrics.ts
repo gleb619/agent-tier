@@ -2,7 +2,6 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path";
 import { withLock } from "../lock";
 import { loadRuns, updateRun } from "../run-store";
-import { type RunUsage, usageForRun } from "./extract";
 import type { TaskTotals } from "./model";
 
 export type { TaskTotals } from "./model";
@@ -16,9 +15,6 @@ export interface TaskMetric {
   runId: string;
   agent: string;
   ms: number;
-  tokensIn: number;
-  tokensOut: number;
-  source: RunUsage["source"];
   ts: string;
 }
 
@@ -71,29 +67,20 @@ export function aggregateTaskMetrics(rows: TaskMetric[]): Map<string, TaskTotals
       taskId: r.taskId,
       runs: 0,
       ms: 0,
-      tokensIn: 0,
-      tokensOut: 0,
-      tokens: 0,
-      estimated: false,
     };
     t.runs += 1;
     t.ms += r.ms;
-    t.tokensIn += r.tokensIn;
-    t.tokensOut += r.tokensOut;
-    t.tokens = t.tokensIn + t.tokensOut;
-    t.estimated ||= r.source === "estimated";
     out.set(r.taskId, t);
   }
   return out;
 }
 
-/** Copy one finished run's time + usage into the durable task metrics. No-op when the run is unknown. */
+/** Copy one finished run's time into the durable task metrics. No-op when the run is unknown. */
 export async function recordRunForTask(stateDir: string, runId: string, taskId: string): Promise<void> {
   const rec = loadRuns(stateDir).find((r) => r.runId === runId);
   if (!rec) return;
   // Link the run to its task so Run Details can show planned-vs-consumed (also survives in runs.jsonl).
   if (rec.taskId !== taskId) await updateRun(stateDir, runId, { taskId });
-  const usage = rec.usage ?? usageForRun(rec.prompt, rec.logFile);
   const start = new Date(rec.startedAt).getTime();
   const end = rec.finishedAt ? new Date(rec.finishedAt).getTime() : Date.now();
   await recordTaskMetric(stateDir, {
@@ -101,9 +88,6 @@ export async function recordRunForTask(stateDir: string, runId: string, taskId: 
     runId,
     agent: rec.agent,
     ms: Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : 0,
-    tokensIn: usage.tokensIn,
-    tokensOut: usage.tokensOut,
-    source: usage.source,
     ts: new Date().toISOString(),
   });
 }

@@ -190,9 +190,9 @@ Payload matches `at status --json` state section: `{ scheduler, maxEntries, agen
 
 | Verb      | stdin params       | data payload |
 | :-------- | :----------------- | :----------- |
-| `summary` | `{ board?: string }` | `{ summary, budgets }` — `summary`: consumed time/tokens over finished runs + budget health (`tasksOverBudget`, `timeRatio`, `tokenRatio`); `budgets`: per metered kanban task `{ taskId, estMs, estTokens, actualMs, actualTokens, runs, estimated, timeState, tokenState }` |
+| `summary` | `{ board?: string }` | `{ summary, budgets }` — `summary`: consumed time over finished runs + budget health (`tasksOverBudget`, `timeRatio`); `budgets`: per metered kanban task `{ taskId, estMs, actualMs, runs, timeState }` |
 
-`runs list|get` also carry `usage` (`{ tokensIn, tokensOut, source: reported|estimated }`) and `taskId` once a run has finished.
+`runs list|get` also carry `taskId` once a run has finished.
 
 ## Adding a resource
 

@@ -56,7 +56,7 @@ source of truth; the shims will move into bridge verbs in later tasks).
 | `GET /api/runs` | `runs list` | joined state dirs (`at bridge` resolves) |
 | `POST /api/runs` | spawn `at -p ... -a ... -t ... -s` | direct shim; awaiting a `runs create` bridge verb |
 | `GET /api/runs/:id` | `runs get` | |
-| `GET /api/usage` | `usage summary` | time/tokens consumed + kanban planned-vs-consumed |
+| `GET /api/usage` | `usage summary` | time consumed + kanban planned-vs-consumed |
 | `DELETE /api/runs/:id` | `runs stop` | `?force=1` propagates as `{force:true}` |
 | `POST /api/runs/:id/retry` | `runs get` + spawn | direct shim; reads stored prompt/agent/tier |
 | `GET /api/runs/:id/log?lines=N` | `runs get` + tail file | direct; `lines` defaults to 200 |

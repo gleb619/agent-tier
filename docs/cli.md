@@ -264,7 +264,7 @@ at compose --loop --stop-on-fail          # drain the board until nothing is exe
 
 ### Keywords → INVESTIGATE context
 
-A kanban plan file may carry keywords/labels in its first 30 lines — YAML front matter
+A kanban plan file may carry keywords/labels — a `## Keywords` section (bullets or comma list), or in its first 30 lines YAML front matter
 (`keywords: [auth, jwt, src/auth/login.ts]`) or a plain `Keywords: a, b` line (`labels:`/`tags:` also
 accepted, max 12). INVESTIGATE then queries `codegraph context` with the keywords **instead of the goal
 text** (the goal may embed a whole plan, a noisy query) and records them at the top of `context.md`.
