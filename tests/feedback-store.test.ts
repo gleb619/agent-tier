@@ -6,7 +6,9 @@ import {
   addFeedback,
   appendFeedbackLog,
   clearFeedback,
+  DEFAULT_RESOLVED_TTL_MS,
   type FeedbackEntry,
+  type FeedbackStatus,
   getFeedback,
   getFeedbackFile,
   listFeedback,
@@ -251,6 +253,115 @@ describe("feedback-store", () => {
       const evicted = await pruneFeedback(stateDir);
       expect(evicted).toBe(1);
       expect(listFeedback(stateDir).map((e) => e.id)).toEqual(["fresh"]);
+    });
+  });
+
+  describe("resolved TTL", () => {
+    const DAY = 24 * 60 * 60 * 1000;
+
+    function closed(id: string, ageMs: number, status: FeedbackStatus = "resolved"): FeedbackEntry {
+      const at = new Date(Date.now() - ageMs).toISOString();
+      return {
+        id,
+        kind: "note",
+        text: id,
+        status,
+        createdAt: at,
+        updatedAt: at,
+        resolvedAt: at,
+      };
+    }
+
+    function open(id: string, ageMs = 0): FeedbackEntry {
+      const at = new Date(Date.now() - ageMs).toISOString();
+      return { id, kind: "bug", text: id, status: "open", createdAt: at, updatedAt: at };
+    }
+
+    function rawIds(): string[] {
+      return fs
+        .readFileSync(getFeedbackFile(stateDir), "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => (JSON.parse(line) as FeedbackEntry).id);
+    }
+
+    it("defaults to 7 days: keeps 5d-old, evicts 8d-old resolved entries", async () => {
+      expect(DEFAULT_RESOLVED_TTL_MS).toBe(7 * DAY);
+      writeFeedbackFile(stateDir, [closed("fresh5d", 5 * DAY), closed("stale8d", 8 * DAY)]);
+
+      expect(await pruneFeedback(stateDir)).toBe(1);
+      expect(rawIds()).toEqual(["fresh5d"]);
+    });
+
+    it("listFeedback evicts expired entries and rewrites the file", () => {
+      writeFeedbackFile(stateDir, [closed("stale8d", 8 * DAY), open("live"), open("undated", 400 * DAY)]);
+
+      const ids = listFeedback(stateDir, { limit: 10 }).map((e) => e.id);
+      expect(ids).not.toContain("stale8d");
+      expect(rawIds().sort()).toEqual(["live", "undated"]);
+    });
+
+    it("getFeedback evicts expired entries and rewrites the file", () => {
+      writeFeedbackFile(stateDir, [closed("stale8d", 8 * DAY), open("live")]);
+
+      expect(getFeedback(stateDir, "live")?.id).toBe("live");
+      expect(rawIds()).toEqual(["live"]);
+      expect(() => getFeedback(stateDir, "stale8d")).toThrow("not found");
+    });
+
+    it("never TTL-evicts open entries or entries without resolvedAt", async () => {
+      const ancient = new Date(Date.now() - 400 * DAY).toISOString();
+      const noResolvedAt: FeedbackEntry = {
+        id: "noresolvedat",
+        kind: "note",
+        text: "noresolvedat",
+        status: "resolved",
+        createdAt: ancient,
+        updatedAt: ancient,
+      };
+      writeFeedbackFile(stateDir, [open("ancient", 400 * DAY), noResolvedAt]);
+      const before = fs.readFileSync(getFeedbackFile(stateDir), "utf8");
+
+      expect(await pruneFeedback(stateDir)).toBe(0);
+      expect(listFeedback(stateDir, { limit: 10 })).toHaveLength(2);
+      expect(fs.readFileSync(getFeedbackFile(stateDir), "utf8")).toBe(before);
+    });
+
+    it("state.json feedback.resolvedTtlMs overrides the default", async () => {
+      fs.writeFileSync(
+        path.join(stateDir, "state.json"),
+        JSON.stringify({ feedback: { resolvedTtlMs: 1000 } }),
+        "utf8",
+      );
+      writeFeedbackFile(stateDir, [closed("aged5s", 5000), open("live")]);
+
+      expect(await pruneFeedback(stateDir)).toBe(1);
+      expect(rawIds()).toEqual(["live"]);
+    });
+
+    it("AT_FEEDBACK_RESOLVED_TTL_MS overrides state.json", async () => {
+      fs.writeFileSync(path.join(stateDir, "state.json"), JSON.stringify({ feedback: { resolvedTtlMs: DAY } }), "utf8");
+      process.env.AT_FEEDBACK_RESOLVED_TTL_MS = "1000";
+      writeFeedbackFile(stateDir, [closed("aged5s", 5000), open("live")]);
+
+      expect(await pruneFeedback(stateDir)).toBe(1);
+      expect(rawIds()).toEqual(["live"]);
+    });
+
+    it("write paths evict expired entries while holding the lock", async () => {
+      const seed = () => writeFeedbackFile(stateDir, [closed("stale8d", 8 * DAY), open("doomed"), open("live")]);
+
+      seed();
+      await updateFeedback(stateDir, "live", { tags: ["touched"] });
+      expect(rawIds().sort()).toEqual(["doomed", "live"]);
+
+      seed();
+      await appendFeedbackLog(stateDir, "live", { note: "still open" });
+      expect(rawIds().sort()).toEqual(["doomed", "live"]);
+
+      seed();
+      await removeFeedback(stateDir, ["doomed"]);
+      expect(rawIds()).toEqual(["live"]);
     });
   });
 

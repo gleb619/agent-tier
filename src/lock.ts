@@ -76,6 +76,52 @@ export async function acquireLock(stateFilePath: string, timeoutMs = 5000): Prom
   }
 }
 
+/**
+ * Non-blocking `acquireLock` for sync read paths: returns the lock path, or null when a
+ * live process holds it. Dead/unreadable locks are stolen once, like `acquireLock` does.
+ */
+export function tryAcquireLock(stateFilePath: string): string | null {
+  const lockDir = getLockDir(stateFilePath);
+  mkdirSync(lockDir, { recursive: true });
+
+  const lockPath = path.join(lockDir, pathToLockName(stateFilePath));
+  const info: LockInfo = {
+    pid: process.pid,
+    hostname: os.hostname(),
+    startedAt: new Date().toISOString(),
+    stateFile: stateFilePath,
+  };
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      writeFileSync(lockPath, JSON.stringify(info, null, 2), {
+        flag: "wx",
+      });
+      return lockPath;
+    } catch (err: unknown) {
+      if (!(err && typeof err === "object" && "code" in err && err.code === "EEXIST")) {
+        return null;
+      }
+      let existingInfo: LockInfo | null = null;
+      try {
+        const content = readFileSync(lockPath, "utf-8");
+        existingInfo = JSON.parse(content) as LockInfo;
+      } catch {
+        // Lock file corrupted or unreadable, treat as dead
+      }
+      if (existingInfo && isPidAlive(existingInfo.pid)) {
+        return null;
+      }
+      try {
+        unlinkSync(lockPath);
+      } catch {
+        // Ignore unlink errors
+      }
+    }
+  }
+  return null;
+}
+
 export function releaseLock(lockPath: string): void {
   try {
     unlinkSync(lockPath);

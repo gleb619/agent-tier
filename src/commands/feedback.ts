@@ -163,7 +163,7 @@ export function registerFeedbackCommand(program: Command): void {
   feedback
     .command("list")
     .alias("ls")
-    .description("List feedback entries (newest first)")
+    .description("List feedback entries (newest first); evicts resolved/wontfix past the TTL (default 7d)")
     .option("--status <status>", "filter by status")
     .option("--kind <kind>", "filter by kind")
     .option("--agent <agent>", "filter by agent")

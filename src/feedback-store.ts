@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { withLock } from "./lock";
+import { releaseLock, tryAcquireLock, withLock } from "./lock";
 import { getStateFilePath } from "./state-dir";
 
 export type FeedbackKind = "bug" | "improvement" | "note";
@@ -83,7 +83,7 @@ export interface FeedbackConfig {
 
 const DEFAULT_MAX_ENTRIES = 500;
 const DEFAULT_MAX_BYTES = 512 * 1024;
-const DEFAULT_RESOLVED_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const DEFAULT_RESOLVED_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_LOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_LOG_ITEMS = 50;
 
@@ -375,6 +375,25 @@ function pruneEntries(entries: FeedbackEntry[], cfg: FeedbackConfig, protectId?:
   return { entries: result, evicted, protectedKept };
 }
 
+/**
+ * Read-time autoclean (`list` / `show`): skips the write when nothing was evicted and gives
+ * up silently if another process holds the lock, so a read never blocks or fails on pruning.
+ */
+function evictExpiredOnRead(stateDir: string, filePath: string): void {
+  const lockPath = tryAcquireLock(filePath);
+  if (!lockPath) {
+    return;
+  }
+  try {
+    const pruned = pruneEntries(readJsonl(filePath), readConfig(stateDir));
+    if (pruned.evicted > 0) {
+      writeJsonlAtomic(filePath, pruned.entries);
+    }
+  } finally {
+    releaseLock(lockPath);
+  }
+}
+
 function validateText(text: string): void {
   if (!text || text.trim().length === 0) {
     throw new Error("feedback text cannot be empty");
@@ -433,7 +452,9 @@ export async function addFeedback(
 }
 
 export function listFeedback(stateDir: string, filter: FeedbackFilter = {}): FeedbackEntry[] {
-  let entries = readJsonl(getFeedbackFile(stateDir));
+  const filePath = getFeedbackFile(stateDir);
+  evictExpiredOnRead(stateDir, filePath);
+  let entries = readJsonl(filePath);
 
   if (filter.status) {
     entries = entries.filter((e) => e.status === filter.status);
@@ -455,7 +476,9 @@ export function listFeedback(stateDir: string, filter: FeedbackFilter = {}): Fee
 }
 
 export function getFeedback(stateDir: string, idOrPrefix: string): FeedbackEntry | undefined {
-  const entries = readJsonl(getFeedbackFile(stateDir));
+  const filePath = getFeedbackFile(stateDir);
+  evictExpiredOnRead(stateDir, filePath);
+  const entries = readJsonl(filePath);
   const idx = findEntryIndex(entries, idOrPrefix);
   return entries[idx];
 }
@@ -467,6 +490,7 @@ export async function updateFeedback(
 ): Promise<FeedbackEntry> {
   const filePath = getFeedbackFile(stateDir);
   return withLock(filePath, () => {
+    const cfg = readConfig(stateDir);
     const entries = readJsonl(filePath);
     const idx = findEntryIndex(entries, idOrPrefix);
     const entry = entries[idx];
@@ -495,8 +519,9 @@ export async function updateFeedback(
     }
 
     entry.updatedAt = new Date().toISOString();
-    writeJsonlAtomic(filePath, entries);
-    return entry;
+    const pruned = pruneEntries(entries, cfg, entry.id);
+    writeJsonlAtomic(filePath, pruned.entries);
+    return pruned.entries.find((e) => e.id === entry.id) ?? entry;
   });
 }
 
@@ -526,16 +551,17 @@ export async function appendFeedbackLog(
     const entry = entries[idx];
     entry.log = [...(entry.log ?? []), item];
     entry.updatedAt = item.at;
-    entries[idx] = pruneLog(entry, cfg, now.getTime());
+    const pruned = pruneEntries(entries, cfg, entry.id);
 
-    writeJsonlAtomic(filePath, entries);
-    return entries[idx];
+    writeJsonlAtomic(filePath, pruned.entries);
+    return pruned.entries.find((e) => e.id === entry.id) ?? entries[idx];
   });
 }
 
 export async function removeFeedback(stateDir: string, ids: string[]): Promise<number> {
   const filePath = getFeedbackFile(stateDir);
   return withLock(filePath, () => {
+    const cfg = readConfig(stateDir);
     const entries = readJsonl(filePath);
     let removed = 0;
 
@@ -545,7 +571,7 @@ export async function removeFeedback(stateDir: string, ids: string[]): Promise<n
       removed++;
     }
 
-    writeJsonlAtomic(filePath, entries);
+    writeJsonlAtomic(filePath, pruneEntries(entries, cfg).entries);
     return removed;
   });
 }
