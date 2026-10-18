@@ -335,7 +335,7 @@ export async function launchAgent(agent: AgentDef, options: RunOptions, extras?:
   if (child.pid === undefined) {
     writeSync(logFd, `[at] error: Failed to spawn ${agent.name}: no PID assigned\n`);
     closeSync(logFd);
-    throw new Error(`Failed to spawn ${agent.name}: no PID assigned`);
+    throw new AgentError(`Failed to spawn ${agent.name}: no PID assigned`, 1);
   }
 
   closeSync(logFd);

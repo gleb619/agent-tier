@@ -233,9 +233,10 @@ describe("defaultSpawner", () => {
       logDir: tmpLogDir,
       prompt: "hello",
     };
+    await expect(defaultSpawner(agent, options)).rejects.toBeInstanceOf(AgentError);
     await expect(defaultSpawner(agent, options)).rejects.toThrow("no PID assigned");
     const files = readdirSync(tmpLogDir);
-    expect(files.length).toBe(1);
+    expect(files.length).toBeGreaterThanOrEqual(1);
     const logPath = path.join(tmpLogDir, files[0]);
     const content = readFileSync(logPath, "utf8");
     expect(content.length).toBeGreaterThan(0);
