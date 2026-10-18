@@ -339,7 +339,8 @@ Board resolution: `[file]` positional → `--board <path>` → `$AT_KANBAN_FILE`
 Every subcommand takes `--json`; `lint` exits 1 on violations and `guard` exits 1 on a dropped ID.
 
 ```bash
-at kanban init [file] [--force]          # scaffold legend + empty 9-column table
+at kanban init [file] [--force]          # scaffold legend + empty 9-column table (+ <board>-loop.md if missing)
+at kanban loop [file] [--force] [--print] # create <board>-loop.md (the /loop prompt) when missing; never overwrites
 at kanban list [file]                    # ID / Status / Priority / Title (Blocked By)
 at kanban next [file] [--start]          # pick work; --start marks it In Progress
 at kanban show <id> [file] [--with-plan] # field block + first 100 lines of the plan file

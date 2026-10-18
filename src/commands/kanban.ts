@@ -5,6 +5,7 @@ import type { Command } from "commander";
 import { loadBoard, mutateBoard, resolveBoardFile, toTasks } from "../kanban/board";
 import { guardKanban } from "../kanban/guard";
 import { lintBoard } from "../kanban/lint";
+import { ensureComposeFile, ensureLoopFile, kanbanLoopText, type LoopFileResult } from "../kanban/loop-file";
 import {
   type AddOptions,
   type OpResult,
@@ -54,6 +55,17 @@ function slug(title: string): string {
 function printText(r: OpResult): void {
   for (const warning of r.warnings) console.error(warning);
   for (const message of r.messages) console.log(message);
+}
+
+/** Board path relative to its project root, as the loop prompt should print it. */
+function relBoard(p: string): string {
+  return path.relative(findProjectRoot(path.dirname(p)) ?? path.dirname(p), p);
+}
+
+/** Report the loop-file outcome on stderr/stdout; a skipped write is a warning, never a failure. */
+function reportLoopFile(r: LoopFileResult): void {
+  if (r.outcome === "created") console.log(`[at] created ${r.file}`);
+  else if (r.outcome === "skipped") console.error(`[at] warning: loop file not created (${r.file}): ${r.reason}`);
 }
 
 function printJson(payload: unknown): void {
@@ -369,7 +381,38 @@ export function registerKanbanCommand(program: Command): void {
         mkdirSync(path.dirname(p), { recursive: true });
         writeFileSync(p, initBoardText(), "utf8");
         console.log(`[at] created ${p}`);
+        reportLoopFile(ensureLoopFile(p, { board: relBoard(p) }));
+        reportLoopFile(ensureComposeFile(p));
         return 0;
+      });
+    });
+
+  kanban
+    .command("loop [file]")
+    .description(
+      "Create the board's <board>-loop.md and <board>-compose.md docs when missing; never overwrites unless --force",
+    )
+    .option("--board <path>", "board file")
+    .option("--force", "regenerate an existing loop file")
+    .option("--print", "print the loop prompt instead of writing it")
+    .option("--json", "emit JSON instead of text")
+    .action((file: string | undefined, opts: BoardOpts & { force?: boolean; print?: boolean }) => {
+      run(() => {
+        const p = boardPath(file, opts);
+        const board = relBoard(p);
+        if (opts.print) {
+          console.log(kanbanLoopText({ board }));
+          return 0;
+        }
+        const results = [ensureLoopFile(p, { board, force: opts.force }), ensureComposeFile(p, { force: opts.force })];
+        if (opts.json) printJson(results);
+        else {
+          for (const r of results) {
+            if (r.outcome === "unchanged") console.log(`[at] ${r.file} already exists (use --force to regenerate)`);
+            else reportLoopFile(r);
+          }
+        }
+        return results.some((r) => r.outcome === "skipped") ? 1 : 0;
       });
     });
 }
