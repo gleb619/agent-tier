@@ -62,6 +62,9 @@ func Call(ctx context.Context, atBin, res, verb, idPositional string, params map
 			params["id"] = idPositional
 		}
 	}
+	if params == nil {
+		params = map[string]any{}
+	}
 	body, err := json.Marshal(params)
 	if err != nil {
 		return Result{Err: fmt.Errorf("marshal bridge params: %w", err)}

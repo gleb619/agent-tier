@@ -22,8 +22,11 @@ Invoke before any work:
 
 - Work in this repo (agent-tier). Touch only what the entry needs; others edit
   concurrently, ignore unrelated failures.
-- Never `git commit`, `git push`, `git reset`, or edit `~/.at/*` by hand. Use the
+- Never `git push`, `git stash`, `git reset`, or edit `~/.at/*` by hand. Use the
   `at feedback` CLI for all queue and log changes.
+- **Every entry gets its own worktree + branch** (`bash scripts/worktree-new.sh <short-name>`);
+  delegated `at` agents run with cwd = that worktree, never on `main`. Commit and merge
+  per the MERGE state. No `Co-Authored-By` / AI trailers in commits.
 - Never remove an entry before the fix is verified.
 - Use `node dist/cli.js` (after `pnpm run build`) or `npx ts-node src/cli.ts` if `at` is
   not on PATH.
@@ -60,7 +63,7 @@ at feedback log <id> "<note>" --state <STATE> [--sub <SUB>] -o try|ok|failed|inf
 ## State machine
 
 ```
-POLL ─► ANALYZE ─► TRIAGE ─► PLAN ─► EXECUTE ─► VERIFY ─► CLOSE ─► REPORT ─► POLL
+POLL ─► ANALYZE ─► TRIAGE ─► PLAN ─► EXECUTE ─► VERIFY ─► MERGE ─► CLOSE ─► REPORT ─► POLL
   │                  │                  │          │ fail                │
   │ nothing workable │ SMALL: skip PLAN │ DELEGATE→WAIT→REVIEW→RETRY     │ 3 fails / cap 5
   ▼                  ▼  go EXECUTE/EDIT ▼                                 ▼
@@ -171,8 +174,26 @@ All must pass:
 - `npx vitest run tests/` (skip `tests_ai/`: needs real agent binaries, slow and flaky;
   failures clearly unrelated to your change may be ignored; say so)
 
-Pass → **CLOSE** (`fixed`). Fail → log `failed` with output (`--state VERIFY -o failed`),
+Test runs may dirty tracked files (e.g. `docs/kanban.md` junk rows): `git status` in the
+worktree, `git checkout -- <file>` only for junk files you did not intend to change.
+
+Pass → **MERGE**. Fail → log `failed` with output (`--state VERIFY -o failed`),
 then **RETRY** (or **CLOSE** `failed` if exhausted).
+
+### State: MERGE
+
+1. In the worktree: `git add <intended files>` (never `-A`), one clean commit, conventional
+   subject (`feat(scope): ...` / `fix(scope): ...`), no junk/WIP commits, no AI trailers.
+   Worktree must be clean after (`git status --short` empty) or the merge script aborts.
+2. `bash scripts/merge-worktree.sh <worktree-path> <branch>` (rebase main + ff-only merge +
+   removes worktree and branch). Prints `MERGED` on success.
+3. `REBASE_CONFLICT` / `MERGE_FAIL` / `DIRTY_WORKTREE` → fix in the worktree and retry; no
+   history rewrites beyond the rebase. Still failing → log `failed`, **RETRY** / **CLOSE** `failed`.
+4. Merged change touched `src/cli.ts` → rebuild `bun build --compile src/cli.ts --outfile bin/at`.
+5. On `CLOSE failed`, remove the worktree (`bash scripts/test-guard.sh worktree-clean <path>`,
+   `git branch -D <branch>` only if nothing worth keeping) so none are left stale.
+
+Go **CLOSE**.
 
 ### State: CLOSE
 
@@ -211,6 +232,7 @@ Resume by restarting `/loop LOOP.md` after new feedback is added.
 ## Safety
 
 - Max 5 entries per tick; then stop the tick and report.
+- Run heavy work only via `scripts/at-safe.sh`; one delegated task at a time.
 - Stop immediately after 3 consecutive failures.
 - If the working tree contains changes unrelated to the entry you are fixing, leave
   them alone; do not stash or revert them.

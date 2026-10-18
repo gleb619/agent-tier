@@ -69,7 +69,7 @@ func (s *Server) streamJSONAsSSE(w http.ResponseWriter, payload []byte) {
 	}
 	// Test for an array without forcing a full unmarshal; we only need to
 	// peek at the first non-space byte.
-	trimmed := bytes.TrimLeft(payload, " \t\r\n")
+	trimmed := bytes.TrimLeft(payload, " 	\r\n")
 	if len(trimmed) == 0 || trimmed[0] != '[' {
 		// Not an array — wrap as a single object event.
 		flusher, _ := w.(http.Flusher)
