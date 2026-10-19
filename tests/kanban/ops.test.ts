@@ -549,3 +549,14 @@ describe("time lives in the plan, not the board", () => {
     expect(out).toMatch(/Estimated:\s+50m/);
   });
 });
+
+describe("opStatus — custom statuses", () => {
+  it("allows a legend status and the core statuses even when the legend omits them", () => {
+    const dir = makeTmpDir();
+    const file = writeBoard(dir, [row("T1", "Backlog", "a")], { legend: ["Review"] });
+    const doc = loadBoard(file);
+    expect(() => opStatus(doc, "T1", "Review")).not.toThrow();
+    expect(() => opStatus(doc, "T1", "In Progress")).not.toThrow();
+    expect(() => opStatus(doc, "T1", "Nope")).toThrow(/Invalid status/);
+  });
+});

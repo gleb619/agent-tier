@@ -4,10 +4,10 @@ import type { Root, Table, TableRow } from "mdast";
 import { writeFileAtomicSync } from "../atomic-write";
 import { withLock } from "../lock";
 import { findProjectRoot } from "../state-dir";
-import { parseLegend } from "./legend";
+import { parseLegend, resolveStatuses } from "./legend";
 import type { OpResult } from "./ops";
 import { cellText, type Processor, parseBoardText, stringifyBoard } from "./parse";
-import { DEFAULT_BOARD_REL, FALLBACK_STATUSES, type Task } from "./types";
+import { DEFAULT_BOARD_REL, type Task } from "./types";
 
 export interface BoardDoc {
   file: string;
@@ -36,7 +36,7 @@ export function loadBoard(file: string): BoardDoc {
     tree: parsed.tree,
     table: parsed.table,
     headers: parsed.headers,
-    statuses: legend.length > 0 ? legend : [...FALLBACK_STATUSES],
+    statuses: resolveStatuses(legend),
   };
 }
 

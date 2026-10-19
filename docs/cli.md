@@ -368,8 +368,9 @@ warning on stderr — over-long input degrades, it never errors.
 **Schema:** `ID` (`T<integer>`, unique), `Status` (from the legend table), `Title`, `Description`
 (≤128), `Priority` (`High`/`Medium`/`Low`), `Owner`, `Blocks` (advisory only), `Blocked By` (what
 selection actually reads), `Plan File` (path or `-`). Optional cells use the `-` sentinel, never
-empty. The Status Legend table *is* the status vocabulary — add a status by editing the legend and
-both `status` and `lint` accept it with no code change.
+empty. The 4 core statuses (`Backlog`, `In Progress`, `Blocked`, `Done`) are always valid, even if the legend
+omits them; the Status Legend table *adds* custom ones — add a status by editing the legend and
+both `status` and `lint` accept it with no code change. Compose/`next` only act on the core four.
 
 **`guard <base>`** compares the ID *set* at `<base>` against HEAD, so it is immune to re-padding
 churn. A dropped ID fails unless some commit in `<base>..HEAD` carries a `[kanban-rewrite]` trailer,

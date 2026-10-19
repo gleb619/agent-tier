@@ -30,7 +30,9 @@ export const IN_PROGRESS = "In Progress";
 export const BLOCKED = "Blocked";
 export const BACKLOG = "Backlog";
 export const DONE = "Done";
-export const FALLBACK_STATUSES = ["Backlog", "In Progress", "Blocked", "Done"];
+/** Built-in statuses: always valid, whatever the legend declares. The legend only adds to them. */
+export const CORE_STATUSES = ["Backlog", "In Progress", "Blocked", "Done"];
+export const FALLBACK_STATUSES = CORE_STATUSES;
 
 export const MAX_DESC = 128;
 export const DESC_SUFFIX = "...";

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { parseLegend } from "./legend";
+import { parseLegend, resolveStatuses } from "./legend";
 import { checkPlanStructure } from "./plan-lint";
 import { checkPlanTime, findPlanFile } from "./plan-time";
 import { IN_PROGRESS, SENTINEL } from "./types";
@@ -103,6 +103,7 @@ export function lintBoard(text: string, root: string, opts: LintOptions = {}): L
   const staleMs = staleDays > 0 && Number.isFinite(staleDays) ? staleDays * 24 * 60 * 60 * 1000 : null;
   const lines = text.split("\n");
   const legend = parseLegend(text);
+  const allowed = resolveStatuses(legend);
   const violations: LintViolation[] = [];
   const seen = new Map<string, number>();
 
@@ -142,8 +143,8 @@ export function lintBoard(text: string, root: string, opts: LintOptions = {}): L
 
     const statusIdx = headerCols.indexOf("Status");
     const status = statusIdx >= 0 ? (cells[statusIdx] ?? "") : "";
-    if (legend.length > 0 && !legend.includes(status)) {
-      fail(`line ${lineNo}: ${id} has invalid Status '${status}' (expected one of: ${[...legend].sort().join(", ")})`);
+    if (legend.length > 0 && !allowed.includes(status)) {
+      fail(`line ${lineNo}: ${id} has invalid Status '${status}' (expected one of: ${[...allowed].sort().join(", ")})`);
     }
 
     const planIdx = headerCols.indexOf("Plan File");

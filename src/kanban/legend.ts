@@ -1,3 +1,5 @@
+import { CORE_STATUSES } from "./types";
+
 export const LEGEND_HEADING = "## Status Legend";
 const LEGEND_ROW_RE = /^\|\s*`([^`]+)`/;
 
@@ -23,4 +25,12 @@ export function parseLegend(text: string): string[] {
   }
 
   return statuses;
+}
+
+/**
+ * Effective status vocabulary: the 4 core statuses (compose and `next` depend on them) first,
+ * then any custom status the legend adds, in legend order. A legend can extend, never shrink, the core.
+ */
+export function resolveStatuses(legend: string[]): string[] {
+  return [...CORE_STATUSES, ...legend.filter((s) => !CORE_STATUSES.includes(s))];
 }

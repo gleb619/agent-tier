@@ -86,7 +86,12 @@ describe("parseLegend", () => {
 
   it("picks up a custom status added to the legend", () => {
     const { file } = board([row("T1", "Backlog", "a")], ["Backlog", "Review", "Done"]);
-    expect(loadBoard(file).statuses).toEqual(["Backlog", "Review", "Done"]);
+    expect(loadBoard(file).statuses).toEqual(["Backlog", "In Progress", "Blocked", "Done", "Review"]);
+  });
+
+  it("keeps the 4 core statuses even when the legend omits them", () => {
+    const { file } = board([row("T1", "Backlog", "a")], ["Review", "QA"]);
+    expect(loadBoard(file).statuses).toEqual(["Backlog", "In Progress", "Blocked", "Done", "Review", "QA"]);
   });
 });
 

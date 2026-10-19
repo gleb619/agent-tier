@@ -194,6 +194,12 @@ describe("lintBoard — legend handling", () => {
     expect(result.violations).toEqual([]);
     expect(result.legend).toEqual(["Backlog", "Review", "Done"]);
   });
+
+  it("still accepts core statuses the legend omits, and rejects unknown ones", () => {
+    const legend = "## Status Legend\n\n| Status | Meaning |\n| :-- | :-- |\n| `Review` | x |";
+    expect(lint([goodRow("T1", "Blocked")], { legend }).result.violations).toEqual([]);
+    expect(lint([goodRow("T1", "Nope")], { legend }).result.violations).toHaveLength(1);
+  });
 });
 
 describe("lintBoard — the generated fixture", () => {
