@@ -75,7 +75,10 @@ describe("ensureComposeFile", () => {
     const board = path.join(dir, "kanban.md");
     expect(ensureComposeFile(board).outcome).toBe("created");
     const repoDoc = readFileSync(path.join(__dirname, "..", "..", "docs", "kanban-compose.md"), "utf8");
-    expect(readFileSync(path.join(dir, "kanban-compose.md"), "utf8")).toBe(repoDoc);
+    expect(
+      readFileSync(path.join(dir, "kanban-compose.md"), "utf8"),
+      "docs/kanban-compose.md drifted from src/kanban/compose-doc.ts; run `pnpm run kanban:compose-doc` to regenerate",
+    ).toBe(repoDoc);
     writeFileSync(path.join(dir, "kanban-compose.md"), "mine", "utf8");
     expect(ensureComposeFile(board).outcome).toBe("unchanged");
     expect(readFileSync(path.join(dir, "kanban-compose.md"), "utf8")).toBe("mine");

@@ -32,7 +32,8 @@
     "web:analyze": "npm --prefix src/webui run build && npm --prefix src/webui run analyze",
     "web:build": "npm --prefix src/webui run build",
     "web:check": "pnpm -C src/webui check",
-    "web:lighthouse": "PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-$PWD/.pw-browsers} vite-node scripts/web-lighthouse.ts"
+    "web:lighthouse": "PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-$PWD/.pw-browsers} vite-node scripts/web-lighthouse.ts",
+    "kanban:compose-doc": "node scripts/generate-compose-doc.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.78.1",

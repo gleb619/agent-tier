@@ -79,7 +79,6 @@ git worktree prune
 | Kanban board | Markdown task board mutated only via `at kanban` (AST, not regex): `list`/`next`/`show`/`add`/`status`/`remove`/`clean`/`lint`/`guard`/`init`; plan-file `## Time` (Planned by agent, Estimated by `at kanban estimate`, lint-checked) vs consumed time; `add --plan/--keywords` scaffolds plan files with `## Keywords` for compose (`src/usage/`, `at bridge usage summary`, shown in Run Details + Dashboard) | `src/kanban/`, `src/commands/kanban.ts`, `docs/kanban.md` |
 | WebUI scaffold | Vite+Svelte+Tailwind app at `src/webui` (pnpm workspace member, own package.json; excluded from root tsc via `tsconfig.webui.json`); root `build` also runs `web:build`; `at web` serves via the Go `at-web` backend (REST+SSE+static, `docs/webui.md`); multi-stage `Dockerfile` | `src/webui/`, `tsconfig.webui.json`, `web-server/`, `Dockerfile`, `docs/webui.md` |
 | Normka mock agents | Tier-4 `mock`/`mock-long` Go binaries; `#NORMKA` / `// normka:on` / `--normka` trigger JSON step specs (lorem, file, http, sse, discuss) | `mock-agent/`, `src/agents/normka-flag.ts`, `bin/mock-agent`, `bin/mock-long-agent` |
-
 ## Commands
 
 ```bash

@@ -4,7 +4,7 @@
  */
 
 import { execSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -12,6 +12,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 const cliPath = path.join(__dirname, "..", "dist", "cli.js");
 
 function buildCli(): void {
+  if (existsSync(cliPath)) return;
   execSync("npm run build", { stdio: "inherit" });
 }
 

@@ -457,7 +457,7 @@ export function registerComposeCommand(program: Command, deps: ComposeCliDeps = 
             cwd: process.cwd(),
           });
           log(`[compose] job ${job.name} started (pid ${job.pid}) — log ${job.logFile}`);
-          log("[compose] manage: at compose jobs | at compose logs " + job.name + " | at compose stop " + job.name);
+          log(`[compose] manage: at compose jobs | at compose logs ${job.name} | at compose stop ${job.name}`);
           process.exit(0);
         } catch (err) {
           error(`[compose] ${err instanceof Error ? err.message : String(err)}`);

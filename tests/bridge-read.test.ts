@@ -74,11 +74,21 @@ function runFixture(overrides: Partial<FixtureRun>): FixtureRun {
   };
 }
 
+function minutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
 function seedRuns(stateDir: string): void {
   const runs = [
-    runFixture({ runId: "r1", agent: "mock", status: "done", startedAt: "2026-10-14T10:00:00.000Z" }),
-    runFixture({ runId: "r2", agent: "codex", status: "failed", startedAt: "2026-10-14T09:00:00.000Z" }),
-    runFixture({ runId: "r3", agent: "mock", status: "running", startedAt: "2026-10-14T11:00:00.000Z" }),
+    runFixture({ runId: "r1", agent: "mock", status: "done", startedAt: minutesAgo(10), finishedAt: minutesAgo(8) }),
+    runFixture({
+      runId: "r2",
+      agent: "codex",
+      status: "failed",
+      startedAt: minutesAgo(20),
+      finishedAt: minutesAgo(18),
+    }),
+    runFixture({ runId: "r3", agent: "mock", status: "running", startedAt: minutesAgo(5), finishedAt: null }),
   ];
   writeFileSync(path.join(stateDir, "runs.jsonl"), `${runs.map((r) => JSON.stringify(r)).join("\n")}\n`, "utf8");
 }

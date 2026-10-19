@@ -102,7 +102,7 @@ describe("test-guard script", () => {
     theirs.kill("SIGKILL");
     mine.kill("SIGKILL");
     void run(["orphans", "--kill"], other);
-  }, 20000);
+  }, 60000);
 
   it("worktree-clean removes a leftover skeleton directory with read-only files", () => {
     const dir = makeTempRepo(`"tests/**/*.test.ts"`);

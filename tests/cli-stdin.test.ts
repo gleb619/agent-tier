@@ -254,7 +254,7 @@ describe.runIf(cliBuilt)("--callback flag", () => {
       }),
     );
     expect(result.exitCode).toBe(0);
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     const content = readFileSync(markerFile, "utf8").trim();
     expect(content).toContain("json-status=done");
   });

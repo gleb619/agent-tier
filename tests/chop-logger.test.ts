@@ -72,13 +72,17 @@ describe("ChopLogger", () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(path.join(os.tmpdir(), "chop-logger-test-"));
+    process.env.TMPDIR = tmpDir;
     h.spawnMock.mockReset();
     h.spawnMock.mockImplementation((...args: unknown[]) => (h.realSpawn as any)(...args));
     h.spawnSyncMock.mockReset();
     h.spawnSyncMock.mockImplementation((...args: unknown[]) => (h.realSpawnSync as any)(...args));
+    // Swallow chop warning stderr by default; tests that assert stderr re-mock it.
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   });
 
   afterEach(() => {
+    delete process.env.TMPDIR;
     vi.restoreAllMocks();
     try {
       rmSync(tmpDir, { recursive: true, force: true });
